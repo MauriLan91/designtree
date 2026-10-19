@@ -30,7 +30,7 @@ crates/
   designtree-cli/       `designtree` command-line tool
 app/                    desktop app: Tauri shell (src-tauri/) + React Flow canvas (src/)
 examples/               sample design files
-docs/                   architecture notes and GUI options
+docs/                   architecture notes, GUI options, product backlog
 ```
 
 ## Desktop app
