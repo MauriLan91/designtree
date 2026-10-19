@@ -24,6 +24,7 @@ export const backend = {
   searchBindings: (query: string, category: string | null, limit = 200) =>
     invoke<Binding[]>("search_bindings", { query, category, limit }),
   validateDesign: (design: Design) => invoke<string[]>("validate_design", { design }),
+  autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
   exportDts: (design: Design) => invoke<string>("export_dts", { design }),
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),

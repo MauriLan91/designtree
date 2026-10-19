@@ -6,9 +6,11 @@
 //! visual concept and never affect the generated source.
 
 pub mod dts;
+pub mod layout;
 pub mod model;
 pub mod validate;
 
 pub use dts::to_dts;
+pub use layout::auto_layout;
 pub use model::*;
 pub use validate::{validate, ValidationError};

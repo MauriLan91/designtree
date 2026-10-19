@@ -102,6 +102,13 @@ fn validate_design(design: Graph) -> Vec<String> {
         .collect()
 }
 
+/// Arranges nodes and bus groups; the caller keeps its own copy for undo.
+#[tauri::command]
+fn auto_layout(mut design: Graph) -> Graph {
+    designtree_core::auto_layout(&mut design);
+    design
+}
+
 #[tauri::command]
 fn export_dts(design: Graph) -> Result<String, Vec<String>> {
     designtree_core::to_dts(&design)
@@ -134,6 +141,7 @@ pub fn run() {
             load_kernel_bindings,
             search_bindings,
             validate_design,
+            auto_layout,
             export_dts,
             save_design,
             open_design,
