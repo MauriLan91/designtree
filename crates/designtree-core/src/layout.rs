@@ -1,8 +1,9 @@
 //! Automatic placement of nodes on the editor canvas.
 //!
-//! The devicetree hierarchy is drawn left to right: depth selects the column,
-//! leaves are stacked top to bottom in child order and every parent is
-//! centered on its children. Each bus (a non-root node with addressable
+//! The devicetree hierarchy is drawn top down, matching the editor's handles
+//! (parent at the bottom of a card, children at the top): depth selects the
+//! row, leaves are placed left to right in child order and every parent is
+//! centered above its children. Each bus (a non-root node with addressable
 //! children) is wrapped in a group frame named `bus:<node id>`. Groups created
 //! by the user are left alone. Positions are the only thing that changes, so
 //! the generated DTS is unaffected.
@@ -14,8 +15,10 @@ use crate::model::{EdgeKind, Graph, Group, Node, NodeId, Position, Size};
 /// Space reserved for one node; actual cards are a bit smaller.
 const NODE_WIDTH: f32 = 220.0;
 const NODE_HEIGHT: f32 = 100.0;
-const COLUMN_GAP: f32 = 100.0;
-const ROW_GAP: f32 = 30.0;
+/// Horizontal gap between neighbouring leaves.
+const SIBLING_GAP: f32 = 40.0;
+/// Vertical gap between a parent and its children.
+const LEVEL_GAP: f32 = 80.0;
 /// Padding between a bus frame and the nodes inside it.
 const GROUP_PADDING: f32 = 40.0;
 const BUS_GROUP_PREFIX: &str = "bus:";
@@ -65,6 +68,10 @@ pub fn auto_layout(graph: &mut Graph) {
         node.position = positions[&node.id];
     }
 
+    for group in &mut graph.groups {
+        refit_group(group, &positions);
+    }
+
     let grouped: HashSet<NodeId> = graph.groups.iter().flat_map(members_recursive).collect();
     let mut bus_groups = Vec::new();
     if let Some(root) = graph.root() {
@@ -81,6 +88,43 @@ pub fn auto_layout(graph: &mut Graph) {
         }
     }
     graph.groups.extend(bus_groups);
+}
+
+/// Resizes a user group to enclose its (moved) members and subgroups.
+fn refit_group(
+    group: &mut Group,
+    positions: &HashMap<NodeId, Position>,
+) -> Option<(f32, f32, f32, f32)> {
+    let mut bounds: Option<(f32, f32, f32, f32)> = None;
+    let mut extend = |b: (f32, f32, f32, f32)| {
+        bounds = Some(match bounds {
+            Some(o) => (o.0.min(b.0), o.1.min(b.1), o.2.max(b.2), o.3.max(b.3)),
+            None => b,
+        });
+    };
+    for id in &group.members {
+        if let Some(p) = positions.get(id) {
+            extend((p.x, p.y, p.x + NODE_WIDTH, p.y + NODE_HEIGHT));
+        }
+    }
+    for sub in &mut group.subgroups {
+        if let Some(b) = refit_group(sub, positions) {
+            extend(b);
+        }
+    }
+    let (x0, y0, x1, y1) = bounds?;
+    let (x0, y0, x1, y1) = (
+        x0 - GROUP_PADDING,
+        y0 - GROUP_PADDING,
+        x1 + GROUP_PADDING,
+        y1 + GROUP_PADDING,
+    );
+    group.position = Position { x: x0, y: y0 };
+    group.size = Some(Size {
+        width: x1 - x0,
+        height: y1 - y0,
+    });
+    Some((x0, y0, x1, y1))
 }
 
 fn members_recursive(group: &Group) -> Vec<NodeId> {
@@ -110,7 +154,7 @@ fn is_bus(graph: &Graph, node: &Node, children: &HashMap<NodeId, Vec<NodeId>>) -
     })
 }
 
-/// Lays out the subtree of `id` and returns the vertical center of its node.
+/// Lays out the subtree of `id` and returns the horizontal center of its node.
 fn place(
     id: &NodeId,
     depth: usize,
@@ -149,8 +193,8 @@ fn place(
         }
         None => {
             *cursor = start;
-            let center = *cursor + NODE_HEIGHT / 2.0;
-            *cursor += NODE_HEIGHT + ROW_GAP;
+            let center = *cursor + NODE_WIDTH / 2.0;
+            *cursor += NODE_WIDTH + SIBLING_GAP;
             center
         }
     };
@@ -158,8 +202,8 @@ fn place(
     positions.insert(
         id.clone(),
         Position {
-            x: depth as f32 * (NODE_WIDTH + COLUMN_GAP),
-            y: center - NODE_HEIGHT / 2.0,
+            x: center - NODE_WIDTH / 2.0,
+            y: depth as f32 * (NODE_HEIGHT + LEVEL_GAP),
         },
     );
     center
@@ -276,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn columns_by_depth_and_parents_centered() {
+    fn rows_by_depth_and_parents_centered() {
         let mut g = graph(
             vec![
                 node("root", None),
@@ -287,14 +331,15 @@ mod tests {
             &[("root", "a"), ("root", "b"), ("a", "c")],
         );
         auto_layout(&mut g);
-        assert_eq!(pos(&g, "root").x, 0.0);
-        assert_eq!(pos(&g, "a").x, NODE_WIDTH + COLUMN_GAP);
-        assert_eq!(pos(&g, "c").x, 2.0 * (NODE_WIDTH + COLUMN_GAP));
-        // `a` has a single child, so it sits at the child's height.
-        assert_eq!(pos(&g, "a").y, pos(&g, "c").y);
-        let mid = (pos(&g, "a").y + pos(&g, "b").y) / 2.0;
-        assert_eq!(pos(&g, "root").y, mid);
-        assert!(pos(&g, "a").y < pos(&g, "b").y);
+        let level = NODE_HEIGHT + LEVEL_GAP;
+        assert_eq!(pos(&g, "root").y, 0.0);
+        assert_eq!(pos(&g, "a").y, level);
+        assert_eq!(pos(&g, "c").y, 2.0 * level);
+        // `a` has a single child, so it sits right above it.
+        assert_eq!(pos(&g, "a").x, pos(&g, "c").x);
+        let mid = (pos(&g, "a").x + pos(&g, "b").x) / 2.0;
+        assert_eq!(pos(&g, "root").x, mid);
+        assert!(pos(&g, "a").x < pos(&g, "b").x);
     }
 
     #[test]
@@ -366,6 +411,7 @@ mod tests {
         assert!(o.x + os.width > i.x + is.width && o.y + os.height > i.y + is.height);
         let u = pos(&g, "uart");
         assert!(u.x > o.x && u.y > o.y && u.y + NODE_HEIGHT < o.y + os.height);
+        assert!(u.x + NODE_WIDTH < o.x + os.width);
     }
 
     #[test]
@@ -389,7 +435,11 @@ mod tests {
         g.groups = vec![user.clone()];
         auto_layout(&mut g);
         auto_layout(&mut g);
-        assert_eq!(g.groups[0], user);
+        // The user group keeps its identity and members but wraps them again.
+        assert_eq!(g.groups[0].members, user.members);
+        let (gp, up) = (g.groups[0].position, pos(&g, "uart"));
+        assert!(gp.x < up.x && gp.y < up.y);
+        assert!(g.groups[0].size.is_some());
         assert_eq!(g.groups.len(), 2);
         // `uart` already belongs to a user group, so the bus frame skips it.
         assert!(g.groups[1].members.is_empty());
