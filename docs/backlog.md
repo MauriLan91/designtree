@@ -2,8 +2,11 @@
 
 > Status: **draft v0.2** (2026-10-19). Product decisions below were taken
 > with the product owner; story details can still change during refinement.
-> Milestones and stories are mirrored to GitHub Milestones and Issues once
-> validated; this file stays the source of truth for goals and story wording.
+> Every milestone is mirrored as a
+> [GitHub milestone](https://github.com/MauriLan91/designtree/milestones) and
+> every story as an issue titled with its ID (`US-1.1 ...`), labelled by
+> feature, model and skills. This file stays the source of truth for goals and
+> story wording; keep both in sync when a story changes.
 
 ## Product decisions
 
