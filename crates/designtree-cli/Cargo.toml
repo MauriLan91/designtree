@@ -1,0 +1,19 @@
+[package]
+name = "designtree-cli"
+description = "Command-line front end for DesignTree"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "designtree"
+path = "src/main.rs"
+
+[dependencies]
+designtree-core.workspace = true
+designtree-bindings.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true

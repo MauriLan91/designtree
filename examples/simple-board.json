@@ -1,0 +1,31 @@
+{
+  "nodes": [
+    { "id": "root", "name": "/", "compatible": ["acme,simple-board"],
+      "properties": [
+        { "name": "#address-cells", "value": { "type": "cells", "value": [1] } },
+        { "name": "#size-cells", "value": { "type": "cells", "value": [1] } }
+      ],
+      "position": { "x": 0, "y": 0 } },
+    { "id": "osc", "name": "oscillator", "label": "osc24m", "compatible": ["fixed-clock"],
+      "properties": [
+        { "name": "#clock-cells", "value": { "type": "cells", "value": [0] } },
+        { "name": "clock-frequency", "value": { "type": "cells", "value": [24000000] } }
+      ],
+      "position": { "x": 240, "y": -120 } },
+    { "id": "uart0", "name": "serial", "unit_address": "10000000", "label": "uart0",
+      "compatible": ["ns16550a"],
+      "properties": [
+        { "name": "reg", "value": { "type": "cells", "value": [268435456, 256] } },
+        { "name": "reg-shift", "value": { "type": "cells", "value": [2] } }
+      ],
+      "position": { "x": 240, "y": 80 } }
+  ],
+  "edges": [
+    { "from": "root", "to": "osc", "kind": "child" },
+    { "from": "root", "to": "uart0", "kind": "child" },
+    { "from": "uart0", "to": "osc", "kind": "reference", "property": "clocks" }
+  ],
+  "groups": [
+    { "id": "soc", "title": "SoC peripherals", "members": ["uart0"] }
+  ]
+}

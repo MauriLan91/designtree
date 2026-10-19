@@ -1,0 +1,15 @@
+[package]
+name = "designtree-bindings"
+description = "Indexer for the Linux kernel devicetree binding schemas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+thiserror.workspace = true
+walkdir.workspace = true
