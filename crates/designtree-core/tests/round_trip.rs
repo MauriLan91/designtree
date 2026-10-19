@@ -1,23 +1,29 @@
 //! Imports a devicetree, exports it again and checks with `dtc` that both
 //! sources describe the same tree.
 
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use designtree_core::{import_dts, to_dts};
 
 /// Compiles DTS to sorted DTS with `dtc`, then drops what legitimately
 /// differs: assigned phandle numbers and how cells are grouped in `<...>`.
 fn canonical(dts: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("designtree-round-trip-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("in.dts");
-    std::fs::write(&file, dts).unwrap();
-    let output = Command::new("dtc")
-        .args(["-q", "-I", "dts", "-O", "dts", "-s"])
-        .arg(&file)
-        .output()
+    let mut child = Command::new("dtc")
+        .args(["-q", "-I", "dts", "-O", "dts", "-s", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .expect("running dtc");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(dts.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
     assert!(
         output.status.success(),
         "dtc failed:\n{}\n{dts}",

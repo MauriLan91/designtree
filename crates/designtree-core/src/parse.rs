@@ -203,6 +203,11 @@ impl Parser {
                         }
                     }
                 }
+                (Some('#'), _) if self.at_line_marker() => {
+                    while self.peek().is_some_and(|c| c != '\n') {
+                        self.bump();
+                    }
+                }
                 (Some('#'), _) if self.at_preprocessor_directive() => {
                     return self.error(
                         self.pos,
@@ -215,25 +220,37 @@ impl Parser {
         }
     }
 
-    /// True at a `#` that starts a line and introduces a preprocessor
-    /// directive or a line marker, as opposed to a property such as
-    /// `#address-cells`.
-    fn at_preprocessor_directive(&self) -> bool {
+    /// Index of the first non-blank character after a `#` that starts a
+    /// line, or `None` if the `#` is not at the start of a line.
+    fn after_line_start_hash(&self) -> Option<usize> {
         let line_start = self.chars[..self.i]
             .iter()
             .rev()
             .take_while(|&&c| c != '\n')
             .all(|c| c.is_whitespace());
         if !line_start {
-            return false;
+            return None;
         }
         let mut j = self.i + 1;
         while self.chars.get(j).is_some_and(|&c| c == ' ' || c == '\t') {
             j += 1;
         }
-        if self.chars.get(j).is_some_and(char::is_ascii_digit) {
-            return true;
-        }
+        Some(j)
+    }
+
+    /// True at a line marker written by `cpp` (`# 12 "board.dts"`).
+    // TODO(US-1.2): use line markers to report positions in the original files.
+    fn at_line_marker(&self) -> bool {
+        self.after_line_start_hash()
+            .is_some_and(|j| self.chars.get(j).is_some_and(char::is_ascii_digit))
+    }
+
+    /// True at a `#` that starts a line and introduces a preprocessor
+    /// directive, as opposed to a property such as `#address-cells`.
+    fn at_preprocessor_directive(&self) -> bool {
+        let Some(mut j) = self.after_line_start_hash() else {
+            return false;
+        };
         let start = j;
         while self.chars.get(j).is_some_and(char::is_ascii_lowercase) {
             j += 1;
@@ -594,8 +611,9 @@ impl Parser {
                 None => return self.error(pos, "expected `>`, found end of file"),
                 Some(_) => {
                     let value = self.primary()?;
-                    // Like dtc, accept negative values that fit once sign-extended.
-                    if value > mask && (value | (mask >> 1)) != u64::MAX {
+                    // Like dtc, accept negative values: their bits above
+                    // the cell width are all ones.
+                    if value > mask && (value | mask) != u64::MAX {
                         return self
                             .error(pos, format!("value {value:#x} does not fit in {bits} bits"));
                     }

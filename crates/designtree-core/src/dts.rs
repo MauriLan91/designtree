@@ -324,6 +324,20 @@ mod tests {
     }
 
     #[test]
+    fn large_cells_survive_json_in_javascript() {
+        let chunk = ValueChunk::Cells {
+            bits: 64,
+            cells: vec![Cell::Number(7), Cell::Number(0xffff_ffff_ffff_fff1)],
+        };
+        let json = serde_json::to_string(&chunk).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"cells","bits":64,"cells":[7,"0xfffffffffffffff1"]}"#
+        );
+        assert_eq!(serde_json::from_str::<ValueChunk>(&json).unwrap(), chunk);
+    }
+
+    #[test]
     fn rejects_hierarchy_cycles() {
         let graph = Graph {
             nodes: vec![node("root", "/"), node("a", "a"), node("b", "b")],

@@ -249,7 +249,22 @@ impl Tree {
                     {
                         graph.nodes[graph_index].compatible = strings
                     }
-                    Classified::Value(value) => {
+                    Classified::Value(mut value) => {
+                        // Path references are looked up like dtc does
+                        // (`/soc/serial` finds `serial@1000`); store the
+                        // full path, which is the target's node id.
+                        if let PropertyValue::Mixed(chunks) = &mut value {
+                            for target in chunk_targets(chunks) {
+                                if let Some(node) = target
+                                    .starts_with('/')
+                                    .then(|| self.find_path(target))
+                                    .flatten()
+                                    .and_then(|node| index[node])
+                                {
+                                    target.clone_from(&graph.nodes[node].id.0);
+                                }
+                            }
+                        }
                         graph.nodes[graph_index].properties.push(Property {
                             name: def.name.clone(),
                             value,
@@ -317,6 +332,23 @@ impl Tree {
             self.visit(child, child_path, depth + 1, graph, index);
         }
     }
+}
+
+/// The reference targets in a mixed value, in order.
+fn chunk_targets(chunks: &mut [ValueChunk]) -> impl Iterator<Item = &mut String> {
+    chunks.iter_mut().flat_map(|chunk| -> Vec<&mut String> {
+        match chunk {
+            ValueChunk::Path { target } => vec![target],
+            ValueChunk::Cells { cells, .. } => cells
+                .iter_mut()
+                .filter_map(|cell| match cell {
+                    Cell::Phandle { phandle } => Some(phandle),
+                    Cell::Number(_) => None,
+                })
+                .collect(),
+            ValueChunk::String { .. } | ValueChunk::Bytes { .. } => Vec::new(),
+        }
+    })
 }
 
 enum Classified<'a> {
@@ -561,10 +593,18 @@ mod tests {
                 ],
             }])
         );
-        assert!(matches!(
+        assert_eq!(
             prop(&graph, "/dev", "by-path"),
-            PropertyValue::Mixed(_)
-        ));
+            &PropertyValue::Mixed(vec![ValueChunk::Cells {
+                bits: 32,
+                cells: vec![
+                    Cell::Phandle {
+                        phandle: "/pll".into()
+                    },
+                    Cell::Number(3),
+                ],
+            }])
+        );
     }
 
     #[test]
@@ -587,10 +627,17 @@ mod tests {
                 /delete-property/ clock-frequency;
             };
             &{/soc/serial} { extra; };
+            / { chosen { stdout-path = &{/soc/serial/}; }; };
             /delete-node/ &gone;
             "#,
         );
         assert_eq!(child_names(&graph, "/soc"), ["serial@1000", "i2c@4000"]);
+        assert_eq!(
+            prop(&graph, "/chosen", "stdout-path"),
+            &PropertyValue::Mixed(vec![ValueChunk::Path {
+                target: "/soc/serial@1000".into()
+            }])
+        );
         let uart = node(&graph, "/soc/serial@1000");
         assert_eq!(
             uart.properties,
@@ -644,6 +691,21 @@ mod tests {
             error("/dts-v1/;\n/ {\n\tx { };\n"),
             "test.dts:4:1: expected `}`, found end of file"
         );
+    }
+
+    #[test]
+    fn accepts_negative_cells_like_dtc() {
+        let graph = import("/dts-v1/;\n/ { a = <(-3000000000) (-1)>; };");
+        assert_eq!(
+            prop(&graph, "/", "a"),
+            &PropertyValue::Cells(vec![0x4d2f_a200, 0xffff_ffff])
+        );
+    }
+
+    #[test]
+    fn skips_cpp_line_markers() {
+        let graph = import("# 1 \"board.dts\"\n/dts-v1/;\n# 3 \"board.dts\" 2\n/ { a; };");
+        assert_eq!(prop(&graph, "/", "a"), &PropertyValue::Empty);
     }
 
     #[test]

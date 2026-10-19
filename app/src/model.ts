@@ -9,8 +9,11 @@ export type PropertyValue =
   | { type: "bytes"; value: number[] }
   | { type: "mixed"; value: ValueChunk[] };
 
-/** Reference targets are labels, or node paths when they start with `/`. */
-export type Cell = number | { phandle: string };
+/**
+ * Values above 2^53 - 1 come as hex strings ("0x...") so they stay exact.
+ * Reference targets are labels, or node paths when they start with `/`.
+ */
+export type Cell = number | string | { phandle: string };
 
 export type ValueChunk =
   | { type: "cells"; bits: number; cells: Cell[] }
@@ -284,7 +287,7 @@ export function parseProperties(text: string, previous: Property[] = []): Proper
         });
         props.push({ name, value: { type: "bytes", value: bytes } });
       } else if (rhs.startsWith('"')) {
-        const strings = [...rhs.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+        const strings = [...rhs.matchAll(/"(?:[^"\\]|\\.)*"/g)].map((m) => JSON.parse(m[0]) as string);
         props.push({ name, value: { type: "strings", value: strings } });
       } else {
         throw new Error("expected <cells>, \"strings\" or [bytes]");
@@ -315,7 +318,9 @@ function formatReference(target: string): string {
 function formatChunk(chunk: ValueChunk): string {
   switch (chunk.type) {
     case "cells": {
-      const cells = chunk.cells.map((c) => (typeof c === "number" ? formatCell(c) : formatReference(c.phandle)));
+      const cells = chunk.cells.map((c) =>
+        typeof c === "number" ? formatCell(c) : typeof c === "string" ? c : formatReference(c.phandle),
+      );
       return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${cells.join(" ")}>`;
     }
     case "string":

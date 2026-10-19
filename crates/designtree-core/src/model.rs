@@ -65,11 +65,42 @@ pub enum ValueChunk {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Cell {
-    Number(u64),
+    /// A JSON number up to 2^53 - 1, a hex string (`"0x..."`) above that,
+    /// so that JavaScript reads every value exactly.
+    Number(#[serde(with = "json_safe_u64")] u64),
     /// `&target`, replaced by the phandle of the target node.
-    Phandle {
-        phandle: String,
-    },
+    Phandle { phandle: String },
+}
+
+mod json_safe_u64 {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+    pub fn serialize<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+        if *value <= MAX_SAFE_INTEGER {
+            serializer.serialize_u64(*value)
+        } else {
+            serializer.serialize_str(&format!("{value:#x}"))
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Number(u64),
+            Hex(String),
+        }
+        match Repr::deserialize(deserializer)? {
+            Repr::Number(n) => Ok(n),
+            Repr::Hex(text) => text
+                .strip_prefix("0x")
+                .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+                .ok_or_else(|| D::Error::custom(format!("invalid cell value `{text}`"))),
+        }
+    }
 }
 
 /// Size of a group frame on the editor canvas.
