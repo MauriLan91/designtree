@@ -7,8 +7,8 @@ replaceable layer.
  kernel source ──► designtree-bindings ──► Catalog (element library, JSON)
                                                 │
                                                 ▼
-   Tauri app   ◄──── JSON ────►  designtree-core ──► .dts
- (React Flow)                 Graph · validate · to_dts
+   Tauri app   ◄──── JSON ────►  designtree-core ◄──► .dts
+ (React Flow)                 Graph · validate · to_dts · import_dts
 ```
 
 ## designtree-core
@@ -21,6 +21,15 @@ replaceable layer.
   cycles, duplicate labels, references to unlabeled nodes) so the editor can
   highlight them all at once.
 - `to_dts` emits devicetree source from a valid graph.
+- `import_dts` turns devicetree source into a graph in two stages:
+  `parse` builds a document that mirrors the source (root blocks,
+  `&label { }` overrides and deletions stay separate items, every item keeps
+  its line and column), then `import` merges it into one tree with dtc
+  semantics. Phandle lists (`clocks = <&a 1>, <&b 2>;`) become reference
+  edges; values that do not fit the simple types (`/bits/ 64`, strings mixed
+  with cells, path references, phandles in the middle of a cell list) are
+  kept exactly as `mixed` values. Node ids are node paths. The C preprocessor
+  is not run yet: `#include` and macros are rejected with a clear error.
 - Canvas positions and groups are stored but never affect the output.
 
 ## designtree-bindings
@@ -46,7 +55,8 @@ candidate next step).
 
 ## Next steps
 
-- DTS import (parse existing `.dts`/`.dtsi` into a graph, including `#include`).
+- `#include` and preprocessor macros in DTS import, inherited `.dtsi` nodes
+  kept as `&label { }` overrides.
 - Property editor driven by the schema types (`$ref` to `/schemas/types.yaml`).
 - Schema validation of node properties against the catalog.
 - `dtc` integration to produce `.dtb` and catch compiler errors.

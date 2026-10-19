@@ -51,6 +51,9 @@ See [app/README.md](app/README.md) for prerequisites and canvas conventions.
 # Generate DTS from a sample design
 cargo run -- export examples/simple-board.json
 
+# Import an existing devicetree source into a design
+cargo run -- import board.dts -o board.json
+
 # Check a design for structural errors
 cargo run -- validate examples/simple-board.json
 

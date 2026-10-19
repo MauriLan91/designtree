@@ -6,7 +6,17 @@ export type PropertyValue =
   | { type: "empty" }
   | { type: "cells"; value: number[] }
   | { type: "strings"; value: string[] }
-  | { type: "bytes"; value: number[] };
+  | { type: "bytes"; value: number[] }
+  | { type: "mixed"; value: ValueChunk[] };
+
+/** Reference targets are labels, or node paths when they start with `/`. */
+export type Cell = number | { phandle: string };
+
+export type ValueChunk =
+  | { type: "cells"; bits: number; cells: Cell[] }
+  | { type: "string"; value: string }
+  | { type: "bytes"; value: number[] }
+  | { type: "path"; target: string };
 
 export interface Property {
   name: string;
@@ -239,11 +249,22 @@ function parseCell(token: string): number {
   return n;
 }
 
-export function parseProperties(text: string): Property[] {
+/**
+ * Parses the property text. Lines left exactly as `formatProperties` wrote
+ * them keep their value from `previous`, so values this simple format cannot
+ * parse (mixed values from an imported .dts) survive editing other lines.
+ */
+export function parseProperties(text: string, previous: Property[] = []): Property[] {
+  const unchanged = new Map(previous.map((p) => [formatProperty(p), p]));
   const props: Property[] = [];
   text.split("\n").forEach((raw, i) => {
     const line = raw.trim().replace(/;$/, "");
     if (!line || line.startsWith("//")) return;
+    const kept = unchanged.get(line);
+    if (kept) {
+      props.push(kept);
+      return;
+    }
     const eq = line.indexOf("=");
     if (eq < 0) {
       props.push({ name: line, value: { type: "empty" } });
@@ -279,21 +300,50 @@ function formatCell(c: number): string {
   return c < 10 ? String(c) : `0x${c.toString(16)}`;
 }
 
+function formatBytes(bytes: number[]): string {
+  return `[${bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ")}]`;
+}
+
+function formatString(s: string): string {
+  return JSON.stringify(s);
+}
+
+function formatReference(target: string): string {
+  return target.startsWith("/") ? `&{${target}}` : `&${target}`;
+}
+
+function formatChunk(chunk: ValueChunk): string {
+  switch (chunk.type) {
+    case "cells": {
+      const cells = chunk.cells.map((c) => (typeof c === "number" ? formatCell(c) : formatReference(c.phandle)));
+      return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${cells.join(" ")}>`;
+    }
+    case "string":
+      return formatString(chunk.value);
+    case "bytes":
+      return formatBytes(chunk.value);
+    case "path":
+      return formatReference(chunk.target);
+  }
+}
+
+function formatProperty(p: Property): string {
+  switch (p.value.type) {
+    case "empty":
+      return p.name;
+    case "cells":
+      return `${p.name} = ${formatChunk({ type: "cells", bits: 32, cells: p.value.value })}`;
+    case "strings":
+      return `${p.name} = ${p.value.value.map(formatString).join(", ")}`;
+    case "bytes":
+      return `${p.name} = ${formatBytes(p.value.value)}`;
+    case "mixed":
+      return `${p.name} = ${p.value.value.map(formatChunk).join(", ")}`;
+  }
+}
+
 export function formatProperties(props: Property[]): string {
-  return props
-    .map((p) => {
-      switch (p.value.type) {
-        case "empty":
-          return p.name;
-        case "cells":
-          return `${p.name} = <${p.value.value.map(formatCell).join(" ")}>`;
-        case "strings":
-          return `${p.name} = ${p.value.value.map((s) => `"${s}"`).join(", ")}`;
-        case "bytes":
-          return `${p.name} = [${p.value.value.map((b) => b.toString(16).padStart(2, "0")).join(" ")}]`;
-      }
-    })
-    .join("\n");
+  return props.map(formatProperty).join("\n");
 }
 
 // ---------------------------------------------------------------------------

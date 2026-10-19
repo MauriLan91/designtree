@@ -120,6 +120,13 @@ fn open_design(path: PathBuf) -> Result<Graph, String> {
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
+/// Imports devicetree source; errors carry file, line and column.
+#[tauri::command]
+fn import_dts(path: PathBuf) -> Result<Graph, String> {
+    let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    designtree_core::import_dts(&source, &path.display().to_string()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn write_text(path: PathBuf, content: String) -> Result<(), String> {
     fs::write(path, content).map_err(|e| e.to_string())
@@ -137,6 +144,7 @@ pub fn run() {
             export_dts,
             save_design,
             open_design,
+            import_dts,
             write_text,
         ])
         .run(tauri::generate_context!())
