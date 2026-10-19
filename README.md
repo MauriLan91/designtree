@@ -7,8 +7,10 @@ directly from the binding schemas in the Linux kernel source tree
 (`Documentation/devicetree/bindings`).
 
 > Status: early skeleton. The Rust backend (model, validation, DTS export,
-> binding indexer) works from the command line; the graphical front end has
-> not been chosen yet (see [docs/gui-options.md](docs/gui-options.md)).
+> binding indexer) and a first desktop app (Tauri 2 + React Flow) work
+> end to end.
+
+![DesignTree editor](docs/screenshot.png)
 
 ## Concepts
 
@@ -26,12 +28,24 @@ crates/
   designtree-core/      graph model, validation, DTS generation
   designtree-bindings/  indexer for the kernel binding schemas (element library)
   designtree-cli/       `designtree` command-line tool
-frontend/               placeholder for the GUI (toolkit not chosen yet)
+app/                    desktop app: Tauri shell (src-tauri/) + React Flow canvas (src/)
 examples/               sample design files
 docs/                   architecture notes and GUI options
 ```
 
-## Quick start
+## Desktop app
+
+```sh
+cd app
+npm install
+npm run tauri dev
+# optional: index a kernel tree at startup and open a design
+DESIGNTREE_LINUX_SRC=/path/to/linux npm run tauri dev -- -- "$PWD/../examples/simple-board.json"
+```
+
+See [app/README.md](app/README.md) for prerequisites and canvas conventions.
+
+## Command line
 
 ```sh
 # Generate DTS from a sample design

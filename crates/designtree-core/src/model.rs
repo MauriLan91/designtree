@@ -32,6 +32,13 @@ pub enum PropertyValue {
     Bytes(Vec<u8>),
 }
 
+/// Size of a group frame on the editor canvas.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Size {
+    pub width: f32,
+    pub height: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Property {
     pub name: String,
@@ -102,6 +109,10 @@ pub struct Group {
     pub members: Vec<NodeId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subgroups: Vec<Group>,
+    #[serde(default)]
+    pub position: Position,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<Size>,
 }
 
 /// A complete design, serialized as the project file.

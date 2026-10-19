@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/MauriLan91/designtree"
-rust-version = "1.80"
+rust-version = "1.85"
 
 [workspace.dependencies]
 designtree-core = { path = "crates/designtree-core" }
@@ -17,5 +17,8 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_norway = "0.9"
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 thiserror = "2"
 walkdir = "2"

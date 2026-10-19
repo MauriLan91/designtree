@@ -1,0 +1,19 @@
+[package]
+name = "designtree-app"
+description = "DesignTree desktop application (Tauri)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+designtree-core.workspace = true
+designtree-bindings.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-dialog.workspace = true

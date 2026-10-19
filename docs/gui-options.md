@@ -1,5 +1,7 @@
 # GUI options
 
+> Decision (2026-10-19): **Tauri 2 + React Flow**. Kept for reference.
+
 The backend is Rust; the front end must offer a node-graph canvas with
 panning, zoom, wiring, grouping and a searchable palette of thousands of
 elements.

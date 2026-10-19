@@ -7,8 +7,8 @@ replaceable layer.
  kernel source ──► designtree-bindings ──► Catalog (element library, JSON)
                                                 │
                                                 ▼
-   GUI canvas  ◄──── JSON ────►  designtree-core ──► .dts
-  (to be chosen)              Graph · validate · to_dts
+   Tauri app   ◄──── JSON ────►  designtree-core ──► .dts
+ (React Flow)                 Graph · validate · to_dts
 ```
 
 ## designtree-core
@@ -39,8 +39,10 @@ The GUI only needs three operations, all JSON in and out:
 2. edit a `Graph` and ask for `validate` on change;
 3. ask for `to_dts` to preview or save the output.
 
-With Tauri these become `#[tauri::command]` functions; with a native Rust
-toolkit the GUI calls the crates directly.
+These are `#[tauri::command]` functions in `app/src-tauri/src/lib.rs`. The
+TypeScript mirror of the model lives in `app/src/model.ts` and must be kept in
+sync with `designtree-core` (generating it with `ts-rs` or `specta` is a
+candidate next step).
 
 ## Next steps
 
