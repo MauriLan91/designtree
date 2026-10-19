@@ -1,9 +1,20 @@
 # Product backlog
 
-> Status: **draft v0.1** (2026-10-19), open for discussion with the product
-> owner. Dates, scope and priorities are proposals until validated. Once
-> validated, milestones and stories are mirrored to GitHub Milestones and
-> Issues; this file stays the source of truth for goals and story wording.
+> Status: **draft v0.2** (2026-10-19). Product decisions below were taken
+> with the product owner; story details can still change during refinement.
+> Milestones and stories are mirrored to GitHub Milestones and Issues once
+> validated; this file stays the source of truth for goals and story wording.
+
+## Product decisions
+
+| # | Decision | Date |
+| --- | --- | --- |
+| D1 | Primary personas are the **board bring-up engineer** and the **BSP maintainer**; learners are secondary. | 2026-10-19 |
+| D2 | v0.1 starts with **importing real devicetrees** (round-trip), before validation and typed wiring. | 2026-10-19 |
+| D3 | Boards built on an SoC `.dtsi` keep it untouched: user changes are exported as **`&label { }` overrides**, never flattened. | 2026-10-19 |
+| D4 | The element library is built **only from a local kernel checkout** chosen by the user; no prebuilt or downloaded catalog is shipped. | 2026-10-19 |
+| D5 | Besides the graph, three views are in scope: **synchronized DTS text**, **address map** and **physical board view**. | 2026-10-19 |
+| D6 | Milestone dates below are accepted as targets. | 2026-10-19 |
 
 ## Product vision
 
@@ -20,7 +31,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | --- | --- |
 | **Board bring-up engineer** | Describe a new board on top of an existing SoC `.dtsi`, quickly and without schema errors. |
 | **BSP maintainer** | Open existing `.dts`/`.dtsi` files, understand them at a glance, change them and keep diffs small. |
-| **Learner / student** | Understand how a devicetree is structured (hierarchy, phandles, address map) by seeing it. |
+| **Learner / student** (secondary) | Understand how a devicetree is structured (hierarchy, phandles, address map) by seeing it. |
 
 ## SMART goals
 
@@ -40,7 +51,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M0 Skeleton** ✅ | Graph model, DTS export, binding indexer, CLI, first Tauri + React Flow app | – | done 2026-10-19 |
 | **M1 v0.1 Round-trip** | Import real devicetrees, typed library, compile with `dtc` | G1, G2 | 2026-12-18 |
 | **M2 v0.2 Real boards** | Schema validation, typed wiring, SoC templates, overlays, address map | G3 | 2027-02-26 |
-| **M3 v0.3 Productive editor** | Undo/redo, text/graph sync, keyboard flow, performance | G4, G5 | 2027-03-31 |
+| **M3 v0.3 Productive editor** | Undo/redo, text/graph sync, board view, keyboard flow, performance | G4, G5 | 2027-03-31 |
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
@@ -85,6 +96,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | US-1.2 | As a BSP maintainer, I want `#include` of `.dtsi` files and `dt-bindings` headers to be resolved so that real kernel board files open. | Include paths configurable (defaults for a kernel tree); C preprocessor macros expanded (`GPIO_ACTIVE_LOW`, `IRQ_TYPE_*`); works on the G1 corpus. | 8 | Opus 5.5 | code-review, security-review |
 | US-1.3 | As a BSP maintainer, I want nodes that come from an included `.dtsi` to be shown as inherited and my changes kept as overrides so that exporting does not flatten the SoC file into my board file. | Inherited nodes visibly marked and read-only by default; edits produce `&label { }` blocks in the board file; export of an unmodified import equals the original after `dtc` compilation. | 13 | Opus 5.5 | code-review |
 | US-1.4 | As a user, I want an imported tree laid out automatically so that it is readable without dragging every node. | Hierarchical auto-layout (e.g. ELK) on import and on demand; groups for each bus; layout stored in the design file. | 5 | Sonnet 5.5 | run, simplify |
+| US-1.5 | As a BSP maintainer, I want exported files formatted like kernel sources, keeping the original order of imported nodes, so that my diffs stay small. | Stable ordering, tabs, kernel style; re-exporting an unmodified import gives a textually identical file except whitespace normalization. | 3 | Sonnet 5.5 | code-review |
 
 ### F2 Typed element library
 
@@ -141,7 +153,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
 | US-8.1 | As a user, I want fuzzy search across compatible, vendor and title, plus favorites and recents, so that I find elements fast among 26,000 compatibles. | Results < 50 ms; ranking by match quality; favorites persisted. | 3 | Sonnet 5.5 | run |
-| US-8.2 | As a user, I want a prebuilt catalog for a pinned kernel version so that I can start without a kernel checkout. | Catalog downloaded or bundled per kernel version; license notice shown; version selectable. | 5 | Sonnet 5.5 | security-review |
+| US-8.2 | As a user, I want to register one or more local kernel checkouts and pick which one a design uses so that the library matches my target kernel. | Settings list kernel source paths with detected version (`Makefile` VERSION/PATCHLEVEL); the design file records the kernel version it was built against; the index is cached per checkout and rebuilt only when bindings change; a design opened against a different version shows a warning. | 5 | Sonnet 5.5 | security-review, run |
 
 ## M3 · v0.3 Productive editor
 
@@ -159,7 +171,14 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
 | US-10.1 | As a BSP maintainer, I want to edit the DTS text side by side with the graph, with changes flowing both ways, so that I can use whichever is faster. | Code editor (Monaco or CodeMirror) with DTS highlighting; text edits re-parse incrementally; selection is synced. | 13 | Opus 5.5 | run, code-review, simplify |
-| US-10.2 | As a BSP maintainer, I want exported files formatted like kernel sources so that my diffs stay small. | Stable ordering, tabs, kernel style; option to keep original ordering of imported nodes. | 3 | Sonnet 5.5 | code-review |
+
+### F14 Physical board view
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-14.1 | As a bring-up engineer, I want a board view where I place devices where they sit on the PCB (SoC, connectors, sensors) so that the design matches the schematic I work from. | Second canvas sharing the same model; nodes positioned freely over an optional background image (board photo or schematic export); selection synced with the graph view; positions saved in the design file and ignored by DTS export. | 8 | Sonnet 5.5 | run, artifact-design |
+| US-14.2 | As a bring-up engineer, I want buses and connections drawn between devices in the board view so that I see which controller drives which peripheral. | Edges derived from hierarchy and phandle references (I²C, SPI, GPIO, interrupts), filterable by type. | 5 | Sonnet 5.5 | run |
+| US-14.3 | As a bring-up engineer, I want connector pin-outs on the board view (e.g. a 40-pin header) mapped to SoC pins so that I can check pin multiplexing. | Connector templates with pin numbers; pins linked to `pinctrl`/GPIO nodes; conflicts flagged. | 8 | Opus 5.5 | run, code-review |
 
 ### F11 Performance
 
@@ -189,8 +208,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 
 ## Ideas not yet scheduled
 
-- Board view: canvas laid out like the physical board or SoC block diagram, not only the tree.
-- Pin multiplexing editor (`pinctrl`) per SoC, with pin conflict detection.
+- Full pin multiplexing editor (`pinctrl`) per SoC, beyond the connector view of US-14.3.
 - Import from a running system (`/proc/device-tree` or a `.dtb`).
 - Git-aware diff of two designs, shown on the canvas.
 - Zephyr devicetree support (same format, different bindings).
