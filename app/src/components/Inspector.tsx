@@ -70,7 +70,7 @@ function NodeInspector({ node, onChange }: { node: DtFlowNode; onChange: Props["
 
   const commitProps = () => {
     try {
-      onChange(node.id, { properties: parseProperties(propsText) });
+      onChange(node.id, { properties: parseProperties(propsText, data.properties) });
       setPropsError(null);
     } catch (e) {
       setPropsError((e as Error).message);

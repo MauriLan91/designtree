@@ -27,16 +27,18 @@ export const backend = {
   exportDts: (design: Design) => invoke<string>("export_dts", { design }),
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),
+  importDts: (path: string) => invoke<Design>("import_dts", { path }),
   writeText: (path: string, content: string) => invoke<void>("write_text", { path, content }),
 };
 
 const DESIGN_FILTER = [{ name: "DesignTree design", extensions: ["json"] }];
+const DTS_FILTER = [{ name: "Devicetree source", extensions: ["dts", "dtsi"] }];
 
 export const dialogs = {
   pickKernelTree: () =>
     open({ directory: true, title: "Select a Linux kernel source tree" }) as Promise<string | null>,
   pickDesignToOpen: () => open({ filters: DESIGN_FILTER }) as Promise<string | null>,
   pickDesignToSave: () => save({ filters: DESIGN_FILTER, defaultPath: "design.json" }),
-  pickDtsToSave: () =>
-    save({ filters: [{ name: "Devicetree source", extensions: ["dts"] }], defaultPath: "board.dts" }),
+  pickDtsToOpen: () => open({ filters: DTS_FILTER }) as Promise<string | null>,
+  pickDtsToSave: () => save({ filters: DTS_FILTER, defaultPath: "board.dts" }),
 };

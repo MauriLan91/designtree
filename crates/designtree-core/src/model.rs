@@ -30,6 +30,77 @@ pub enum PropertyValue {
     Strings(Vec<String>),
     /// Raw bytes (`local-mac-address = [00 11 22 33 44 55];`).
     Bytes(Vec<u8>),
+    /// Any other value, kept chunk by chunk as written in the source:
+    /// strings mixed with cells, `/bits/` sizes other than 32, path
+    /// references (`stdout-path = &uart0;`) and phandles that are not at
+    /// the start of a cell list (`interrupt-map`).
+    Mixed(Vec<ValueChunk>),
+}
+
+/// One comma-separated piece of a [`PropertyValue::Mixed`] value.
+///
+/// Reference targets in chunks are a label (`uart0`), or a node path when
+/// they start with `/` (`/soc/serial@0`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum ValueChunk {
+    /// `<...>` cell list, `bits` wide (8, 16, 32 or 64).
+    Cells {
+        bits: u8,
+        cells: Vec<Cell>,
+    },
+    String {
+        value: String,
+    },
+    Bytes {
+        value: Vec<u8>,
+    },
+    /// `&target` outside a cell list; expands to the full path of the target.
+    Path {
+        target: String,
+    },
+}
+
+/// One element of a cell list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Cell {
+    /// A JSON number up to 2^53 - 1, a hex string (`"0x..."`) above that,
+    /// so that JavaScript reads every value exactly.
+    Number(#[serde(with = "json_safe_u64")] u64),
+    /// `&target`, replaced by the phandle of the target node.
+    Phandle { phandle: String },
+}
+
+mod json_safe_u64 {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+    pub fn serialize<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+        if *value <= MAX_SAFE_INTEGER {
+            serializer.serialize_u64(*value)
+        } else {
+            serializer.serialize_str(&format!("{value:#x}"))
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Number(u64),
+            Hex(String),
+        }
+        match Repr::deserialize(deserializer)? {
+            Repr::Number(n) => Ok(n),
+            Repr::Hex(text) => text
+                .strip_prefix("0x")
+                .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+                .ok_or_else(|| D::Error::custom(format!("invalid cell value `{text}`"))),
+        }
+    }
 }
 
 /// Size of a group frame on the editor canvas.
@@ -85,7 +156,9 @@ pub enum EdgeKind {
     /// `to` is a child of `from` in the devicetree hierarchy.
     Child,
     /// `from` references `to` through a phandle property, optionally
-    /// followed by specifier cells (`clocks = <&osc 1>;`).
+    /// followed by specifier cells (`clocks = <&osc 1>;`). Several edges
+    /// with the same property form one phandle list, in edge order
+    /// (`clocks = <&osc 1>, <&pll 0>;`).
     Reference {
         property: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]

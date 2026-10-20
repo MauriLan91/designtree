@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::model::{EdgeKind, Graph, Node, PropertyValue};
+use crate::model::{Cell, EdgeKind, Graph, Node, PropertyValue, ValueChunk};
 use crate::validate::{validate, ValidationError};
 
 /// Generates devicetree source from a design. Fails if the graph does not
@@ -40,18 +40,27 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
             }
         }
     }
+    // Reference edges with the same property form one phandle list.
+    let mut phandle_lists: Vec<(&str, Vec<String>)> = Vec::new();
     for edge in graph.references(&node.id) {
         if let EdgeKind::Reference { property, args } = &edge.kind {
             let target = graph
                 .node(&edge.to)
                 .and_then(|n| n.label.as_deref())
                 .unwrap_or("?");
-            let mut cells = format!("&{target}");
+            let mut entry = format!("<&{target}");
             for arg in args {
-                let _ = write!(cells, " {}", format_cell(*arg));
+                let _ = write!(entry, " {}", format_cell(u64::from(*arg)));
             }
-            let _ = writeln!(out, "{inner}{property} = <{cells}>;");
+            entry.push('>');
+            match phandle_lists.iter_mut().find(|(p, _)| p == property) {
+                Some((_, entries)) => entries.push(entry),
+                None => phandle_lists.push((property, vec![entry])),
+            }
         }
+    }
+    for (property, entries) in phandle_lists {
+        let _ = writeln!(out, "{inner}{property} = {};", entries.join(", "));
     }
 
     for child in graph.children(&node.id) {
@@ -64,12 +73,34 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
 fn quote_all(strings: &[String]) -> String {
     strings
         .iter()
-        .map(|s| format!("\"{s}\""))
+        .map(|s| quote(s))
         .collect::<Vec<_>>()
         .join(", ")
 }
 
-fn format_cell(cell: u32) -> String {
+fn quote(s: &str) -> String {
+    let mut quoted = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => quoted.push_str("\\\""),
+            '\\' => quoted.push_str("\\\\"),
+            '\n' => quoted.push_str("\\n"),
+            '\t' => quoted.push_str("\\t"),
+            '\r' => quoted.push_str("\\r"),
+            c if c.is_control() => {
+                let mut buf = [0; 4];
+                for b in c.encode_utf8(&mut buf).bytes() {
+                    let _ = write!(quoted, "\\x{b:02x}");
+                }
+            }
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+fn format_cell(cell: u64) -> String {
     if cell < 10 {
         cell.to_string()
     } else {
@@ -77,18 +108,57 @@ fn format_cell(cell: u32) -> String {
     }
 }
 
+fn format_bytes(bytes: &[u8]) -> String {
+    let bytes: Vec<_> = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!("[{}]", bytes.join(" "))
+}
+
+/// `&label`, or `&{/path}` for a path target.
+fn format_reference(target: &str) -> String {
+    if target.starts_with('/') {
+        format!("&{{{target}}}")
+    } else {
+        format!("&{target}")
+    }
+}
+
 fn format_value(value: &PropertyValue) -> String {
     match value {
         PropertyValue::Empty => String::new(),
         PropertyValue::Cells(cells) => {
-            let cells: Vec<_> = cells.iter().map(|c| format_cell(*c)).collect();
+            let cells: Vec<_> = cells.iter().map(|c| format_cell(u64::from(*c))).collect();
             format!("<{}>", cells.join(" "))
         }
         PropertyValue::Strings(strings) => quote_all(strings),
-        PropertyValue::Bytes(bytes) => {
-            let bytes: Vec<_> = bytes.iter().map(|b| format!("{b:02x}")).collect();
-            format!("[{}]", bytes.join(" "))
+        PropertyValue::Bytes(bytes) => format_bytes(bytes),
+        PropertyValue::Mixed(chunks) => chunks
+            .iter()
+            .map(format_chunk)
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
+fn format_chunk(chunk: &ValueChunk) -> String {
+    match chunk {
+        ValueChunk::Cells { bits, cells } => {
+            let cells: Vec<_> = cells
+                .iter()
+                .map(|cell| match cell {
+                    Cell::Number(n) => format_cell(*n),
+                    Cell::Phandle { phandle } => format_reference(phandle),
+                })
+                .collect();
+            let prefix = if *bits == 32 {
+                String::new()
+            } else {
+                format!("/bits/ {bits} ")
+            };
+            format!("{prefix}<{}>", cells.join(" "))
         }
+        ValueChunk::String { value } => quote(value),
+        ValueChunk::Bytes { value } => format_bytes(value),
+        ValueChunk::Path { target } => format_reference(target),
     }
 }
 
@@ -198,6 +268,73 @@ mod tests {
         let errors = to_dts(&graph).unwrap_err();
         assert!(errors.contains(&ValidationError::Detached("b".into())));
         assert!(errors.contains(&ValidationError::UnlabeledTarget("b".into())));
+    }
+
+    #[test]
+    fn emits_mixed_values_and_escaped_strings() {
+        let mut root = node("root", "/");
+        root.properties = vec![
+            Property {
+                name: "model".into(),
+                value: PropertyValue::Strings(vec!["a \"b\"\n".into()]),
+            },
+            Property {
+                name: "mixed".into(),
+                value: PropertyValue::Mixed(vec![
+                    ValueChunk::Cells {
+                        bits: 64,
+                        cells: vec![Cell::Number(0x1_0000_0000)],
+                    },
+                    ValueChunk::Path { target: "/".into() },
+                    ValueChunk::Cells {
+                        bits: 32,
+                        cells: vec![
+                            Cell::Number(1),
+                            Cell::Phandle {
+                                phandle: "missing".into(),
+                            },
+                        ],
+                    },
+                ]),
+            },
+        ];
+        let mut graph = Graph {
+            nodes: vec![root],
+            edges: vec![],
+            groups: vec![],
+        };
+        assert_eq!(
+            to_dts(&graph).unwrap_err(),
+            [ValidationError::UnknownReference {
+                node: "root".into(),
+                property: "mixed".into(),
+                target: "missing".into(),
+            }]
+        );
+
+        graph.nodes[0].label = Some("missing".into());
+        assert_eq!(
+            to_dts(&graph).unwrap(),
+            "/dts-v1/;\n\n\
+             missing: / {\n\
+             \tmodel = \"a \\\"b\\\"\\n\";\n\
+             \tmixed = /bits/ 64 <0x100000000>, &{/}, <1 &missing>;\n\
+             };\n"
+        );
+    }
+
+    #[test]
+    fn large_cells_survive_json_in_javascript() {
+        let chunk = ValueChunk::Cells {
+            bits: 64,
+            cells: vec![Cell::Number(7), Cell::Number(0xffff_ffff_ffff_fff1)],
+        };
+        let json = serde_json::to_string(&chunk).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"cells","bits":64,"cells":[7,"0xfffffffffffffff1"]}"#
+        );
+        assert_eq!(serde_json::from_str::<ValueChunk>(&json).unwrap(), chunk);
     }
 
     #[test]
