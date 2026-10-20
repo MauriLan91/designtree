@@ -7,11 +7,13 @@
 
 pub mod dts;
 pub mod import;
+pub mod layout;
 pub mod model;
 pub mod parse;
 pub mod validate;
 
 pub use dts::to_dts;
 pub use import::{import_dts, ImportError};
+pub use layout::auto_layout;
 pub use model::*;
 pub use validate::{validate, ValidationError};

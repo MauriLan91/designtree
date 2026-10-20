@@ -32,6 +32,13 @@ enum Command {
     },
     /// Check a design file for structural errors.
     Validate { design: PathBuf },
+    /// Arrange the nodes of a design file automatically.
+    Layout {
+        design: PathBuf,
+        /// Output design file (JSON). Prints to stdout when omitted.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Generate devicetree source from a design file.
     Export {
         design: PathBuf,
@@ -68,6 +75,11 @@ fn main() -> Result<()> {
                 eprintln!("error: {error}");
             }
             bail!("{} problem(s) found", errors.len())
+        }
+        Command::Layout { design, output } => {
+            let mut graph = load(&design)?;
+            designtree_core::auto_layout(&mut graph);
+            write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
         Command::Export { design, output } => match designtree_core::to_dts(&load(&design)?) {
             Ok(dts) => write_output(output, &dts),
