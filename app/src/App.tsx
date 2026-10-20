@@ -241,7 +241,7 @@ export default function App() {
       // Keep editor-only data (bindings) that the design file does not carry.
       const old = new Map(nodes.map((n) => [n.id, n]));
       setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding } } : n)));
-      setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 0);
+      setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     } catch (e) {
       setErrors([String(e)]);
     }
@@ -290,6 +290,7 @@ export default function App() {
           onBeforeDelete={onBeforeDelete}
           fitView
           fitViewOptions={{ maxZoom: 1 }}
+          minZoom={0.1}
           deleteKeyCode={["Backspace", "Delete"]}
         >
           <Background />
