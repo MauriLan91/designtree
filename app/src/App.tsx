@@ -33,6 +33,7 @@ import {
   toDesign,
   uniqueLabel,
   type Binding,
+  type Design,
   type DtFlowNode,
   type FlowNode,
   type GroupFlowNode,
@@ -223,13 +224,12 @@ export default function App() {
     setEdges(d.edges);
   };
 
-  const openDesign = async () => {
-    const path = await dialogs.pickDesignToOpen();
-    if (!path) return;
+  const loadDesign = async (load: () => Promise<Design>) => {
     try {
-      const d = fromDesign(await backend.openDesign(path));
+      const d = fromDesign(await load());
       setNodes(d.nodes);
       setEdges(d.edges);
+      requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([String(e)]);
     }
@@ -245,6 +245,16 @@ export default function App() {
     } catch (e) {
       setErrors([String(e)]);
     }
+  };
+
+  const openDesign = async () => {
+    const path = await dialogs.pickDesignToOpen();
+    if (path) await loadDesign(() => backend.openDesign(path));
+  };
+
+  const importDts = async () => {
+    const path = await dialogs.pickDtsToOpen();
+    if (path) await loadDesign(() => backend.importDts(path));
   };
 
   const saveDesign = async () => {
@@ -269,6 +279,7 @@ export default function App() {
         <span className="brand">DesignTree</span>
         <button onClick={newDesign}>New</button>
         <button onClick={openDesign} disabled={!inTauri}>Open…</button>
+        <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
         <button onClick={exportDts} disabled={!inTauri || !dts || errors.length > 0}>Export .dts…</button>
         <span className="sep" />

@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::model::{EdgeKind, Graph, Node, PropertyValue};
+use crate::model::{Cell, EdgeKind, Graph, Node, PropertyValue, ValueChunk};
 use crate::validate::{validate, ValidationError};
 
 /// Generates devicetree source from a design. Fails if the graph does not
@@ -22,6 +22,40 @@ const TAB_WIDTH: usize = 8;
 /// Lines are wrapped so they do not exceed this many columns.
 const MAX_COLUMNS: usize = 80;
 
+/// One comma-separated piece of a property value: `<cells>`, `"string"`,
+/// `[bytes]` or `&path`. `tokens` may be split across lines.
+struct Item {
+    open: String,
+    tokens: Vec<String>,
+    close: &'static str,
+}
+
+impl Item {
+    fn single(token: String) -> Self {
+        Item {
+            open: String::new(),
+            tokens: vec![token],
+            close: "",
+        }
+    }
+
+    fn cells(open: String, tokens: Vec<String>) -> Self {
+        Item {
+            open,
+            tokens,
+            close: ">",
+        }
+    }
+
+    fn bytes(bytes: &[u8]) -> Self {
+        Item {
+            open: "[".into(),
+            tokens: bytes.iter().map(|b| format!("{b:02x}")).collect(),
+            close: "]",
+        }
+    }
+}
+
 fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     let indent = "\t".repeat(depth);
     let inner = "\t".repeat(depth + 1);
@@ -35,8 +69,8 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     let mut has_properties = false;
     if !node.compatible.is_empty() {
         has_properties = true;
-        let strings = node.compatible.iter().map(|s| quote(s)).collect();
-        write_list(out, depth + 1, "compatible", "", strings, "");
+        let items = node.compatible.iter().map(|s| Item::single(quote(s)));
+        write_property(out, depth + 1, "compatible", items.collect());
     }
     for prop in &node.properties {
         has_properties = true;
@@ -44,20 +78,11 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
             PropertyValue::Empty => {
                 let _ = writeln!(out, "{inner}{};", prop.name);
             }
-            PropertyValue::Cells(cells) => {
-                let cells = cells.iter().map(|c| format_cell(*c)).collect();
-                write_list(out, depth + 1, &prop.name, "<", cells, ">");
-            }
-            PropertyValue::Strings(strings) => {
-                let strings = strings.iter().map(|s| quote(s)).collect();
-                write_list(out, depth + 1, &prop.name, "", strings, "");
-            }
-            PropertyValue::Bytes(bytes) => {
-                let bytes = bytes.iter().map(|b| format!("{b:02x}")).collect();
-                write_list(out, depth + 1, &prop.name, "[", bytes, "]");
-            }
+            value => write_property(out, depth + 1, &prop.name, value_items(value)),
         }
     }
+    // Reference edges with the same property form one phandle list.
+    let mut phandle_lists: Vec<(&str, Vec<Item>)> = Vec::new();
     for edge in graph.references(&node.id) {
         if let EdgeKind::Reference { property, args } = &edge.kind {
             has_properties = true;
@@ -66,9 +91,16 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
                 .and_then(|n| n.label.as_deref())
                 .unwrap_or("?");
             let mut cells = vec![format!("&{target}")];
-            cells.extend(args.iter().map(|a| format_cell(*a)));
-            write_list(out, depth + 1, property, "<", cells, ">");
+            cells.extend(args.iter().map(|a| format_cell(u64::from(*a))));
+            let item = Item::cells("<".into(), cells);
+            match phandle_lists.iter_mut().find(|(p, _)| p == property) {
+                Some((_, items)) => items.push(item),
+                None => phandle_lists.push((property, vec![item])),
+            }
         }
+    }
+    for (property, items) in phandle_lists {
+        write_property(out, depth + 1, property, items);
     }
 
     // Kernel style: a blank line separates properties from subnodes and
@@ -82,38 +114,53 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     let _ = writeln!(out, "{indent}}};");
 }
 
-/// Writes `name = <open>tokens<close>;`, wrapping at [`MAX_COLUMNS`] and
-/// aligning continuation lines under the first token, as the kernel does
+/// Writes `name = item, item;`, wrapping at [`MAX_COLUMNS`] and aligning
+/// continuation lines under the start of the value, as the kernel does
 /// (tabs first, then spaces).
-fn write_list(
-    out: &mut String,
-    depth: usize,
-    name: &str,
-    open: &str,
-    mut tokens: Vec<String>,
-    close: &str,
-) {
-    let indent = "\t".repeat(depth);
-    let prefix = format!("{name} = {open}");
-    let align = depth * TAB_WIDTH + prefix.len();
-
-    // Strings are separated by commas, which stay at the end of the line.
-    let comma = open.is_empty();
-    let last = tokens.len().saturating_sub(1);
-    for (i, token) in tokens.iter_mut().enumerate() {
-        if comma && i < last {
-            token.push(',');
+fn write_property(out: &mut String, depth: usize, name: &str, items: Vec<Item>) {
+    // Flatten to tokens: an item's opening goes on its first token, its
+    // closing and the separating comma on its last.
+    let mut tokens = Vec::new();
+    let last_item = items.len().saturating_sub(1);
+    for (i, item) in items.into_iter().enumerate() {
+        let last_token = item.tokens.len().saturating_sub(1);
+        let mut empty = item.tokens.is_empty();
+        for (j, token) in item.tokens.into_iter().enumerate() {
+            let mut piece = String::new();
+            if j == 0 {
+                piece.push_str(&item.open);
+            }
+            piece.push_str(&token);
+            if j == last_token {
+                piece.push_str(item.close);
+                if i < last_item {
+                    piece.push(',');
+                }
+            }
+            tokens.push(piece);
+            empty = false;
+        }
+        if empty {
+            // `<>` and `[]` carry no tokens.
+            let mut piece = format!("{}{}", item.open, item.close);
+            if i < last_item {
+                piece.push(',');
+            }
+            tokens.push(piece);
         }
     }
 
-    let mut line = format!("{indent}{prefix}");
+    let prefix = format!("{name} = ");
+    let align = depth * TAB_WIDTH + prefix.len();
+    let mut line = format!("{}{prefix}", "\t".repeat(depth));
     let mut col = align;
+    let last = tokens.len().saturating_sub(1);
     for (i, token) in tokens.iter().enumerate() {
-        let mut piece = token.clone();
-        if i == last {
-            piece.push_str(close);
-            piece.push(';');
-        }
+        let piece = if i == last {
+            format!("{token};")
+        } else {
+            token.clone()
+        };
         if i > 0 {
             if col + 1 + piece.len() > MAX_COLUMNS {
                 out.push_str(&line);
@@ -132,23 +179,61 @@ fn write_list(
         line.push_str(&piece);
         col += piece.len();
     }
-    if tokens.is_empty() {
-        line.push_str(close);
-        line.push(';');
-    }
     out.push_str(&line);
     out.push('\n');
 }
 
+fn value_items(value: &PropertyValue) -> Vec<Item> {
+    match value {
+        PropertyValue::Empty => vec![],
+        PropertyValue::Cells(cells) => {
+            let cells = cells.iter().map(|c| format_cell(u64::from(*c))).collect();
+            vec![Item::cells("<".into(), cells)]
+        }
+        PropertyValue::Strings(strings) => strings.iter().map(|s| Item::single(quote(s))).collect(),
+        PropertyValue::Bytes(bytes) => vec![Item::bytes(bytes)],
+        PropertyValue::Mixed(chunks) => chunks.iter().map(chunk_item).collect(),
+    }
+}
+
+fn chunk_item(chunk: &ValueChunk) -> Item {
+    match chunk {
+        ValueChunk::Cells { bits, cells } => {
+            let cells = cells
+                .iter()
+                .map(|cell| match cell {
+                    Cell::Number(n) => format_cell(*n),
+                    Cell::Phandle { phandle } => format_reference(phandle),
+                })
+                .collect();
+            let open = if *bits == 32 {
+                "<".to_string()
+            } else {
+                format!("/bits/ {bits} <")
+            };
+            Item::cells(open, cells)
+        }
+        ValueChunk::String { value } => Item::single(quote(value)),
+        ValueChunk::Bytes { value } => Item::bytes(value),
+        ValueChunk::Path { target } => Item::single(format_reference(target)),
+    }
+}
+
 fn quote(s: &str) -> String {
-    let mut quoted = String::with_capacity(s.len() + 2);
-    quoted.push('"');
+    let mut quoted = String::from("\"");
     for c in s.chars() {
         match c {
             '"' => quoted.push_str("\\\""),
             '\\' => quoted.push_str("\\\\"),
             '\n' => quoted.push_str("\\n"),
             '\t' => quoted.push_str("\\t"),
+            '\r' => quoted.push_str("\\r"),
+            c if c.is_control() => {
+                let mut buf = [0; 4];
+                for b in c.encode_utf8(&mut buf).bytes() {
+                    let _ = write!(quoted, "\\x{b:02x}");
+                }
+            }
             c => quoted.push(c),
         }
     }
@@ -156,11 +241,20 @@ fn quote(s: &str) -> String {
     quoted
 }
 
-fn format_cell(cell: u32) -> String {
+fn format_cell(cell: u64) -> String {
     if cell < 10 {
         cell.to_string()
     } else {
         format!("{cell:#x}")
+    }
+}
+
+/// `&label`, or `&{/path}` for a path target.
+fn format_reference(target: &str) -> String {
+    if target.starts_with('/') {
+        format!("&{{{target}}}")
+    } else {
+        format!("&{target}")
     }
 }
 
@@ -260,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_property_and_child_order() {
+    fn keeps_child_order() {
         let graph = Graph {
             nodes: vec![node("root", "/"), node("z", "zeta"), node("a", "alpha")],
             edges: vec![child("root", "z"), child("root", "a")],
@@ -273,7 +367,7 @@ mod tests {
     }
 
     #[test]
-    fn wraps_long_values_aligned_with_the_first_cell() {
+    fn wraps_long_values_aligned_with_the_value() {
         let cells: Vec<u32> = (0..16).map(|i| 0x1000_0000 + i).collect();
         let dts = to_dts(&graph_with(vec![Property {
             name: "ranges".into(),
@@ -283,8 +377,8 @@ mod tests {
         let lines: Vec<_> = dts.lines().filter(|l| l.contains("0x1000")).collect();
         assert!(lines.len() > 1);
         assert!(lines[0].starts_with("\t\tranges = <0x10000000"));
-        // Continuation lines align under the first cell: two tabs + 10 columns.
-        assert!(lines[1].starts_with("\t\t\t  0x"), "{:?}", lines[1]);
+        // Continuation lines align under the value: two tabs + 9 columns.
+        assert!(lines[1].starts_with("\t\t\t 0x"));
         for line in &lines {
             let width = line.replace('\t', "        ").len();
             assert!(width <= 80, "{line:?} is {width} columns");
@@ -293,13 +387,20 @@ mod tests {
     }
 
     #[test]
-    fn escapes_strings() {
+    fn wraps_comma_separated_chunks_after_the_comma() {
+        let strings: Vec<String> = (0..8)
+            .map(|i| format!("vendor,device-number-{i}"))
+            .collect();
         let dts = to_dts(&graph_with(vec![Property {
-            name: "label".into(),
-            value: PropertyValue::Strings(vec!["say \"hi\"\\".into()]),
+            name: "names".into(),
+            value: PropertyValue::Strings(strings),
         }]))
         .unwrap();
-        assert!(dts.contains("label = \"say \\\"hi\\\"\\\\\";"), "{dts}");
+        let lines: Vec<_> = dts.lines().filter(|l| l.contains("vendor")).collect();
+        assert!(lines.len() > 1);
+        assert!(lines[0].ends_with(','));
+        assert!(lines[1].starts_with("\t\t\t\"vendor"), "{:?}", lines[1]);
+        assert!(lines.last().unwrap().ends_with("\";"));
     }
 
     #[test]
@@ -322,6 +423,73 @@ mod tests {
         let errors = to_dts(&graph).unwrap_err();
         assert!(errors.contains(&ValidationError::Detached("b".into())));
         assert!(errors.contains(&ValidationError::UnlabeledTarget("b".into())));
+    }
+
+    #[test]
+    fn emits_mixed_values_and_escaped_strings() {
+        let mut root = node("root", "/");
+        root.properties = vec![
+            Property {
+                name: "model".into(),
+                value: PropertyValue::Strings(vec!["a \"b\"\n".into()]),
+            },
+            Property {
+                name: "mixed".into(),
+                value: PropertyValue::Mixed(vec![
+                    ValueChunk::Cells {
+                        bits: 64,
+                        cells: vec![Cell::Number(0x1_0000_0000)],
+                    },
+                    ValueChunk::Path { target: "/".into() },
+                    ValueChunk::Cells {
+                        bits: 32,
+                        cells: vec![
+                            Cell::Number(1),
+                            Cell::Phandle {
+                                phandle: "missing".into(),
+                            },
+                        ],
+                    },
+                ]),
+            },
+        ];
+        let mut graph = Graph {
+            nodes: vec![root],
+            edges: vec![],
+            groups: vec![],
+        };
+        assert_eq!(
+            to_dts(&graph).unwrap_err(),
+            [ValidationError::UnknownReference {
+                node: "root".into(),
+                property: "mixed".into(),
+                target: "missing".into(),
+            }]
+        );
+
+        graph.nodes[0].label = Some("missing".into());
+        assert_eq!(
+            to_dts(&graph).unwrap(),
+            "/dts-v1/;\n\n\
+             missing: / {\n\
+             \tmodel = \"a \\\"b\\\"\\n\";\n\
+             \tmixed = /bits/ 64 <0x100000000>, &{/}, <1 &missing>;\n\
+             };\n"
+        );
+    }
+
+    #[test]
+    fn large_cells_survive_json_in_javascript() {
+        let chunk = ValueChunk::Cells {
+            bits: 64,
+            cells: vec![Cell::Number(7), Cell::Number(0xffff_ffff_ffff_fff1)],
+        };
+        let json = serde_json::to_string(&chunk).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"cells","bits":64,"cells":[7,"0xfffffffffffffff1"]}"#
+        );
+        assert_eq!(serde_json::from_str::<ValueChunk>(&json).unwrap(), chunk);
     }
 
     #[test]

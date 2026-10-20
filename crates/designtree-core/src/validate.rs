@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use thiserror::Error;
 
-use crate::model::{EdgeKind, Graph, NodeId};
+use crate::model::{Cell, EdgeKind, Graph, Node, NodeId, PropertyValue, ValueChunk};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ValidationError {
@@ -22,6 +22,12 @@ pub enum ValidationError {
     UnlabeledTarget(String),
     #[error("duplicate label `{0}`")]
     DuplicateLabel(String),
+    #[error("property `{property}` of node `{node}` references unknown node `{target}`")]
+    UnknownReference {
+        node: String,
+        property: String,
+        target: String,
+    },
 }
 
 /// Checks structural rules that must hold before DTS can be generated.
@@ -91,5 +97,79 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
         }
     }
 
+    check_value_references(graph, &labels, &mut errors);
     errors
+}
+
+/// References inside `Mixed` values must name an existing label or path.
+fn check_value_references(
+    graph: &Graph,
+    labels: &HashSet<&String>,
+    errors: &mut Vec<ValidationError>,
+) {
+    let mut paths: Option<HashSet<String>> = None;
+    for node in &graph.nodes {
+        for property in &node.properties {
+            let PropertyValue::Mixed(chunks) = &property.value else {
+                continue;
+            };
+            let targets = chunks.iter().flat_map(|chunk| match chunk {
+                ValueChunk::Path { target } => vec![target],
+                ValueChunk::Cells { cells, .. } => cells
+                    .iter()
+                    .filter_map(|c| match c {
+                        Cell::Phandle { phandle } => Some(phandle),
+                        Cell::Number(_) => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            });
+            for target in targets {
+                let known = if target.starts_with('/') {
+                    paths
+                        .get_or_insert_with(|| node_paths(graph))
+                        .contains(target)
+                } else {
+                    labels.contains(target)
+                };
+                if !known {
+                    errors.push(ValidationError::UnknownReference {
+                        node: node.id.0.clone(),
+                        property: property.name.clone(),
+                        target: target.clone(),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Full paths of the nodes attached to the root, such as `/soc/serial@1000`.
+fn node_paths(graph: &Graph) -> HashSet<String> {
+    let mut children: HashMap<&NodeId, Vec<&NodeId>> = HashMap::new();
+    for edge in graph.edges.iter().filter(|e| e.kind == EdgeKind::Child) {
+        children.entry(&edge.from).or_default().push(&edge.to);
+    }
+    let nodes: HashMap<&NodeId, &Node> = graph.nodes.iter().map(|n| (&n.id, n)).collect();
+
+    let mut paths = HashSet::new();
+    let mut visited = HashSet::new();
+    let mut stack: Vec<(&NodeId, String)> = graph
+        .root()
+        .map(|root| (&root.id, String::new()))
+        .into_iter()
+        .collect();
+    while let Some((id, path)) = stack.pop() {
+        // Nodes with several parents or in cycles are reported elsewhere.
+        if !visited.insert(id) {
+            continue;
+        }
+        for child in children.get(id).into_iter().flatten() {
+            if let Some(node) = nodes.get(child) {
+                stack.push((child, format!("{path}/{}", node.full_name())));
+            }
+        }
+        paths.insert(if path.is_empty() { "/".into() } else { path });
+    }
+    paths
 }

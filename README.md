@@ -49,15 +49,18 @@ See [app/README.md](app/README.md) for prerequisites and canvas conventions.
 
 ```sh
 # Generate DTS from a sample design
-cargo run -- export examples/simple-board.json
+cargo run --bin designtree -- export examples/simple-board.json
+
+# Import an existing devicetree source into a design
+cargo run --bin designtree -- import board.dts -o board.json
 
 # Check a design for structural errors
-cargo run -- validate examples/simple-board.json
+cargo run --bin designtree -- validate examples/simple-board.json
 
 # Build the element library from a kernel checkout
 git clone --depth 1 --filter=blob:none --sparse https://github.com/torvalds/linux.git
 git -C linux sparse-checkout set Documentation/devicetree/bindings
-cargo run --release -- index linux -o catalog.json
+cargo run --release --bin designtree -- index linux -o catalog.json
 ```
 
 Against a current kernel tree the indexer finds about 5,700 binding schemas

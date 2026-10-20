@@ -23,6 +23,13 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Import devicetree source (.dts) into a design file.
+    Import {
+        dts: PathBuf,
+        /// Output file (JSON). Prints to stdout when omitted.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Check a design file for structural errors.
     Validate { design: PathBuf },
     /// Arrange the nodes of a design file automatically.
@@ -51,6 +58,12 @@ fn main() -> Result<()> {
                 catalog.skipped.len()
             );
             write_output(output, &serde_json::to_string_pretty(&catalog)?)
+        }
+        Command::Import { dts, output } => {
+            let source =
+                fs::read_to_string(&dts).with_context(|| format!("reading {}", dts.display()))?;
+            let graph = designtree_core::import_dts(&source, &dts.display().to_string())?;
+            write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
         Command::Validate { design } => {
             let errors = designtree_core::validate(&load(&design)?);
