@@ -27,6 +27,45 @@ pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
     Ok(out)
 }
 
+/// Width of a tab in kernel sources, used to wrap long values.
+const TAB_WIDTH: usize = 8;
+/// Lines are wrapped so they do not exceed this many columns.
+const MAX_COLUMNS: usize = 80;
+
+/// One comma-separated piece of a property value: `<cells>`, `"string"`,
+/// `[bytes]` or `&path`. `tokens` may be split across lines.
+struct Item {
+    open: String,
+    tokens: Vec<String>,
+    close: &'static str,
+}
+
+impl Item {
+    fn single(token: String) -> Self {
+        Item {
+            open: String::new(),
+            tokens: vec![token],
+            close: "",
+        }
+    }
+
+    fn cells(open: String, tokens: Vec<String>) -> Self {
+        Item {
+            open,
+            tokens,
+            close: ">",
+        }
+    }
+
+    fn bytes(bytes: &[u8]) -> Self {
+        Item {
+            open: "[".into(),
+            tokens: bytes.iter().map(|b| format!("{b:02x}")).collect(),
+            close: "]",
+        }
+    }
+}
+
 fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     let indent = "\t".repeat(depth);
     let inner = "\t".repeat(depth + 1);
@@ -40,55 +79,157 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     }
     let _ = writeln!(out, "{} {{", node.full_name());
 
+    let mut has_properties = false;
     if !node.compatible.is_empty() {
-        let _ = writeln!(out, "{inner}compatible = {};", quote_all(&node.compatible));
+        has_properties = true;
+        let items = node.compatible.iter().map(|s| Item::single(quote(s)));
+        write_property(out, depth + 1, "compatible", items.collect());
     }
     for prop in &node.properties {
+        has_properties = true;
         match &prop.value {
             PropertyValue::Empty => {
                 let _ = writeln!(out, "{inner}{};", prop.name);
             }
-            value => {
-                let _ = writeln!(out, "{inner}{} = {};", prop.name, format_value(value));
-            }
+            value => write_property(out, depth + 1, &prop.name, value_items(value)),
         }
     }
     // Reference edges with the same property form one phandle list.
-    let mut phandle_lists: Vec<(&str, Vec<String>)> = Vec::new();
+    let mut phandle_lists: Vec<(&str, Vec<Item>)> = Vec::new();
     for edge in graph.references(&node.id) {
         if let EdgeKind::Reference { property, args } = &edge.kind {
+            has_properties = true;
             let target = graph
                 .node(&edge.to)
                 .and_then(|n| n.label.as_deref())
                 .unwrap_or("?");
-            let mut entry = format!("<&{target}");
-            for arg in args {
-                let _ = write!(entry, " {}", format_cell(u64::from(*arg)));
-            }
-            entry.push('>');
+            let mut cells = vec![format!("&{target}")];
+            cells.extend(args.iter().map(|a| format_cell(u64::from(*a))));
+            let item = Item::cells("<".into(), cells);
             match phandle_lists.iter_mut().find(|(p, _)| p == property) {
-                Some((_, entries)) => entries.push(entry),
-                None => phandle_lists.push((property, vec![entry])),
+                Some((_, items)) => items.push(item),
+                None => phandle_lists.push((property, vec![item])),
             }
         }
     }
-    for (property, entries) in phandle_lists {
-        let _ = writeln!(out, "{inner}{property} = {};", entries.join(", "));
+    for (property, items) in phandle_lists {
+        write_property(out, depth + 1, property, items);
     }
 
-    for child in graph.children(&node.id) {
-        out.push('\n');
+    // Kernel style: a blank line separates properties from subnodes and
+    // subnodes from each other, but never follows the opening brace.
+    for (i, child) in graph.children(&node.id).enumerate() {
+        if has_properties || i > 0 {
+            out.push('\n');
+        }
         write_node(graph, child, depth + 1, out);
     }
     let _ = writeln!(out, "{indent}}};");
 }
 
-fn quote_all(strings: &[String]) -> String {
-    strings
-        .iter()
-        .map(|s| quote(s))
-        .collect::<Vec<_>>()
-        .join(", ")
+/// Writes `name = item, item;`, wrapping at [`MAX_COLUMNS`] and aligning
+/// continuation lines under the start of the value, as the kernel does
+/// (tabs first, then spaces).
+fn write_property(out: &mut String, depth: usize, name: &str, items: Vec<Item>) {
+    // Flatten to tokens: an item's opening goes on its first token, its
+    // closing and the separating comma on its last.
+    let mut tokens = Vec::new();
+    let last_item = items.len().saturating_sub(1);
+    for (i, item) in items.into_iter().enumerate() {
+        let last_token = item.tokens.len().saturating_sub(1);
+        let mut empty = item.tokens.is_empty();
+        for (j, token) in item.tokens.into_iter().enumerate() {
+            let mut piece = String::new();
+            if j == 0 {
+                piece.push_str(&item.open);
+            }
+            piece.push_str(&token);
+            if j == last_token {
+                piece.push_str(item.close);
+                if i < last_item {
+                    piece.push(',');
+                }
+            }
+            tokens.push(piece);
+            empty = false;
+        }
+        if empty {
+            // `<>` and `[]` carry no tokens.
+            let mut piece = format!("{}{}", item.open, item.close);
+            if i < last_item {
+                piece.push(',');
+            }
+            tokens.push(piece);
+        }
+    }
+
+    let prefix = format!("{name} = ");
+    let align = depth * TAB_WIDTH + prefix.len();
+    let mut line = format!("{}{prefix}", "\t".repeat(depth));
+    let mut col = align;
+    let last = tokens.len().saturating_sub(1);
+    for (i, token) in tokens.iter().enumerate() {
+        let piece = if i == last {
+            format!("{token};")
+        } else {
+            token.clone()
+        };
+        if i > 0 {
+            if col + 1 + piece.len() > MAX_COLUMNS {
+                out.push_str(&line);
+                out.push('\n');
+                line = format!(
+                    "{}{}",
+                    "\t".repeat(align / TAB_WIDTH),
+                    " ".repeat(align % TAB_WIDTH)
+                );
+                col = align;
+            } else {
+                line.push(' ');
+                col += 1;
+            }
+        }
+        line.push_str(&piece);
+        col += piece.len();
+    }
+    out.push_str(&line);
+    out.push('\n');
+}
+
+fn value_items(value: &PropertyValue) -> Vec<Item> {
+    match value {
+        PropertyValue::Empty => vec![],
+        PropertyValue::Cells(cells) => {
+            let cells = cells.iter().map(|c| format_cell(u64::from(*c))).collect();
+            vec![Item::cells("<".into(), cells)]
+        }
+        PropertyValue::Strings(strings) => strings.iter().map(|s| Item::single(quote(s))).collect(),
+        PropertyValue::Bytes(bytes) => vec![Item::bytes(bytes)],
+        PropertyValue::Mixed(chunks) => chunks.iter().map(chunk_item).collect(),
+    }
+}
+
+fn chunk_item(chunk: &ValueChunk) -> Item {
+    match chunk {
+        ValueChunk::Cells { bits, cells } => {
+            let cells = cells
+                .iter()
+                .map(|cell| match cell {
+                    Cell::Number(n) => format_cell(*n),
+                    Cell::Phandle { phandle } => format_reference(phandle),
+                })
+                .collect();
+            let open = if *bits == 32 {
+                "<".to_string()
+            } else {
+                format!("/bits/ {bits} <")
+            };
+            Item::cells(open, cells)
+        }
+        ValueChunk::String { value } => Item::single(quote(value)),
+        ValueChunk::Bytes { value } => Item::bytes(value),
+        ValueChunk::Path { target } => Item::single(format_reference(target)),
+    }
 }
 
 pub(crate) fn quote(s: &str) -> String {
@@ -121,57 +262,12 @@ fn format_cell(cell: u64) -> String {
     }
 }
 
-fn format_bytes(bytes: &[u8]) -> String {
-    let bytes: Vec<_> = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!("[{}]", bytes.join(" "))
-}
-
 /// `&label`, or `&{/path}` for a path target.
 fn format_reference(target: &str) -> String {
     if target.starts_with('/') {
         format!("&{{{target}}}")
     } else {
         format!("&{target}")
-    }
-}
-
-fn format_value(value: &PropertyValue) -> String {
-    match value {
-        PropertyValue::Empty => String::new(),
-        PropertyValue::Cells(cells) => {
-            let cells: Vec<_> = cells.iter().map(|c| format_cell(u64::from(*c))).collect();
-            format!("<{}>", cells.join(" "))
-        }
-        PropertyValue::Strings(strings) => quote_all(strings),
-        PropertyValue::Bytes(bytes) => format_bytes(bytes),
-        PropertyValue::Mixed(chunks) => chunks
-            .iter()
-            .map(format_chunk)
-            .collect::<Vec<_>>()
-            .join(", "),
-    }
-}
-
-fn format_chunk(chunk: &ValueChunk) -> String {
-    match chunk {
-        ValueChunk::Cells { bits, cells } => {
-            let cells: Vec<_> = cells
-                .iter()
-                .map(|cell| match cell {
-                    Cell::Number(n) => format_cell(*n),
-                    Cell::Phandle { phandle } => format_reference(phandle),
-                })
-                .collect();
-            let prefix = if *bits == 32 {
-                String::new()
-            } else {
-                format!("/bits/ {bits} ")
-            };
-            format!("{prefix}<{}>", cells.join(" "))
-        }
-        ValueChunk::String { value } => quote(value),
-        ValueChunk::Bytes { value } => format_bytes(value),
-        ValueChunk::Path { target } => format_reference(target),
     }
 }
 
@@ -248,7 +344,6 @@ mod tests {
             dts,
             "/dts-v1/;\n\n\
              / {\n\
-             \n\
              \tosc: oscillator {\n\
              \t\tcompatible = \"fixed-clock\";\n\
              \t\t#clock-cells = <0>;\n\
@@ -262,6 +357,68 @@ mod tests {
              \t};\n\
              };\n"
         );
+    }
+
+    fn graph_with(properties: Vec<Property>) -> Graph {
+        let mut soc = node("soc", "soc");
+        soc.properties = properties;
+        Graph {
+            nodes: vec![node("root", "/"), soc],
+            edges: vec![child("root", "soc")],
+            groups: vec![],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn keeps_child_order() {
+        let graph = Graph {
+            nodes: vec![node("root", "/"), node("z", "zeta"), node("a", "alpha")],
+            edges: vec![child("root", "z"), child("root", "a")],
+            groups: vec![],
+            ..Default::default()
+        };
+        assert_eq!(
+            to_dts(&graph).unwrap(),
+            "/dts-v1/;\n\n/ {\n\tzeta {\n\t};\n\n\talpha {\n\t};\n};\n"
+        );
+    }
+
+    #[test]
+    fn wraps_long_values_aligned_with_the_value() {
+        let cells: Vec<u32> = (0..16).map(|i| 0x1000_0000 + i).collect();
+        let dts = to_dts(&graph_with(vec![Property {
+            name: "ranges".into(),
+            value: PropertyValue::Cells(cells),
+        }]))
+        .unwrap();
+        let lines: Vec<_> = dts.lines().filter(|l| l.contains("0x1000")).collect();
+        assert!(lines.len() > 1);
+        assert!(lines[0].starts_with("\t\tranges = <0x10000000"));
+        // Continuation lines align under the value: two tabs + 9 columns.
+        assert!(lines[1].starts_with("\t\t\t 0x"));
+        for line in &lines {
+            let width = line.replace('\t', "        ").len();
+            assert!(width <= 80, "{line:?} is {width} columns");
+        }
+        assert!(dts.contains(">;\n"));
+    }
+
+    #[test]
+    fn wraps_comma_separated_chunks_after_the_comma() {
+        let strings: Vec<String> = (0..8)
+            .map(|i| format!("vendor,device-number-{i}"))
+            .collect();
+        let dts = to_dts(&graph_with(vec![Property {
+            name: "names".into(),
+            value: PropertyValue::Strings(strings),
+        }]))
+        .unwrap();
+        let lines: Vec<_> = dts.lines().filter(|l| l.contains("vendor")).collect();
+        assert!(lines.len() > 1);
+        assert!(lines[0].ends_with(','));
+        assert!(lines[1].starts_with("\t\t\t\"vendor"), "{:?}", lines[1]);
+        assert!(lines.last().unwrap().ends_with("\";"));
     }
 
     #[test]

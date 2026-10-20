@@ -241,6 +241,18 @@ export default function App() {
     }
   };
 
+  const autoLayout = async () => {
+    try {
+      const d = fromDesign(await backend.autoLayout(toDesign(nodes, edges)));
+      // Keep editor-only data (bindings) that the design file does not carry.
+      const old = new Map(nodes.map((n) => [n.id, n]));
+      setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding } } : n)));
+      setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+    } catch (e) {
+      setErrors([String(e)]);
+    }
+  };
+
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
     if (path) await loadDesign(() => backend.openDesign(path));
@@ -277,6 +289,7 @@ export default function App() {
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
         <button onClick={exportDts} disabled={!inTauri || !dts || errors.length > 0}>Export .dts…</button>
         <span className="sep" />
+        <button onClick={autoLayout} disabled={!inTauri}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
       </header>
@@ -294,6 +307,7 @@ export default function App() {
           onBeforeDelete={onBeforeDelete}
           fitView
           fitViewOptions={{ maxZoom: 1 }}
+          minZoom={0.1}
           deleteKeyCode={["Backspace", "Delete"]}
         >
           <Background />

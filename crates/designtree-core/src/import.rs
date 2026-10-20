@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::layout::auto_layout;
 use crate::model::{
     Cell, Edge, EdgeKind, Graph, MemReserve, Node, NodeId, Position, Property, PropertyValue,
     ValueChunk,
@@ -18,9 +19,6 @@ use crate::model::{
 pub use crate::parse::ImportError;
 use crate::parse::{parse, BodyItem, NodeBody, ParseError, Pos, PropertyDef, Reference, TopItem};
 use crate::preprocess::{confined_reader, preprocess, ImportOptions};
-
-/// Horizontal and vertical spacing of the initial layout of imported nodes.
-const LAYOUT_STEP: Position = Position { x: 280.0, y: 110.0 };
 
 /// Imports a devicetree source file, resolving `#include` and macros.
 pub fn import_dts_file(path: &Path, options: &ImportOptions) -> Result<Graph, ImportError> {
@@ -32,8 +30,8 @@ pub fn import_dts_file(path: &Path, options: &ImportOptions) -> Result<Graph, Im
 /// Imports devicetree source text read from `file`. Includes are looked up
 /// next to `file`, then in the include directories of `options`.
 ///
-/// Node ids are the node paths (`/`, `/soc/serial@10000000`). Nodes get a
-/// simple indented layout: one row per node, one column per depth.
+/// Node ids are the node paths (`/`, `/soc/serial@10000000`). Nodes and buses
+/// are arranged with [`auto_layout`].
 pub fn import_dts(
     source: &str,
     file: &Path,
@@ -271,7 +269,7 @@ impl Tree {
             ..Graph::default()
         };
         let mut index = vec![None; self.nodes.len()];
-        self.visit(ROOT, "/".into(), 0, &mut graph, &mut index);
+        self.visit(ROOT, "/".into(), &mut graph, &mut index);
 
         for (node, graph_index) in index.iter().enumerate() {
             let Some(graph_index) = *graph_index else {
@@ -328,19 +326,13 @@ impl Tree {
                 }
             }
         }
+        auto_layout(&mut graph);
         Ok(graph)
     }
 
     /// Adds `node` and its subtree to the graph in source order, with child
     /// edges, and records the graph index of each visited tree node.
-    fn visit(
-        &self,
-        node: usize,
-        path: String,
-        depth: usize,
-        graph: &mut Graph,
-        index: &mut [Option<usize>],
-    ) {
+    fn visit(&self, node: usize, path: String, graph: &mut Graph, index: &mut [Option<usize>]) {
         let tree_node = &self.nodes[node];
         let (name, unit_address) = match tree_node.name.split_once('@') {
             Some((name, address)) => (name.to_owned(), Some(address.to_owned())),
@@ -357,10 +349,7 @@ impl Tree {
             omit_if_no_ref: tree_node.omit_if_no_ref,
             compatible: Vec::new(),
             properties: Vec::new(),
-            position: Position {
-                x: depth as f32 * LAYOUT_STEP.x,
-                y: row as f32 * LAYOUT_STEP.y,
-            },
+            position: Position::default(),
         });
 
         for child in self.live_children(node) {
@@ -373,7 +362,7 @@ impl Tree {
                 to: NodeId(child_path.clone()),
                 kind: EdgeKind::Child,
             });
-            self.visit(child, child_path, depth + 1, graph, index);
+            self.visit(child, child_path, graph, index);
         }
     }
 }
