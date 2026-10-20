@@ -6,13 +6,16 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use designtree_bindings::{Binding, Catalog};
-use designtree_core::Graph;
+use designtree_core::{Graph, ImportOptions};
 use serde::Serialize;
 use tauri::State;
 
 #[derive(Default)]
 struct AppState {
     catalog: RwLock<Catalog>,
+    /// Kernel tree of the loaded catalog; its include directories are used
+    /// when importing devicetrees from outside a kernel tree.
+    linux_src: RwLock<Option<PathBuf>>,
 }
 
 #[derive(Serialize)]
@@ -44,6 +47,7 @@ fn load_kernel_bindings(
         skipped: catalog.skipped.len(),
     };
     *state.catalog.write().unwrap() = catalog;
+    *state.linux_src.write().unwrap() = Some(linux_src);
     Ok(summary)
 }
 
@@ -120,11 +124,15 @@ fn open_design(path: PathBuf) -> Result<Graph, String> {
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
-/// Imports devicetree source; errors carry file, line and column.
-#[tauri::command]
-fn import_dts(path: PathBuf) -> Result<Graph, String> {
-    let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    designtree_core::import_dts(&source, &path.display().to_string()).map_err(|e| e.to_string())
+/// Imports devicetree source with `#include` resolved: from the kernel tree
+/// the file lies in, else from the kernel tree of the loaded catalog.
+/// Errors carry file, line and column. Runs off the UI thread, since
+/// large boards pull in many files.
+#[tauri::command(async)]
+fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
+    let fallback = state.linux_src.read().unwrap().clone();
+    let options = ImportOptions::detect_or(&path, fallback.as_deref());
+    designtree_core::import_dts_file(&path, &options).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

@@ -9,56 +9,59 @@
 //! [`PropertyValue::Mixed`] value.
 
 use std::collections::HashMap;
-use std::fmt;
+use std::path::Path;
 
 use crate::model::{
-    Cell, Edge, EdgeKind, Graph, Node, NodeId, Position, Property, PropertyValue, ValueChunk,
+    Cell, Edge, EdgeKind, Graph, MemReserve, Node, NodeId, Position, Property, PropertyValue,
+    ValueChunk,
 };
+pub use crate::parse::ImportError;
 use crate::parse::{parse, BodyItem, NodeBody, ParseError, Pos, PropertyDef, Reference, TopItem};
-
-/// An import failure, located in the source file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImportError {
-    pub file: String,
-    pub line: u32,
-    pub column: u32,
-    pub message: String,
-}
-
-impl fmt::Display for ImportError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}: {}",
-            self.file, self.line, self.column, self.message
-        )
-    }
-}
-
-impl std::error::Error for ImportError {}
+use crate::preprocess::{confined_reader, preprocess, ImportOptions};
 
 /// Horizontal and vertical spacing of the initial layout of imported nodes.
 const LAYOUT_STEP: Position = Position { x: 280.0, y: 110.0 };
 
-/// Imports devicetree source. `file` is only used in error messages.
+/// Imports a devicetree source file, resolving `#include` and macros.
+pub fn import_dts_file(path: &Path, options: &ImportOptions) -> Result<Graph, ImportError> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| ImportError::new(path.display().to_string(), 1, e.to_string()))?;
+    import_dts(&source, path, options)
+}
+
+/// Imports devicetree source text read from `file`. Includes are looked up
+/// next to `file`, then in the include directories of `options`.
 ///
 /// Node ids are the node paths (`/`, `/soc/serial@10000000`). Nodes get a
 /// simple indented layout: one row per node, one column per depth.
-pub fn import_dts(source: &str, file: &str) -> Result<Graph, ImportError> {
-    let located = |e: ParseError| ImportError {
-        file: file.to_owned(),
-        line: e.pos.line,
-        column: e.pos.column,
-        message: e.message,
-    };
-    let document = parse(source).map_err(located)?;
+pub fn import_dts(
+    source: &str,
+    file: &Path,
+    options: &ImportOptions,
+) -> Result<Graph, ImportError> {
+    let text = preprocess(source, file, options, &confined_reader(file, options))?;
+    import_preprocessed(&text, &file.display().to_string())
+}
+
+/// Imports source that has already been preprocessed.
+fn import_preprocessed(text: &str, file: &str) -> Result<Graph, ImportError> {
+    let document = parse(text, file)?;
+    let files = document.files;
+    let located = |e: ParseError| e.located(&files);
     let mut tree = Tree::new();
     for item in document.items {
         match item {
             TopItem::Root(body) => tree.merge(ROOT, body),
-            TopItem::Override { target, body } => tree
-                .resolve(&target)
-                .and_then(|node| tree.merge(node, body)),
+            TopItem::Override {
+                labels,
+                target,
+                body,
+            } => tree.resolve(&target).and_then(|node| {
+                for label in &labels {
+                    tree.add_label(node, label, target.pos);
+                }
+                tree.merge(node, body)
+            }),
             TopItem::DeleteNode(target) => tree.resolve(&target).and_then(|node| {
                 if node == ROOT {
                     return Err(ParseError {
@@ -69,6 +72,20 @@ pub fn import_dts(source: &str, file: &str) -> Result<Graph, ImportError> {
                 tree.delete(node);
                 Ok(())
             }),
+            TopItem::OmitIfNoRef(target) => tree.resolve(&target).and_then(|node| {
+                if node == ROOT {
+                    return Err(ParseError {
+                        pos: target.pos,
+                        message: "the root node cannot be `/omit-if-no-ref/`".into(),
+                    });
+                }
+                tree.nodes[node].omit_if_no_ref = true;
+                Ok(())
+            }),
+            TopItem::MemReserve { address, size } => {
+                tree.memreserves.push(MemReserve { address, size });
+                Ok(())
+            }
         }
         .map_err(located)?;
     }
@@ -80,7 +97,8 @@ const ROOT: usize = 0;
 struct TreeNode {
     /// Full name with unit address; `/` for the root.
     name: String,
-    label: Option<String>,
+    labels: Vec<String>,
+    omit_if_no_ref: bool,
     properties: Vec<PropertyDef>,
     children: Vec<usize>,
     deleted: bool,
@@ -90,7 +108,8 @@ impl TreeNode {
     fn new(name: &str) -> Self {
         TreeNode {
             name: name.to_owned(),
-            label: None,
+            labels: Vec::new(),
+            omit_if_no_ref: false,
             properties: Vec::new(),
             children: Vec::new(),
             deleted: false,
@@ -101,7 +120,10 @@ impl TreeNode {
 /// Arena of nodes; deleted nodes stay in place, marked, so indices are stable.
 struct Tree {
     nodes: Vec<TreeNode>,
-    labels: HashMap<String, usize>,
+    /// Nodes that define each label, in definition order. dtc lets a label
+    /// appear twice as long as one of the two nodes is deleted.
+    labels: HashMap<String, Vec<(usize, Pos)>>,
+    memreserves: Vec<MemReserve>,
 }
 
 impl Tree {
@@ -109,6 +131,7 @@ impl Tree {
         Tree {
             nodes: vec![TreeNode::new("/")],
             labels: HashMap::new(),
+            memreserves: Vec::new(),
         }
     }
 
@@ -148,9 +171,10 @@ impl Tree {
                             child
                         }
                     };
-                    if let Some(label) = &def.label {
-                        self.add_label(child, label, def.pos)?;
+                    for label in &def.labels {
+                        self.add_label(child, label, def.pos);
                     }
+                    self.nodes[child].omit_if_no_ref |= def.omit_if_no_ref;
                     self.merge(child, def.body)?;
                 }
                 BodyItem::DeleteNode { name, .. } => {
@@ -163,60 +187,72 @@ impl Tree {
         Ok(())
     }
 
-    fn add_label(&mut self, node: usize, label: &str, pos: Pos) -> Result<(), ParseError> {
-        if let Some(&owner) = self.labels.get(label) {
-            if owner != node {
+    /// Labels may repeat until the end, see [`Tree::check_labels`].
+    fn add_label(&mut self, node: usize, label: &str, pos: Pos) {
+        if !self.nodes[node].labels.iter().any(|l| l == label) {
+            self.nodes[node].labels.push(label.to_owned());
+            self.labels
+                .entry(label.to_owned())
+                .or_default()
+                .push((node, pos));
+        }
+    }
+
+    fn delete(&mut self, node: usize) {
+        self.nodes[node].deleted = true;
+        for child in self.nodes[node].children.clone() {
+            self.delete(child);
+        }
+    }
+
+    /// The live node that defines `label`.
+    fn labeled(&self, label: &str) -> Option<usize> {
+        self.labels
+            .get(label)?
+            .iter()
+            .map(|&(node, _)| node)
+            .find(|&node| !self.nodes[node].deleted)
+    }
+
+    /// The live node a reference points to: a label, a path (`/soc/uart`)
+    /// or a path below a label (`soc/uart`, from `&{soc/uart}`).
+    fn resolve(&self, reference: &Reference) -> Result<usize, ParseError> {
+        self.find(&reference.target).ok_or_else(|| ParseError {
+            pos: reference.pos,
+            message: format!("reference to unknown node `{}`", reference.target),
+        })
+    }
+
+    fn find(&self, target: &str) -> Option<usize> {
+        match target.split_once('/') {
+            Some(("", path)) => self.find_path(ROOT, path),
+            Some((label, path)) => self
+                .labeled(label)
+                .and_then(|node| self.find_path(node, path)),
+            None => self.labeled(target),
+        }
+    }
+
+    /// Fails on a label defined by two live nodes.
+    fn check_labels(&self) -> Result<(), ParseError> {
+        for (label, owners) in &self.labels {
+            let mut live = owners.iter().filter(|(node, _)| !self.nodes[*node].deleted);
+            if let (Some(_), Some(&(_, pos))) = (live.next(), live.next()) {
                 return Err(ParseError {
                     pos,
                     message: format!("duplicate label `{label}`"),
                 });
             }
         }
-        match &self.nodes[node].label {
-            Some(existing) if existing != label => Err(ParseError {
-                pos,
-                message: format!(
-                    "node already has label `{existing}`; more than one label on a node \
-                     is not supported yet"
-                ),
-            }),
-            _ => {
-                self.nodes[node].label = Some(label.to_owned());
-                self.labels.insert(label.to_owned(), node);
-                Ok(())
-            }
-        }
-    }
-
-    fn delete(&mut self, node: usize) {
-        self.nodes[node].deleted = true;
-        if let Some(label) = self.nodes[node].label.take() {
-            self.labels.remove(&label);
-        }
-        for child in self.nodes[node].children.clone() {
-            self.delete(child);
-        }
-    }
-
-    /// The live node a label or path reference points to.
-    fn resolve(&self, reference: &Reference) -> Result<usize, ParseError> {
-        let found = if reference.target.starts_with('/') {
-            self.find_path(&reference.target)
-        } else {
-            self.labels.get(&reference.target).copied()
-        };
-        found.ok_or_else(|| ParseError {
-            pos: reference.pos,
-            message: format!("reference to unknown node `{}`", reference.target),
-        })
+        Ok(())
     }
 
     /// Like dtc, a path component without unit address also matches a node
     /// that has one (`/soc/serial` finds `/soc/serial@1000`).
-    fn find_path(&self, path: &str) -> Option<usize> {
+    fn find_path(&self, from: usize, path: &str) -> Option<usize> {
         path.split('/')
             .filter(|c| !c.is_empty())
-            .try_fold(ROOT, |node, component| {
+            .try_fold(from, |node, component| {
                 self.child(node, component).or_else(|| {
                     self.live_children(node).find(|&c| {
                         self.nodes[c]
@@ -228,8 +264,12 @@ impl Tree {
             })
     }
 
-    fn into_graph(self) -> Result<Graph, ParseError> {
-        let mut graph = Graph::default();
+    fn into_graph(mut self) -> Result<Graph, ParseError> {
+        self.check_labels()?;
+        let mut graph = Graph {
+            memreserves: std::mem::take(&mut self.memreserves),
+            ..Graph::default()
+        };
         let mut index = vec![None; self.nodes.len()];
         self.visit(ROOT, "/".into(), 0, &mut graph, &mut index);
 
@@ -256,8 +296,8 @@ impl Tree {
                         if let PropertyValue::Mixed(chunks) = &mut value {
                             for target in chunk_targets(chunks) {
                                 if let Some(node) = target
-                                    .starts_with('/')
-                                    .then(|| self.find_path(target))
+                                    .contains('/')
+                                    .then(|| self.find(target))
                                     .flatten()
                                     .and_then(|node| index[node])
                                 {
@@ -272,7 +312,9 @@ impl Tree {
                     }
                     Classified::Phandles(entries) => {
                         for (label, args) in entries {
-                            let target = index[self.labels[label]].expect("labels name live nodes");
+                            let target = index
+                                [self.labeled(label).expect("references are resolved")]
+                            .expect("live nodes are in the graph");
                             graph.edges.push(Edge {
                                 from: graph.nodes[graph_index].id.clone(),
                                 to: graph.nodes[target].id.clone(),
@@ -310,7 +352,9 @@ impl Tree {
             id: NodeId(path.clone()),
             name,
             unit_address,
-            label: tree_node.label.clone(),
+            label: tree_node.labels.first().cloned(),
+            extra_labels: tree_node.labels.iter().skip(1).cloned().collect(),
+            omit_if_no_ref: tree_node.omit_if_no_ref,
             compatible: Vec::new(),
             properties: Vec::new(),
             position: Position {
@@ -410,7 +454,7 @@ fn classify(def: &PropertyDef) -> Classified<'_> {
     let mut entries: Vec<(&str, Vec<u32>)> = Vec::new();
     for cell in cells {
         match cell {
-            Cell::Phandle { phandle } if !phandle.starts_with('/') => {
+            Cell::Phandle { phandle } if !phandle.contains('/') => {
                 entries.push((phandle, Vec::new()));
             }
             Cell::Number(n) => match entries.last_mut() {
@@ -428,11 +472,14 @@ mod tests {
     use super::*;
 
     fn import(source: &str) -> Graph {
-        import_dts(source, "test.dts").unwrap_or_else(|e| panic!("{e}"))
+        import_dts(source, Path::new("test.dts"), &ImportOptions::default())
+            .unwrap_or_else(|e| panic!("{e}"))
     }
 
     fn error(source: &str) -> String {
-        import_dts(source, "test.dts").unwrap_err().to_string()
+        import_dts(source, Path::new("test.dts"), &ImportOptions::default())
+            .unwrap_err()
+            .to_string()
     }
 
     fn node<'a>(graph: &'a Graph, id: &str) -> &'a Node {
@@ -472,6 +519,7 @@ mod tests {
         let graph = import(
             r#"
             /dts-v1/;
+            /memreserve/ 0x80000000 (64 << 20);
             // board
             / {
                 #address-cells = <1>;
@@ -493,6 +541,13 @@ mod tests {
             "#,
         );
         assert_eq!(child_names(&graph, "/"), ["serial@10000000"]);
+        assert_eq!(
+            graph.memreserves,
+            [MemReserve {
+                address: 0x8000_0000,
+                size: 64 << 20
+            }]
+        );
         let root = node(&graph, "/");
         assert_eq!(root.compatible, ["acme,board", "acme,soc"]);
         assert_eq!(
@@ -681,8 +736,18 @@ mod tests {
             error("/ { };"),
             "test.dts:1:1: missing `/dts-v1/;` before the root node"
         );
-        assert!(error("/dts-v1/;\n#include \"soc.dtsi\"\n")
-            .starts_with("test.dts:2:1: C preprocessor directives"));
+        assert_eq!(
+            error("/dts-v1/;\n#define F(a) <a>\n/ { a = F((1 +\n 2));\n b = ; };\n"),
+            "test.dts:5:6: expected a value, found `;`"
+        );
+        assert_eq!(
+            error("/dts-v1/;\n/ { };\n/omit-if-no-ref/ &{/};\n"),
+            "test.dts:3:18: the root node cannot be `/omit-if-no-ref/`"
+        );
+        assert_eq!(
+            error("/dts-v1/;\n#include \"no-such-file.dtsi\"\n"),
+            "test.dts:2:1: cannot find include file `no-such-file.dtsi`"
+        );
         assert_eq!(
             error("/dts-v1/;\n/ { s = \"abc; };"),
             "test.dts:2:9: unterminated string"
@@ -709,6 +774,33 @@ mod tests {
     }
 
     #[test]
+    fn label_paths_and_labels_freed_by_deletion() {
+        let graph = import(
+            "/dts-v1/;\n\
+             / { a: x { k: kid { }; }; b { k: kid { }; }; m: multi: n { }; };\n\
+             /delete-node/ &{a/kid};\n\
+             &k { here; };\n\
+             l: &multi { };\n\
+             /omit-if-no-ref/ &multi;\n\
+             / { p: /omit-if-no-ref/ pins { }; };\n",
+        );
+        assert!(node(&graph, "/n").omit_if_no_ref);
+        assert!(node(&graph, "/pins").omit_if_no_ref);
+        assert!(node(&graph, "/b/kid")
+            .properties
+            .iter()
+            .any(|p| p.name == "here"));
+        assert_eq!(child_names(&graph, "/x"), Vec::<String>::new());
+        let n = node(&graph, "/n");
+        assert_eq!(n.label.as_deref(), Some("m"));
+        assert_eq!(n.extra_labels, ["multi", "l"]);
+        assert_eq!(
+            error("/dts-v1/;\n/ { a: x { }; a: y { }; };\n"),
+            "test.dts:2:18: duplicate label `a`"
+        );
+    }
+
+    #[test]
     fn deleted_labels_cannot_be_referenced() {
         assert_eq!(
             error("/dts-v1/;\n/ { a: x { }; };\n/delete-node/ &a;\n/ { y = <&a>; };"),
@@ -723,5 +815,50 @@ mod tests {
             prop(&graph, "/", "#address-cells"),
             &PropertyValue::Cells(vec![2])
         );
+    }
+
+    #[test]
+    fn rejects_deep_nesting_without_overflowing_the_stack() {
+        let deep = 100_000;
+        for source in [
+            format!(
+                "/dts-v1/;\n/ {{ a = <{}1{}>; }};",
+                "(".repeat(deep),
+                ")".repeat(deep)
+            ),
+            format!("/dts-v1/;\n/ {{ a = <({}1)>; }};", "-".repeat(deep)),
+            format!("/dts-v1/;\n/ {{ {} }};", "n { ".repeat(deep)),
+            format!(
+                "/dts-v1/;\n#if {}1{}\n#endif\n",
+                "(".repeat(deep),
+                ")".repeat(deep)
+            ),
+        ] {
+            assert!(
+                error(&source).ends_with("nested too deeply"),
+                "{source:.40}"
+            );
+        }
+    }
+
+    #[test]
+    fn includes_stay_inside_the_imported_tree() {
+        let dir = std::env::temp_dir().join(format!("designtree-confine-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("board")).unwrap();
+        std::fs::write(dir.join("secret.dtsi"), "/ { };\n").unwrap();
+        std::fs::write(dir.join("board/ok.dtsi"), "/ { };\n").unwrap();
+        let import = |include: &str| {
+            let source = format!("/dts-v1/;\n#include \"{include}\"\n");
+            import_dts(&source, &dir.join("board/b.dts"), &ImportOptions::default())
+        };
+        let inside = import("ok.dtsi");
+        let outside = import("../secret.dtsi");
+        let absolute = import(&dir.join("secret.dtsi").display().to_string());
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(inside.is_ok(), "{inside:?}");
+        for result in [outside, absolute] {
+            let message = result.unwrap_err().message;
+            assert!(message.contains("outside the directory"), "{message}");
+        }
     }
 }

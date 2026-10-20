@@ -3,18 +3,54 @@
 //! The result is a [`Document`] that mirrors the source: root blocks,
 //! `&label { }` overrides and deletions stay separate items, so a later stage
 //! can either merge them into one tree ([`crate::import`]) or keep them apart.
-//! The C preprocessor is not run: `#include` and macros are rejected with a
-//! clear error.
+//! The input is preprocessed source: line markers (`# 12 "board.dtsi"`)
+//! written by [`crate::preprocess`] or `cpp` set the file and line that
+//! positions refer to, so errors and nodes point into the original files.
 
 use std::fmt;
 
 use crate::model::{Cell, ValueChunk};
 
-/// 1-based line and column (in characters) in the source.
+/// 1-based line and column (in characters) in a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pos {
+    /// Index into [`Document::files`].
+    pub file: u32,
     pub line: u32,
     pub column: u32,
+}
+
+/// An error located in a source file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportError {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
+    pub message: String,
+}
+
+impl fmt::Display for ImportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}: {}",
+            self.file, self.line, self.column, self.message
+        )
+    }
+}
+
+impl std::error::Error for ImportError {}
+
+impl ImportError {
+    /// An error about line `line` of `file` as a whole.
+    pub fn new(file: impl Into<String>, line: u32, message: impl Into<String>) -> Self {
+        ImportError {
+            file: file.into(),
+            line,
+            column: 1,
+            message: message.into(),
+        }
+    }
 }
 
 /// An error at a position in the source, either a syntax error or a
@@ -25,16 +61,22 @@ pub struct ParseError {
     pub message: String,
 }
 
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}: {}", self.pos.line, self.pos.column, self.message)
+impl ParseError {
+    /// Attaches the file name, looked up in `files`.
+    pub fn located(self, files: &[String]) -> ImportError {
+        ImportError {
+            file: files[self.pos.file as usize].clone(),
+            line: self.pos.line,
+            column: self.pos.column,
+            message: self.message,
+        }
     }
 }
 
-impl std::error::Error for ParseError {}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Document {
+    /// Names of the source files, as given to [`parse`] and in line markers.
+    pub files: Vec<String>,
     pub items: Vec<TopItem>,
 }
 
@@ -42,14 +84,23 @@ pub struct Document {
 pub enum TopItem {
     /// `/ { ... };`
     Root(NodeBody),
-    /// `&label { ... };` or `&{/path} { ... };`
-    Override { target: Reference, body: NodeBody },
+    /// `&label { ... };` or `&{/path} { ... };`, optionally preceded by
+    /// labels to add to the target (`new: &old { };`).
+    Override {
+        labels: Vec<String>,
+        target: Reference,
+        body: NodeBody,
+    },
     /// `/delete-node/ &label;`
     DeleteNode(Reference),
+    /// `/omit-if-no-ref/ &label;`
+    OmitIfNoRef(Reference),
+    /// `/memreserve/ address size;`
+    MemReserve { address: u64, size: u64 },
 }
 
-/// `&label` or `&{/path}`; `target` is the label, or the path when it starts
-/// with `/`.
+/// `&label`, `&{/path}` or `&{label/path}`; `target` is the label, the path
+/// (starting with `/`), or the label followed by the path below it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Reference {
     pub target: String,
@@ -81,27 +132,40 @@ pub struct PropertyDef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeDef {
-    pub label: Option<String>,
+    pub labels: Vec<String>,
+    /// `/omit-if-no-ref/`: dtc drops the node unless something references it.
+    pub omit_if_no_ref: bool,
     /// Full name including the unit address, e.g. `serial@10000000`.
     pub name: String,
     pub body: NodeBody,
     pub pos: Pos,
 }
 
-/// Parses devicetree source text.
-pub fn parse(source: &str) -> Result<Document> {
-    Parser {
-        chars: source.chars().collect(),
-        i: 0,
-        pos: Pos { line: 1, column: 1 },
-    }
-    .document()
+/// Parses devicetree source text; `file` names it in positions and errors.
+pub fn parse(source: &str, file: &str) -> std::result::Result<Document, ImportError> {
+    let mut parser = Parser::new(source, vec![file.to_owned()]);
+    parser.document().map_err(|e| e.located(&parser.files))
 }
 
-const PREPROCESSOR_DIRECTIVES: &[&str] = &[
-    "include", "define", "undef", "if", "ifdef", "ifndef", "elif", "else", "endif", "error",
-    "warning", "pragma", "line",
-];
+/// Evaluates a C integer expression such as the condition of `#if`, with
+/// cpp's signed arithmetic.
+pub(crate) fn evaluate(expression: &str) -> std::result::Result<u64, String> {
+    let mut parser = Parser::new(expression, Vec::new());
+    parser.signed = true;
+    let value = parser.expression().map_err(|e| e.message)?;
+    parser.skip_trivia().map_err(|e| e.message)?;
+    match parser.peek() {
+        None => Ok(value),
+        Some(_) => Err(format!(
+            "unexpected `{}`",
+            parser.chars[parser.i..].iter().collect::<String>()
+        )),
+    }
+}
+
+/// Limit on nested nodes, parentheses and unary operators, far above what
+/// real sources use, so that hostile input cannot overflow the stack.
+const MAX_NESTING: usize = 100;
 
 /// Binary operators by increasing precedence, as in C.
 const BINARY_OPERATORS: &[&[&str]] = &[
@@ -135,9 +199,45 @@ struct Parser {
     chars: Vec<char>,
     i: usize,
     pos: Pos,
+    files: Vec<String>,
+    /// Expressions use cpp's signed arithmetic instead of dtc's unsigned.
+    signed: bool,
+    /// Current depth of nested nodes, parentheses and unary operators.
+    nesting: usize,
+    /// Nesting of operands that are parsed but not evaluated (the right of
+    /// `0 && x`); division by zero there is not an error.
+    unevaluated: u32,
 }
 
 impl Parser {
+    fn new(text: &str, files: Vec<String>) -> Self {
+        Parser {
+            chars: text.chars().collect(),
+            i: 0,
+            pos: Pos {
+                file: 0,
+                line: 1,
+                column: 1,
+            },
+            files,
+            signed: false,
+            nesting: 0,
+            unevaluated: 0,
+        }
+    }
+
+    /// Runs `parse` one nesting level deeper, failing past [`MAX_NESTING`]
+    /// instead of overflowing the stack.
+    fn nested<T>(&mut self, parse: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        if self.nesting >= MAX_NESTING {
+            return self.error(self.pos, "nested too deeply");
+        }
+        self.nesting += 1;
+        let result = parse(self);
+        self.nesting -= 1;
+        result
+    }
+
     fn peek(&self) -> Option<char> {
         self.peek_at(0)
     }
@@ -150,10 +250,10 @@ impl Parser {
         let c = self.peek()?;
         self.i += 1;
         if c == '\n' {
-            self.pos.line += 1;
+            self.pos.line = self.pos.line.saturating_add(1);
             self.pos.column = 1;
         } else {
-            self.pos.column += 1;
+            self.pos.column = self.pos.column.saturating_add(1);
         }
         Some(c)
     }
@@ -203,17 +303,9 @@ impl Parser {
                         }
                     }
                 }
-                (Some('#'), _) if self.at_line_marker() => {
-                    while self.peek().is_some_and(|c| c != '\n') {
-                        self.bump();
-                    }
-                }
+                (Some('#'), _) if self.at_line_marker() => self.line_marker()?,
                 (Some('#'), _) if self.at_preprocessor_directive() => {
-                    return self.error(
-                        self.pos,
-                        "C preprocessor directives (`#include`, `#define`, ...) are not \
-                         supported yet; preprocess the file with `cpp` first",
-                    );
+                    return self.error(self.pos, "unexpected C preprocessor directive");
                 }
                 _ => return Ok(()),
             }
@@ -238,11 +330,44 @@ impl Parser {
         Some(j)
     }
 
-    /// True at a line marker written by `cpp` (`# 12 "board.dts"`).
-    // TODO(US-1.2): use line markers to report positions in the original files.
+    /// True at a line marker (`# 12 "board.dts"`).
     fn at_line_marker(&self) -> bool {
         self.after_line_start_hash()
             .is_some_and(|j| self.chars.get(j).is_some_and(char::is_ascii_digit))
+    }
+
+    /// Consumes a line marker: the next line is line `N` of the named file
+    /// (of the current file when the marker has no name).
+    fn line_marker(&mut self) -> Result<()> {
+        self.bump(); // '#'
+        while self.peek().is_some_and(|c| c == ' ' || c == '\t') {
+            self.bump();
+        }
+        let line = self.take_digits(usize::MAX, 10).parse().unwrap_or(1);
+        while self.peek().is_some_and(|c| c == ' ' || c == '\t') {
+            self.bump();
+        }
+        let file = match self.peek() {
+            Some('"') => {
+                let name = self.string()?;
+                let index = match self.files.iter().position(|f| *f == name) {
+                    Some(index) => index,
+                    None => {
+                        self.files.push(name);
+                        self.files.len() - 1
+                    }
+                };
+                Some(index as u32)
+            }
+            _ => None,
+        };
+        while self.bump().is_some_and(|c| c != '\n') {}
+        if let Some(file) = file {
+            self.pos.file = file;
+        }
+        self.pos.line = line;
+        self.pos.column = 1;
+        Ok(())
     }
 
     /// True at a `#` that starts a line and introduces a preprocessor
@@ -256,7 +381,7 @@ impl Parser {
             j += 1;
         }
         let word: String = self.chars[start..j].iter().collect();
-        PREPROCESSOR_DIRECTIVES.contains(&word.as_str())
+        crate::preprocess::DIRECTIVES.contains(&word.as_str())
             && !self.chars.get(j).is_some_and(|&c| is_name_char(c))
     }
 
@@ -312,21 +437,32 @@ impl Parser {
                         self.expect(';')?;
                         has_version = true;
                     }
-                    Some("delete-node") => {
-                        self.consume_keyword("delete-node");
+                    Some(word @ ("delete-node" | "omit-if-no-ref")) => {
+                        self.consume_keyword(word);
                         self.skip_trivia()?;
                         if self.peek() != Some('&') {
                             return self.error(
                                 self.pos,
                                 format!(
-                                    "expected `&label` after top-level `/delete-node/`, {}",
+                                    "expected `&label` after top-level `/{word}/`, {}",
                                     self.found()
                                 ),
                             );
                         }
                         let target = self.reference()?;
                         self.expect(';')?;
-                        items.push(TopItem::DeleteNode(target));
+                        items.push(if word == "delete-node" {
+                            TopItem::DeleteNode(target)
+                        } else {
+                            TopItem::OmitIfNoRef(target)
+                        });
+                    }
+                    Some("memreserve") => {
+                        self.consume_keyword("memreserve");
+                        let address = self.primary()?;
+                        let size = self.primary()?;
+                        self.expect(';')?;
+                        items.push(TopItem::MemReserve { address, size });
                     }
                     Some(word) => return self.top_level_keyword(pos, word),
                     None => {
@@ -340,10 +476,27 @@ impl Parser {
                 Some('&') => {
                     let target = self.reference()?;
                     let body = self.node_body()?;
-                    items.push(TopItem::Override { target, body });
+                    items.push(TopItem::Override {
+                        labels: Vec::new(),
+                        target,
+                        body,
+                    });
                 }
                 Some(_) if self.at_label() => {
-                    return self.unsupported(pos, "a label on a top-level override");
+                    let labels = self.labels()?;
+                    if self.peek() != Some('&') {
+                        return self.error(
+                            self.pos,
+                            format!("expected `&label` after a label, {}", self.found()),
+                        );
+                    }
+                    let target = self.reference()?;
+                    let body = self.node_body()?;
+                    items.push(TopItem::Override {
+                        labels,
+                        target,
+                        body,
+                    });
                 }
                 Some(_) => {
                     return self.error(
@@ -359,15 +512,16 @@ impl Parser {
         if !has_version {
             return self.error(self.pos, "missing `/dts-v1/;` header");
         }
-        Ok(Document { items })
+        Ok(Document {
+            files: self.files.clone(),
+            items,
+        })
     }
 
     fn top_level_keyword<T>(&self, pos: Pos, word: &str) -> Result<T> {
         match word {
             "plugin" => self.unsupported(pos, "`/plugin/` (devicetree overlays)"),
-            "memreserve" | "omit-if-no-ref" | "include" => {
-                self.unsupported(pos, &format!("`/{word}/`"))
-            }
+            "include" => self.error(pos, "unexpected `/include/`; the preprocessor resolves it"),
             _ => self.error(pos, format!("unknown directive `/{word}/`")),
         }
     }
@@ -399,7 +553,8 @@ impl Parser {
                             BodyItem::DeleteNode { name, pos }
                         }
                         Some("omit-if-no-ref") => {
-                            return self.unsupported(pos, "`/omit-if-no-ref/`")
+                            body.items.push(self.body_definition()?);
+                            continue;
                         }
                         Some(word) => {
                             return self.error(pos, format!("unknown directive `/{word}/`"))
@@ -419,34 +574,47 @@ impl Parser {
         }
     }
 
-    /// A property or a child node, optionally preceded by a label.
+    /// Labels (`a: b:`) at the cursor, then skips trivia.
+    fn labels(&mut self) -> Result<Vec<String>> {
+        let mut labels = Vec::new();
+        while self.at_label() {
+            labels.push(self.label());
+            self.skip_trivia()?;
+        }
+        Ok(labels)
+    }
+
+    /// A property or a child node, optionally preceded by labels and
+    /// `/omit-if-no-ref/`.
     fn body_definition(&mut self) -> Result<BodyItem> {
         let label_pos = self.pos;
-        let label = if self.at_label() {
-            let label = self.label();
+        let mut labels = self.labels()?;
+        let mut omit_if_no_ref = false;
+        if self.peek_keyword().as_deref() == Some("omit-if-no-ref") {
+            self.consume_keyword("omit-if-no-ref");
             self.skip_trivia()?;
-            if self.at_label() {
-                return self.unsupported(self.pos, "more than one label on a node");
-            }
-            Some(label)
-        } else {
-            None
-        };
+            omit_if_no_ref = true;
+            labels.extend(self.labels()?);
+        }
         let pos = self.pos;
         let name = self.name()?;
         self.skip_trivia()?;
         match self.peek() {
             Some('{') => {
-                let body = self.node_body()?;
+                let body = self.nested(Self::node_body)?;
                 Ok(BodyItem::Node(NodeDef {
-                    label,
+                    labels,
+                    omit_if_no_ref,
                     name,
                     body,
                     pos,
                 }))
             }
-            Some('=' | ';') if label.is_some() => {
+            Some('=' | ';') if !labels.is_empty() => {
                 self.unsupported(label_pos, "a label on a property")
+            }
+            Some('=' | ';') if omit_if_no_ref => {
+                self.error(label_pos, "`/omit-if-no-ref/` applies to nodes only")
             }
             Some('=' | ';') => {
                 let (value, references) = if self.eat('=')? {
@@ -510,8 +678,8 @@ impl Parser {
             while self.peek().is_some_and(is_path_char) {
                 target.extend(self.bump());
             }
-            if !target.starts_with('/') {
-                return self.error(pos, "a path reference must start with `/`: `&{/path}`");
+            if target.is_empty() {
+                return self.error(pos, "expected a path in `&{...}`");
             }
             if self.bump() != Some('}') {
                 return self.error(pos, "unterminated path reference, expected `}`");
@@ -717,7 +885,7 @@ impl Parser {
         match self.peek() {
             Some('(') => {
                 self.bump();
-                let value = self.expression()?;
+                let value = self.nested(Self::expression)?;
                 self.expect(')')?;
                 Ok(value)
             }
@@ -760,16 +928,30 @@ impl Parser {
         parsed.or_else(|_| self.error(pos, format!("invalid number `{text}`")))
     }
 
-    /// A C integer expression, evaluated on 64-bit unsigned values as dtc does.
+    /// A C integer expression, evaluated on 64-bit unsigned values as dtc
+    /// does (signed ones for cpp).
     fn expression(&mut self) -> Result<u64> {
         let condition = self.binary(0)?;
         if !self.eat('?')? {
             return Ok(condition);
         }
-        let then = self.expression()?;
+        let then = self.operand(condition == 0, Self::expression)?;
         self.expect(':')?;
-        let otherwise = self.expression()?;
+        let otherwise = self.operand(condition != 0, Self::expression)?;
         Ok(if condition != 0 { then } else { otherwise })
+    }
+
+    /// Parses an operand with `parse`, as unevaluated when `skipped`.
+    fn operand(
+        &mut self,
+        skipped: bool,
+        parse: impl FnOnce(&mut Self) -> Result<u64>,
+    ) -> Result<u64> {
+        let skipped = u32::from(skipped);
+        self.unevaluated += skipped;
+        let value = self.nested(parse);
+        self.unevaluated -= skipped;
+        value
     }
 
     fn binary(&mut self, level: usize) -> Result<u64> {
@@ -786,7 +968,13 @@ impl Parser {
             for _ in 0..op.len() {
                 self.bump();
             }
-            let rhs = self.binary(level + 1)?;
+            let skipped = match *op {
+                "||" => lhs != 0,
+                "&&" => lhs == 0,
+                _ => false,
+            };
+            let rhs = self.operand(skipped, |p| p.binary(level + 1))?;
+            let (a, b) = (lhs as i64, rhs as i64);
             lhs = match *op {
                 "||" => u64::from(lhs != 0 || rhs != 0),
                 "&&" => u64::from(lhs != 0 && rhs != 0),
@@ -795,6 +983,10 @@ impl Parser {
                 "&" => lhs & rhs,
                 "==" => u64::from(lhs == rhs),
                 "!=" => u64::from(lhs != rhs),
+                "<=" if self.signed => u64::from(a <= b),
+                ">=" if self.signed => u64::from(a >= b),
+                "<" if self.signed => u64::from(a < b),
+                ">" if self.signed => u64::from(a > b),
                 "<=" => u64::from(lhs <= rhs),
                 ">=" => u64::from(lhs >= rhs),
                 "<" => u64::from(lhs < rhs),
@@ -802,13 +994,20 @@ impl Parser {
                 "<<" => lhs
                     .checked_shl(rhs.try_into().unwrap_or(u32::MAX))
                     .unwrap_or(0),
+                ">>" if self.signed => {
+                    a.checked_shr(rhs.try_into().unwrap_or(u32::MAX))
+                        .unwrap_or(if a < 0 { -1 } else { 0 }) as u64
+                }
                 ">>" => lhs
                     .checked_shr(rhs.try_into().unwrap_or(u32::MAX))
                     .unwrap_or(0),
                 "+" => lhs.wrapping_add(rhs),
                 "-" => lhs.wrapping_sub(rhs),
                 "*" => lhs.wrapping_mul(rhs),
+                "/" | "%" if rhs == 0 && self.unevaluated > 0 => 0,
                 "/" | "%" if rhs == 0 => return self.error(pos, "division by zero"),
+                "/" if self.signed => a.wrapping_div(b) as u64,
+                "%" if self.signed => a.wrapping_rem(b) as u64,
                 "/" => lhs / rhs,
                 "%" => lhs % rhs,
                 _ => unreachable!("operator table and evaluation are out of sync"),
@@ -837,15 +1036,15 @@ impl Parser {
         match self.peek() {
             Some('-') => {
                 self.bump();
-                Ok(self.unary()?.wrapping_neg())
+                Ok(self.nested(Self::unary)?.wrapping_neg())
             }
             Some('~') => {
                 self.bump();
-                Ok(!self.unary()?)
+                Ok(!self.nested(Self::unary)?)
             }
             Some('!') => {
                 self.bump();
-                Ok(u64::from(self.unary()? == 0))
+                Ok(u64::from(self.nested(Self::unary)? == 0))
             }
             _ => self.primary(),
         }
