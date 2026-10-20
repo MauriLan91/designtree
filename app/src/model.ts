@@ -36,9 +36,18 @@ export interface DesignNode {
   name: string;
   unit_address?: string;
   label?: string;
+  /** More labels for the same node; references use `label`. */
+  extra_labels?: string[];
+  omit_if_no_ref?: boolean;
   compatible?: string[];
   properties?: Property[];
   position: Position;
+}
+
+/** Values above 2^53 - 1 come as hex strings ("0x..."). */
+export interface MemReserve {
+  address: number | string;
+  size: number | string;
 }
 
 export type DesignEdge =
@@ -58,7 +67,11 @@ export interface Design {
   nodes: DesignNode[];
   edges: DesignEdge[];
   groups: DesignGroup[];
+  memreserves?: MemReserve[];
 }
+
+/** The parts of a design that belong to the whole tree, not to a node or group. */
+export type DesignExtras = Omit<Design, "nodes" | "edges" | "groups">;
 
 export interface PropertySpec {
   name: string;
@@ -81,6 +94,8 @@ export interface DtNodeData extends Record<string, unknown> {
   name: string;
   unitAddress?: string;
   label?: string;
+  extraLabels?: string[];
+  omitIfNoRef?: boolean;
   compatible: string[];
   properties: Property[];
   /** Binding the node was created from; editor-only, not saved. */
@@ -138,7 +153,7 @@ function absolutePosition(node: FlowNode, byId: Map<string, FlowNode>): Position
   return { x, y };
 }
 
-export function toDesign(nodes: FlowNode[], edges: Edge[]): Design {
+export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras = {}): Design {
   const byId = new Map(nodes.map((n) => [n.id, n]));
 
   const designNodes: DesignNode[] = nodes.filter(isDtNode).map((n) => ({
@@ -146,6 +161,8 @@ export function toDesign(nodes: FlowNode[], edges: Edge[]): Design {
     name: n.data.name,
     unit_address: n.data.unitAddress || undefined,
     label: n.data.label || undefined,
+    extra_labels: n.data.extraLabels,
+    omit_if_no_ref: n.data.omitIfNoRef,
     compatible: n.data.compatible,
     properties: n.data.properties,
     position: absolutePosition(n, byId),
@@ -177,10 +194,10 @@ export function toDesign(nodes: FlowNode[], edges: Edge[]): Design {
     .filter((n): n is GroupFlowNode => n.type === "group" && !n.parentId)
     .map(buildGroup);
 
-  return { nodes: designNodes, edges: designEdges, groups: designGroups };
+  return { ...extras, nodes: designNodes, edges: designEdges, groups: designGroups };
 }
 
-export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[] } {
+export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; extras: DesignExtras } {
   const groupNodes: GroupFlowNode[] = [];
   const parentOf = new Map<string, { id: string; origin: Position }>();
 
@@ -213,6 +230,8 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[] }
         name: n.name,
         unitAddress: n.unit_address,
         label: n.label,
+        extraLabels: n.extra_labels,
+        omitIfNoRef: n.omit_if_no_ref,
         compatible: n.compatible ?? [],
         properties: n.properties ?? [],
       },
@@ -234,7 +253,8 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[] }
   );
 
   // Parents must precede children in the React Flow node array.
-  return { nodes: [...groupNodes, ...dtNodes], edges };
+  const { nodes: _nodes, edges: _edges, groups: _groups, ...extras } = design;
+  return { nodes: [...groupNodes, ...dtNodes], edges, extras };
 }
 
 // ---------------------------------------------------------------------------
@@ -406,7 +426,9 @@ export function genericNodeName(binding: Binding): string {
 
 export function uniqueLabel(base: string, nodes: FlowNode[]): string {
   const clean = base.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^([0-9])/, "_$1");
-  const taken = new Set(nodes.filter(isDtNode).map((n) => n.data.label));
+  const taken = new Set(
+    nodes.filter(isDtNode).flatMap((n) => [n.data.label, ...(n.data.extraLabels ?? [])]),
+  );
   if (!taken.has(clean)) return clean;
   let i = 0;
   while (taken.has(`${clean}${i}`)) i++;

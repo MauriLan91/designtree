@@ -37,6 +37,7 @@ import {
   type DtFlowNode,
   type FlowNode,
   type GroupFlowNode,
+  type DesignExtras,
   type RefData,
 } from "./model";
 
@@ -51,6 +52,8 @@ export default function App() {
   const initial = useMemo(() => fromDesign(emptyDesign()), []);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
+  // Design data with no place on the canvas, kept for saving and export.
+  const [extras, setExtras] = useState<DesignExtras>({});
   const [dts, setDts] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -65,6 +68,7 @@ export default function App() {
         const d = fromDesign(args.design);
         setNodes(d.nodes);
         setEdges(d.edges);
+        setExtras(d.extras);
       }
       setInitialKernel(args.linux_src);
     }, (e) => setErrors([String(e)]));
@@ -81,14 +85,14 @@ export default function App() {
     }
     const t = setTimeout(async () => {
       try {
-        setDts(await backend.exportDts(toDesign(nodes, edges)));
+        setDts(await backend.exportDts(toDesign(nodes, edges, extras)));
         setErrors([]);
       } catch (e) {
         setErrors(Array.isArray(e) ? e : [String(e)]);
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [nodes, edges]);
+  }, [nodes, edges, extras]);
 
   const isValidConnection: IsValidConnection = useCallback(
     (c) =>
@@ -222,6 +226,7 @@ export default function App() {
     const d = fromDesign(emptyDesign());
     setNodes(d.nodes);
     setEdges(d.edges);
+    setExtras(d.extras);
   };
 
   const loadDesign = async (load: () => Promise<Design>) => {
@@ -229,6 +234,7 @@ export default function App() {
       const d = fromDesign(await load());
       setNodes(d.nodes);
       setEdges(d.edges);
+      setExtras(d.extras);
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([String(e)]);
@@ -259,7 +265,7 @@ export default function App() {
 
   const saveDesign = async () => {
     const path = await dialogs.pickDesignToSave();
-    if (path) await backend.saveDesign(path, toDesign(nodes, edges));
+    if (path) await backend.saveDesign(path, toDesign(nodes, edges, extras));
   };
 
   const exportDts = async () => {

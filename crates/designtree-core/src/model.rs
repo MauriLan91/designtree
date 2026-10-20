@@ -128,6 +128,13 @@ pub struct Node {
     /// DTS label used as phandle target, e.g. `uart0`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// More labels for the same node (`l2: l2_cache: cache { };`).
+    /// References always use `label`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_labels: Vec<String>,
+    /// `/omit-if-no-ref/`: dtc drops the node unless something references it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub omit_if_no_ref: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub compatible: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -147,6 +154,11 @@ impl Node {
 
     pub fn is_root(&self) -> bool {
         self.name == "/"
+    }
+
+    /// `label` followed by `extra_labels`.
+    pub fn labels(&self) -> impl Iterator<Item = &String> {
+        self.label.iter().chain(&self.extra_labels)
     }
 }
 
@@ -197,6 +209,17 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     #[serde(default)]
     pub groups: Vec<Group>,
+    /// `/memreserve/` entries: memory regions the OS must not use.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub memreserves: Vec<MemReserve>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemReserve {
+    #[serde(with = "json_safe_u64")]
+    pub address: u64,
+    #[serde(with = "json_safe_u64")]
+    pub size: u64,
 }
 
 impl Graph {

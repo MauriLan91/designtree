@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use designtree_core::Graph;
+use designtree_core::{Graph, ImportOptions};
 
 /// DesignTree: build Linux devicetrees as node graphs.
 #[derive(Parser)]
@@ -24,11 +24,21 @@ enum Command {
         output: Option<PathBuf>,
     },
     /// Import devicetree source (.dts) into a design file.
+    ///
+    /// `#include` and macros are resolved. Inside a kernel tree the kernel's
+    /// include directories are used automatically.
     Import {
         dts: PathBuf,
         /// Output file (JSON). Prints to stdout when omitted.
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Kernel source tree whose include directories to use.
+        #[arg(long)]
+        linux: Option<PathBuf>,
+        /// Additional include directory (repeatable), searched after the
+        /// kernel ones.
+        #[arg(short = 'I', long = "include")]
+        include_dirs: Vec<PathBuf>,
     },
     /// Check a design file for structural errors.
     Validate { design: PathBuf },
@@ -59,10 +69,18 @@ fn main() -> Result<()> {
             );
             write_output(output, &serde_json::to_string_pretty(&catalog)?)
         }
-        Command::Import { dts, output } => {
-            let source =
-                fs::read_to_string(&dts).with_context(|| format!("reading {}", dts.display()))?;
-            let graph = designtree_core::import_dts(&source, &dts.display().to_string())?;
+        Command::Import {
+            dts,
+            output,
+            linux,
+            include_dirs,
+        } => {
+            let mut options = match linux {
+                Some(linux) => ImportOptions::kernel(&linux),
+                None => ImportOptions::detect(&dts),
+            };
+            options.include_dirs.extend(include_dirs);
+            let graph = designtree_core::import_dts_file(&dts, &options)?;
             write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
         Command::Validate { design } => {

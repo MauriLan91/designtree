@@ -44,7 +44,7 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
     }
 
     let mut labels = HashSet::new();
-    for label in graph.nodes.iter().filter_map(|n| n.label.as_ref()) {
+    for label in graph.nodes.iter().flat_map(Node::labels) {
         if !labels.insert(label) {
             errors.push(ValidationError::DuplicateLabel(label.clone()));
         }

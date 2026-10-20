@@ -290,6 +290,8 @@ mod tests {
             name: if id == "root" { "/".into() } else { id.into() },
             unit_address: unit.map(Into::into),
             label: None,
+            extra_labels: vec![],
+            omit_if_no_ref: false,
             compatible: vec![],
             properties: vec![],
             position: Position::default(),
@@ -308,6 +310,7 @@ mod tests {
                 })
                 .collect(),
             groups: vec![],
+            ..Default::default()
         }
     }
 

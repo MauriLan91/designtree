@@ -1,7 +1,9 @@
 //! A file already in kernel style survives import and export unchanged:
 //! same node and property order, tabs, blank lines between nodes.
 
-use designtree_core::{import_dts, to_dts};
+use std::path::Path;
+
+use designtree_core::{import_dts, to_dts, ImportOptions};
 
 const KERNEL_STYLE: &str = "/dts-v1/;
 
@@ -43,13 +45,23 @@ const KERNEL_STYLE: &str = "/dts-v1/;
 
 #[test]
 fn kernel_style_source_round_trips_textually() {
-    let graph = import_dts(KERNEL_STYLE, "board.dts").unwrap();
+    let graph = import_dts(
+        KERNEL_STYLE,
+        Path::new("board.dts"),
+        &ImportOptions::default(),
+    )
+    .unwrap();
     assert_eq!(to_dts(&graph).unwrap(), KERNEL_STYLE);
 }
 
 #[test]
 fn import_arranges_nodes_without_overlap() {
-    let graph = import_dts(KERNEL_STYLE, "board.dts").unwrap();
+    let graph = import_dts(
+        KERNEL_STYLE,
+        Path::new("board.dts"),
+        &ImportOptions::default(),
+    )
+    .unwrap();
     let positions: Vec<_> = graph.nodes.iter().map(|n| n.position).collect();
     for (i, a) in positions.iter().enumerate() {
         for b in &positions[i + 1..] {

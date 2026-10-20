@@ -13,6 +13,16 @@ pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
     let root = graph.root().expect("validated graph has a root");
 
     let mut out = String::from("/dts-v1/;\n\n");
+    for reserve in &graph.memreserves {
+        let _ = writeln!(
+            out,
+            "/memreserve/ {:#x} {:#x};",
+            reserve.address, reserve.size
+        );
+    }
+    if !graph.memreserves.is_empty() {
+        out.push('\n');
+    }
     write_node(graph, root, 0, &mut out);
     Ok(out)
 }
@@ -61,8 +71,11 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
     let inner = "\t".repeat(depth + 1);
 
     let _ = write!(out, "{indent}");
-    if let Some(label) = &node.label {
+    for label in node.labels() {
         let _ = write!(out, "{label}: ");
+    }
+    if node.omit_if_no_ref {
+        out.push_str("/omit-if-no-ref/ ");
     }
     let _ = writeln!(out, "{} {{", node.full_name());
 
@@ -219,7 +232,7 @@ fn chunk_item(chunk: &ValueChunk) -> Item {
     }
 }
 
-fn quote(s: &str) -> String {
+pub(crate) fn quote(s: &str) -> String {
     let mut quoted = String::from("\"");
     for c in s.chars() {
         match c {
@@ -269,6 +282,8 @@ mod tests {
             name: name.into(),
             unit_address: None,
             label: None,
+            extra_labels: vec![],
+            omit_if_no_ref: false,
             compatible: vec![],
             properties: vec![],
             position: Position::default(),
@@ -321,6 +336,7 @@ mod tests {
                 },
             ],
             groups: vec![],
+            ..Default::default()
         };
 
         let dts = to_dts(&graph).unwrap();
@@ -350,6 +366,7 @@ mod tests {
             nodes: vec![node("root", "/"), soc],
             edges: vec![child("root", "soc")],
             groups: vec![],
+            ..Default::default()
         }
     }
 
@@ -359,6 +376,7 @@ mod tests {
             nodes: vec![node("root", "/"), node("z", "zeta"), node("a", "alpha")],
             edges: vec![child("root", "z"), child("root", "a")],
             groups: vec![],
+            ..Default::default()
         };
         assert_eq!(
             to_dts(&graph).unwrap(),
@@ -419,6 +437,7 @@ mod tests {
                 },
             ],
             groups: vec![],
+            ..Default::default()
         };
         let errors = to_dts(&graph).unwrap_err();
         assert!(errors.contains(&ValidationError::Detached("b".into())));
@@ -457,6 +476,7 @@ mod tests {
             nodes: vec![root],
             edges: vec![],
             groups: vec![],
+            ..Default::default()
         };
         assert_eq!(
             to_dts(&graph).unwrap_err(),
@@ -498,6 +518,7 @@ mod tests {
             nodes: vec![node("root", "/"), node("a", "a"), node("b", "b")],
             edges: vec![child("a", "b"), child("b", "a")],
             groups: vec![],
+            ..Default::default()
         };
         let errors = validate(&graph);
         assert!(errors.contains(&ValidationError::Detached("a".into())));
