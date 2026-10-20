@@ -14,6 +14,7 @@ designtree-core = { path = "crates/designtree-core" }
 designtree-bindings = { path = "crates/designtree-bindings" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+fancy-regex = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_norway = "0.9"

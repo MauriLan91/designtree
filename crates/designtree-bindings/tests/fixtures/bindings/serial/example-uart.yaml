@@ -6,6 +6,9 @@ $schema: http://devicetree.org/meta-schemas/core.yaml#
 
 title: Example UART
 
+allOf:
+  - $ref: serial-common.yaml#
+
 properties:
   compatible:
     oneOf:
@@ -22,6 +25,24 @@ properties:
   clocks:
     description: Reference clock.
     maxItems: 1
+
+  reset-gpios: true
+
+  status: true
+
+  current-speed: true
+
+  vendor,fifo-size:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [16, 64]
+    default: 16
+
+  vendor,line-mode:
+    enum: [rs232, rs485]
+
+  vendor,turnaround-us:
+    minimum: 1
+    maximum: 100
 
 required:
   - compatible

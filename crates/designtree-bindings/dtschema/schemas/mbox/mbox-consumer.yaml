@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2019 ARM Ltd.
+# Copyright 2019 Linaro Ltd.
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mbox/mbox-consumer.yaml#
+$schema: http://devicetree.org/meta-schemas/base.yaml#
+
+title: Mailbox Consumer Common Properties
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+# always select the core schema
+select: true
+
+properties:
+  mboxes:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: >
+      List of mailboxes used by the client. Each entry in the list will be
+      a phandle pointing to a mailbox controller followed by some number of
+      controller-defined (via #mbox-cells) extra cells.
+
+  mbox-names:
+    $ref: /schemas/types.yaml#/definitions/string-array
+    description: >
+      List of names corresponding to mailboxes in the mboxes list.
+
+  shmem:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      maxItems: 1
+    description: >
+      List of phandles to memory regions associated with mailboxes in the
+      mboxes list.
+
+dependencies:
+  mbox-names: [ mboxes ]
+
+additionalProperties: true
+
+examples:
+  - |
+    device {
+        mboxes = <&mailbox 0>, <&mailbox 1>;
+        mbox-names = "tx", "rx";
+    };
+...

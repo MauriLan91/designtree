@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2018 Linaro Ltd.
+# Copyright 2018 Arm Ltd.
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/interrupts.yaml#
+$schema: http://devicetree.org/meta-schemas/base.yaml#
+
+title: Interrupt Consumer Common Properties
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+# always select the core schema
+select: true
+
+properties:
+  interrupt-parent:
+    $ref: types.yaml#/definitions/phandle
+  interrupts:
+    $ref: types.yaml#/definitions/uint32-matrix
+  interrupt-names:
+    $ref: /schemas/types.yaml#/definitions/string-array
+  interrupts-extended:
+    $ref: types.yaml#/definitions/phandle-array
+dependencies:
+  interrupt-names:
+    oneOf:
+      - required:
+          - interrupts
+      - required:
+          - interrupts-extended
+
+additionalProperties: true

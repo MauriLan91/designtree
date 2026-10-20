@@ -89,10 +89,30 @@ export interface Design {
 /** The parts of a design that belong to the whole tree, not to a node or group. */
 export type DesignExtras = Omit<Design, "nodes" | "edges" | "groups">;
 
+/** dt-schema `types.yaml` definitions, plus `node` for child nodes. */
+export type PropertyType =
+  | "flag"
+  | "string"
+  | "string-array"
+  | "non-unique-string-array"
+  | `${"uint" | "int"}${8 | 16 | 32 | 64}`
+  | `${"uint" | "int"}${8 | 16 | 32 | 64}-${"array" | "matrix"}`
+  | "phandle"
+  | "phandle-array"
+  | "address"
+  | "node";
+
 export interface PropertySpec {
   name: string;
   description?: string;
   required: boolean;
+  type?: PropertyType;
+  enum?: unknown[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  min_items?: number;
+  max_items?: number;
 }
 
 export interface Binding {

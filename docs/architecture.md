@@ -55,9 +55,32 @@ replaceable layer.
 
 Walks `Documentation/devicetree/bindings/**/*.yaml` and extracts, per schema:
 category (first directory), title, compatible strings (from `const`, `enum`,
-`items`, `oneOf`, ...), and properties with their description and whether
-they are required. Files that fail to parse are listed in `skipped` instead of
-aborting the run.
+`items`, `oneOf`, ...), and properties with their description, whether they
+are required, their type and their constraints (`enum`, `default`,
+`minimum`/`maximum`, `minItems`/`maxItems`). Files that fail to parse are
+listed in `skipped` instead of aborting the run.
+
+Types are the definitions of dt-schema's `types.yaml` (`uint32`,
+`phandle-array`, `string-array`, ...) plus `node` for child nodes. The kernel
+tree does not contain the dt-schema core schemas that bindings refer to
+(`/schemas/types.yaml`, `/schemas/clock/clock.yaml`, `/schemas/dt-core.yaml`),
+so a pinned copy is embedded at build time from
+`crates/designtree-bindings/dtschema`. A property's type is looked up in this
+order, taking the first schema that states one:
+
+1. its definition in the binding, following `$ref`, `allOf`, `oneOf` and
+   `anyOf`;
+2. the schemas the binding includes through a top-level `$ref` or `allOf`;
+3. any other definition of the same name in the kernel or core schemas,
+   like dt-schema's own property type database (`reset-gpios: true` is
+   typed this way);
+4. the pattern properties of the core schemas that apply to every node
+   (`-gpios$`, `-microvolt$`, `^#.*-cells$`).
+
+Only when none states a type is one guessed from listed values or bounds.
+Constraints come from steps 1, 2 and the generic core schemas, never from an
+unrelated binding. `designtree index --stats` reports the share of schemas
+indexed and of properties typed (backlog goal G2).
 
 ## Boundary with the GUI
 

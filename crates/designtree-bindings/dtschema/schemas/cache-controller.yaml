@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2019 Linaro Ltd.
+# Copyright 2022 Arm Ltd.
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/cache-controller.yaml#
+$schema: http://devicetree.org/meta-schemas/base.yaml#
+
+title: Common Cache Properties
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+properties:
+  cache-level:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 2
+    maximum: 32
+
+  cache-unified:
+    $ref: /schemas/types.yaml#/definitions/flag
+
+  next-level-cache:
+    $ref: /schemas/types.yaml#/definitions/phandle
+
+patternProperties:
+  "^(i-|d-|)cache-size$":
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+  "^(i-|d-|)cache-sets$":
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+  "^(i-|d-|)cache-block-size$":
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+  "^(i-|d-|)cache-line-size$":
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+dependentRequired:
+  cache-size: [ cache-unified ]
+  cache-sets: [ cache-unified ]
+  cache-block-size: [ cache-unified ]
+  cache-line-size: [ cache-unified ]
+  cache-level: [ compatible ]
+
+dependentSchemas:
+  cache-unified:
+    patternProperties:
+      '^[id]-cache-': false
+
+if:
+  not:
+    properties:
+      device_type:
+        const: cpu
+    required:
+      - device_type
+then:
+  required:
+    - cache-level
+
+additionalProperties: true
