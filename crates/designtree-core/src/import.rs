@@ -13,11 +13,13 @@ use std::path::Path;
 
 use crate::layout::auto_layout;
 use crate::model::{
-    Cell, Edge, EdgeKind, Graph, MemReserve, Node, NodeId, Position, Property, PropertyValue,
-    ValueChunk,
+    Cell, Edge, EdgeKind, Graph, Inherited, MemReserve, Node, NodeId, Position, Property,
+    PropertyValue, ValueChunk,
 };
 pub use crate::parse::ImportError;
-use crate::parse::{parse, BodyItem, NodeBody, ParseError, Pos, PropertyDef, Reference, TopItem};
+use crate::parse::{
+    parse, BodyItem, NodeBody, NodeDef, ParseError, Pos, PropertyDef, Reference, TopItem,
+};
 use crate::preprocess::{confined_reader, preprocess, ImportOptions};
 
 /// Imports a devicetree source file, resolving `#include` and macros.
@@ -32,24 +34,67 @@ pub fn import_dts_file(path: &Path, options: &ImportOptions) -> Result<Graph, Im
 ///
 /// Node ids are the node paths (`/`, `/soc/serial@10000000`). Nodes and buses
 /// are arranged with [`auto_layout`].
+///
+/// The include directives of `file` are kept in [`Graph::includes`], and
+/// nodes from included files are marked [`Node::inherited`] with their
+/// included definition, so that export writes only the board's changes.
+/// When an include sits inside a node (`&i2c1 { #include "x.dtsi" };`),
+/// that split is not possible and the import is flat: no includes, nothing
+/// inherited.
 pub fn import_dts(
     source: &str,
     file: &Path,
     options: &ImportOptions,
 ) -> Result<Graph, ImportError> {
-    let text = preprocess(source, file, options, &confined_reader(file, options))?;
-    import_preprocessed(&text, &file.display().to_string())
+    let preprocessed = preprocess(source, file, options, &confined_reader(file, options))?;
+    import_preprocessed(
+        &preprocessed.text,
+        &file.display().to_string(),
+        preprocessed.directives,
+    )
 }
 
-/// Imports source that has already been preprocessed.
-fn import_preprocessed(text: &str, file: &str) -> Result<Graph, ImportError> {
+/// Imports source that has already been preprocessed; `directives` are the
+/// include directives (and `#define`s) of the top file with their lines.
+fn import_preprocessed(
+    text: &str,
+    file: &str,
+    directives: Vec<(u32, String)>,
+) -> Result<Graph, ImportError> {
     let document = parse(text, file)?;
     let files = document.files;
     let located = |e: ParseError| e.located(&files);
-    let mut tree = Tree::new();
+
+    // Directives after the board's first node or deletion go at the end.
+    let first_board_line = document
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            TopItem::Root(_, pos) => Some(pos),
+            TopItem::Override { target, .. }
+            | TopItem::DeleteNode(target)
+            | TopItem::OmitIfNoRef(target) => Some(&target.pos),
+            TopItem::MemReserve { .. } => None,
+        })
+        .filter(|pos| pos.file == MAIN)
+        .map(|pos| pos.line)
+        .min()
+        .unwrap_or(u32::MAX);
+    let (includes, trailing): (Vec<_>, Vec<_>) = directives
+        .into_iter()
+        .partition(|(line, _)| *line < first_board_line);
+    let is_include = |d: &str| d.starts_with("#include") || d.starts_with("/include/");
+    // Layering fails when an include sits inside a node, or when one comes
+    // after the board's nodes: it can change them (a PMIC `.dtsi` filling in
+    // the PMIC node the board declares) and the board can change them after
+    // that, an order overrides cannot express.
+    let flat =
+        trailing.iter().any(|(_, d)| is_include(d)) || !document.items.iter().all(from_one_side);
+
+    let mut tree = Tree::new(flat);
     for item in document.items {
         match item {
-            TopItem::Root(body) => tree.merge(ROOT, body),
+            TopItem::Root(body, _) => tree.merge(ROOT, body),
             TopItem::Override {
                 labels,
                 target,
@@ -67,7 +112,7 @@ fn import_preprocessed(text: &str, file: &str) -> Result<Graph, ImportError> {
                         message: "cannot delete the root node".into(),
                     });
                 }
-                tree.delete(node);
+                tree.delete(node, target.pos);
                 Ok(())
             }),
             TopItem::OmitIfNoRef(target) => tree.resolve(&target).and_then(|node| {
@@ -78,16 +123,64 @@ fn import_preprocessed(text: &str, file: &str) -> Result<Graph, ImportError> {
                     });
                 }
                 tree.nodes[node].omit_if_no_ref = true;
+                tree.nodes[node].base_omit_if_no_ref |= tree.included(target.pos);
                 Ok(())
             }),
-            TopItem::MemReserve { address, size } => {
-                tree.memreserves.push(MemReserve { address, size });
+            TopItem::MemReserve { address, size, pos } => {
+                tree.memreserves.push(MemReserve {
+                    address,
+                    size,
+                    inherited: tree.included(pos),
+                });
                 Ok(())
             }
         }
         .map_err(located)?;
     }
-    tree.into_graph().map_err(located)
+    let mut graph = tree.into_graph(&files).map_err(located)?;
+    if graph.nodes.iter().any(|n| n.inherited.is_some()) || !graph.deleted_nodes.is_empty() {
+        graph.includes = includes.into_iter().map(|(_, d)| d).collect();
+        graph.trailing_includes = trailing.into_iter().map(|(_, d)| d).collect();
+    }
+    Ok(graph)
+}
+
+/// Index of the imported file in [`Pos::file`]; others are included.
+const MAIN: u32 = 0;
+
+/// True if `item` comes from the imported file or from included files, not
+/// both, i.e. the imported file has no include inside a node.
+fn from_one_side(item: &TopItem) -> bool {
+    fn body_files(body: &NodeBody, files: &mut Vec<u32>) {
+        for item in &body.items {
+            match item {
+                BodyItem::Property(def) => files.push(def.pos.file),
+                BodyItem::DeleteProperty { pos, .. } | BodyItem::DeleteNode { pos, .. } => {
+                    files.push(pos.file)
+                }
+                BodyItem::Node(def) => node_files(def, files),
+            }
+        }
+    }
+    fn node_files(def: &NodeDef, files: &mut Vec<u32>) {
+        files.push(def.pos.file);
+        body_files(&def.body, files);
+    }
+    let mut files = Vec::new();
+    match item {
+        TopItem::Root(body, pos) => {
+            files.push(pos.file);
+            body_files(body, &mut files);
+        }
+        TopItem::Override { target, body, .. } => {
+            files.push(target.pos.file);
+            body_files(body, &mut files);
+        }
+        _ => {}
+    }
+    files
+        .windows(2)
+        .all(|pair| (pair[0] == MAIN) == (pair[1] == MAIN))
 }
 
 const ROOT: usize = 0;
@@ -95,22 +188,36 @@ const ROOT: usize = 0;
 struct TreeNode {
     /// Full name with unit address; `/` for the root.
     name: String,
+    parent: Option<usize>,
     labels: Vec<String>,
     omit_if_no_ref: bool,
     properties: Vec<PropertyDef>,
     children: Vec<usize>,
     deleted: bool,
+    /// File that created the node; `Some` if it is an included file and the
+    /// parent is inherited too.
+    inherited_from: Option<u32>,
+    /// Labels, properties and `/omit-if-no-ref/` as the included files
+    /// define them.
+    base_labels: Vec<String>,
+    base_properties: Vec<PropertyDef>,
+    base_omit_if_no_ref: bool,
 }
 
 impl TreeNode {
-    fn new(name: &str) -> Self {
+    fn new(name: &str, parent: Option<usize>, inherited_from: Option<u32>) -> Self {
         TreeNode {
             name: name.to_owned(),
+            parent,
             labels: Vec::new(),
             omit_if_no_ref: false,
             properties: Vec::new(),
             children: Vec::new(),
             deleted: false,
+            inherited_from,
+            base_labels: Vec::new(),
+            base_properties: Vec::new(),
+            base_omit_if_no_ref: false,
         }
     }
 }
@@ -122,15 +229,26 @@ struct Tree {
     /// appear twice as long as one of the two nodes is deleted.
     labels: HashMap<String, Vec<(usize, Pos)>>,
     memreserves: Vec<MemReserve>,
+    /// Inherited nodes the imported file deletes, as reference targets.
+    deleted_inherited: Vec<String>,
+    /// Everything counts as the imported file's own.
+    flat: bool,
 }
 
 impl Tree {
-    fn new() -> Self {
+    fn new(flat: bool) -> Self {
         Tree {
-            nodes: vec![TreeNode::new("/")],
+            nodes: vec![TreeNode::new("/", None, None)],
             labels: HashMap::new(),
             memreserves: Vec::new(),
+            deleted_inherited: Vec::new(),
+            flat,
         }
+    }
+
+    /// True for an item at `pos` that comes from an included file.
+    fn included(&self, pos: Pos) -> bool {
+        !self.flat && pos.file != MAIN
     }
 
     fn live_children(&self, node: usize) -> impl Iterator<Item = usize> + '_ {
@@ -150,20 +268,32 @@ impl Tree {
         for item in body.items {
             match item {
                 BodyItem::Property(def) => {
-                    let properties = &mut self.nodes[node].properties;
-                    match properties.iter_mut().find(|p| p.name == def.name) {
-                        Some(existing) => *existing = def,
-                        None => properties.push(def),
+                    if self.included(def.pos) {
+                        if node == ROOT {
+                            self.nodes[ROOT].inherited_from.get_or_insert(def.pos.file);
+                        }
+                        set_property(&mut self.nodes[node].base_properties, def.clone());
                     }
+                    set_property(&mut self.nodes[node].properties, def);
                 }
-                BodyItem::DeleteProperty { name, .. } => {
+                BodyItem::DeleteProperty { name, pos } => {
+                    if self.included(pos) {
+                        self.nodes[node].base_properties.retain(|p| p.name != name);
+                    }
                     self.nodes[node].properties.retain(|p| p.name != name);
                 }
                 BodyItem::Node(def) => {
                     let child = match self.child(node, &def.name) {
                         Some(child) => child,
                         None => {
-                            self.nodes.push(TreeNode::new(&def.name));
+                            // The root holds both inherited and board nodes.
+                            let inherited = self.included(def.pos)
+                                && (node == ROOT || self.nodes[node].inherited_from.is_some());
+                            let from = inherited.then_some(def.pos.file);
+                            if node == ROOT && inherited {
+                                self.nodes[ROOT].inherited_from.get_or_insert(def.pos.file);
+                            }
+                            self.nodes.push(TreeNode::new(&def.name, Some(node), from));
                             let child = self.nodes.len() - 1;
                             self.nodes[node].children.push(child);
                             child
@@ -173,11 +303,13 @@ impl Tree {
                         self.add_label(child, label, def.pos);
                     }
                     self.nodes[child].omit_if_no_ref |= def.omit_if_no_ref;
+                    self.nodes[child].base_omit_if_no_ref |=
+                        def.omit_if_no_ref && self.included(def.pos);
                     self.merge(child, def.body)?;
                 }
-                BodyItem::DeleteNode { name, .. } => {
+                BodyItem::DeleteNode { name, pos } => {
                     if let Some(child) = self.child(node, &name) {
-                        self.delete(child);
+                        self.delete(child, pos);
                     }
                 }
             }
@@ -187,6 +319,9 @@ impl Tree {
 
     /// Labels may repeat until the end, see [`Tree::check_labels`].
     fn add_label(&mut self, node: usize, label: &str, pos: Pos) {
+        if self.included(pos) && !self.nodes[node].base_labels.iter().any(|l| l == label) {
+            self.nodes[node].base_labels.push(label.to_owned());
+        }
         if !self.nodes[node].labels.iter().any(|l| l == label) {
             self.nodes[node].labels.push(label.to_owned());
             self.labels
@@ -196,10 +331,30 @@ impl Tree {
         }
     }
 
-    fn delete(&mut self, node: usize) {
+    /// Deletes `node` and its subtree, as written at `pos`.
+    fn delete(&mut self, node: usize, pos: Pos) {
+        if !self.included(pos) && self.nodes[node].inherited_from.is_some() {
+            let target = match self.nodes[node].base_labels.first() {
+                Some(label) => label.clone(),
+                None => self.path(node),
+            };
+            self.deleted_inherited.push(target);
+        }
+        self.mark_deleted(node);
+    }
+
+    fn mark_deleted(&mut self, node: usize) {
         self.nodes[node].deleted = true;
         for child in self.nodes[node].children.clone() {
-            self.delete(child);
+            self.mark_deleted(child);
+        }
+    }
+
+    fn path(&self, node: usize) -> String {
+        match self.nodes[node].parent {
+            None => "/".into(),
+            Some(ROOT) => format!("/{}", self.nodes[node].name),
+            Some(parent) => format!("{}/{}", self.path(parent), self.nodes[node].name),
         }
     }
 
@@ -262,10 +417,11 @@ impl Tree {
             })
     }
 
-    fn into_graph(mut self) -> Result<Graph, ParseError> {
+    fn into_graph(mut self, files: &[String]) -> Result<Graph, ParseError> {
         self.check_labels()?;
         let mut graph = Graph {
             memreserves: std::mem::take(&mut self.memreserves),
+            deleted_nodes: std::mem::take(&mut self.deleted_inherited),
             ..Graph::default()
         };
         let mut index = vec![None; self.nodes.len()];
@@ -288,21 +444,7 @@ impl Tree {
                         graph.nodes[graph_index].compatible = strings
                     }
                     Classified::Value(mut value) => {
-                        // Path references are looked up like dtc does
-                        // (`/soc/serial` finds `serial@1000`); store the
-                        // full path, which is the target's node id.
-                        if let PropertyValue::Mixed(chunks) = &mut value {
-                            for target in chunk_targets(chunks) {
-                                if let Some(node) = target
-                                    .contains('/')
-                                    .then(|| self.find(target))
-                                    .flatten()
-                                    .and_then(|node| index[node])
-                                {
-                                    target.clone_from(&graph.nodes[node].id.0);
-                                }
-                            }
-                        }
+                        self.canonical_paths(&mut value, &graph, &index);
                         graph.nodes[graph_index].properties.push(Property {
                             name: def.name.clone(),
                             value,
@@ -326,8 +468,64 @@ impl Tree {
                 }
             }
         }
+        for (node, graph_index) in index.iter().enumerate() {
+            let (Some(graph_index), Some(file)) = (*graph_index, self.nodes[node].inherited_from)
+            else {
+                continue;
+            };
+            let properties = self.nodes[node]
+                .base_properties
+                .iter()
+                .map(|def| {
+                    let mut value = match classify(def) {
+                        Classified::Value(value) => value,
+                        Classified::Phandles(entries) => PropertyValue::Mixed(
+                            entries
+                                .into_iter()
+                                .map(|(label, args)| ValueChunk::Cells {
+                                    bits: 32,
+                                    cells: std::iter::once(Cell::Phandle {
+                                        phandle: label.to_owned(),
+                                    })
+                                    .chain(args.into_iter().map(|a| Cell::Number(a.into())))
+                                    .collect(),
+                                })
+                                .collect(),
+                        ),
+                    };
+                    self.canonical_paths(&mut value, &graph, &index);
+                    Property {
+                        name: def.name.clone(),
+                        value,
+                    }
+                })
+                .collect();
+            graph.nodes[graph_index].inherited = Some(Inherited {
+                file: files[file as usize].clone(),
+                labels: self.nodes[node].base_labels.clone(),
+                properties,
+                omit_if_no_ref: self.nodes[node].base_omit_if_no_ref,
+            });
+        }
         auto_layout(&mut graph);
         Ok(graph)
+    }
+
+    /// Path references are looked up like dtc does (`/soc/serial` finds
+    /// `serial@1000`); store the full path, which is the target's node id.
+    fn canonical_paths(&self, value: &mut PropertyValue, graph: &Graph, index: &[Option<usize>]) {
+        if let PropertyValue::Mixed(chunks) = value {
+            for target in chunk_targets(chunks) {
+                if let Some(node) = target
+                    .contains('/')
+                    .then(|| self.find(target))
+                    .flatten()
+                    .and_then(|node| index[node])
+                {
+                    target.clone_from(&graph.nodes[node].id.0);
+                }
+            }
+        }
     }
 
     /// Adds `node` and its subtree to the graph in source order, with child
@@ -349,6 +547,7 @@ impl Tree {
             omit_if_no_ref: tree_node.omit_if_no_ref,
             compatible: Vec::new(),
             properties: Vec::new(),
+            inherited: None,
             position: Position::default(),
         });
 
@@ -364,6 +563,14 @@ impl Tree {
             });
             self.visit(child, child_path, graph, index);
         }
+    }
+}
+
+/// Sets a property, replacing an earlier definition in place as dtc does.
+fn set_property(properties: &mut Vec<PropertyDef>, def: PropertyDef) {
+    match properties.iter_mut().find(|p| p.name == def.name) {
+        Some(existing) => *existing = def,
+        None => properties.push(def),
     }
 }
 
@@ -534,7 +741,8 @@ mod tests {
             graph.memreserves,
             [MemReserve {
                 address: 0x8000_0000,
-                size: 64 << 20
+                size: 64 << 20,
+                inherited: false,
             }]
         );
         let root = node(&graph, "/");
@@ -849,5 +1057,180 @@ mod tests {
             let message = result.unwrap_err().message;
             assert!(message.contains("outside the directory"), "{message}");
         }
+    }
+
+    /// A board file next to its SoC file, in a fresh directory.
+    struct Board {
+        dir: std::path::PathBuf,
+    }
+
+    impl Board {
+        fn new(name: &str, files: &[(&str, &str)]) -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("designtree-{name}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            for (file, text) in files {
+                std::fs::write(dir.join(file), text).unwrap();
+            }
+            Board { dir }
+        }
+
+        fn import(&self, file: &str) -> Graph {
+            import_dts_file(&self.dir.join(file), &ImportOptions::default()).unwrap()
+        }
+    }
+
+    impl Drop for Board {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    const SOC: &str = "/ {\n\
+        \t#address-cells = <1>;\n\
+        \t#size-cells = <1>;\n\
+        \tsoc {\n\
+        \t\tuart0: serial@1000 { compatible = \"ns16550a\"; reg = <0x1000 0x100>; status = \"disabled\"; };\n\
+        \t\ti2c1: i2c@2000 { reg = <0x2000 0x100>; status = \"disabled\"; nested { a = <1>; }; };\n\
+        \t\tspi: spi@3000 { status = \"disabled\"; };\n\
+        \t};\n\
+        };\n";
+
+    #[test]
+    fn exports_board_changes_as_overrides() {
+        let board = Board::new(
+            "overrides",
+            &[
+                ("soc.dtsi", SOC),
+                (
+                    "board.dts",
+                    "/dts-v1/;\n\
+                     #define SPEED 400\n\
+                     #include \"soc.dtsi\"\n\
+                     / { model = \"Board\"; chosen { stdout-path = &uart0; }; };\n\
+                     &uart0 { status = \"okay\"; };\n\
+                     &i2c1 { /delete-property/ status; nested { a = <2>; }; codec: codec@1a { reg = <0x1a>; speed = <SPEED>; }; };\n\
+                     /delete-node/ &spi;\n",
+                ),
+            ],
+        );
+        let graph = board.import("board.dts");
+        let inherited = |id: &str| node(&graph, id).inherited.is_some();
+        assert!(
+            inherited("/") && inherited("/soc/serial@1000") && inherited("/soc/i2c@2000/nested")
+        );
+        assert!(!inherited("/chosen") && !inherited("/soc/i2c@2000/codec@1a"));
+        let uart = node(&graph, "/soc/serial@1000").inherited.as_ref().unwrap();
+        assert!(uart.file.ends_with("soc.dtsi"));
+        assert_eq!(uart.labels, ["uart0"]);
+        assert_eq!(
+            graph.includes,
+            ["#define SPEED 400", "#include \"soc.dtsi\""]
+        );
+        assert_eq!(graph.deleted_nodes, ["spi"]);
+
+        let expected = "/dts-v1/;\n\n\
+            #define SPEED 400\n\
+            #include \"soc.dtsi\"\n\n\
+            /delete-node/ &spi;\n\n\
+            / {\n\
+            \tmodel = \"Board\";\n\n\
+            \tchosen {\n\
+            \t\tstdout-path = &uart0;\n\
+            \t};\n\
+            };\n\n\
+            &uart0 {\n\
+            \tstatus = \"okay\";\n\
+            };\n\n\
+            &i2c1 {\n\
+            \t/delete-property/ status;\n\n\
+            \tnested {\n\
+            \t\ta = <2>;\n\
+            \t};\n\n\
+            \tcodec: codec@1a {\n\
+            \t\treg = <0x1a>;\n\
+            \t\tspeed = <0x190>;\n\
+            \t};\n\
+            };\n\n";
+        let exported = crate::to_dts(&graph).unwrap();
+        assert_eq!(exported, expected);
+
+        // The export is a board file in its own right: importing it gives
+        // the same design back.
+        std::fs::write(board.dir.join("again.dts"), &exported).unwrap();
+        assert_eq!(crate::to_dts(&board.import("again.dts")).unwrap(), expected);
+
+        // An unmodified import exports nothing beyond the includes.
+        let plain = Board::new(
+            "plain",
+            &[
+                ("soc.dtsi", SOC),
+                ("board.dts", "/dts-v1/;\n#include \"soc.dtsi\"\n"),
+            ],
+        );
+        assert_eq!(
+            crate::to_dts(&plain.import("board.dts")).unwrap(),
+            "/dts-v1/;\n\n#include \"soc.dtsi\"\n\n"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_a_flat_tree_when_includes_cannot_be_kept() {
+        let nested = Board::new(
+            "nested",
+            &[
+                ("soc.dtsi", SOC),
+                ("part.dtsi", "a = <1>;\n"),
+                (
+                    "board.dts",
+                    "/dts-v1/;\n#include \"soc.dtsi\"\n&uart0 {\n#include \"part.dtsi\"\n};\n",
+                ),
+            ],
+        );
+        // An include after the board's nodes, filling in one of them.
+        let trailing = Board::new(
+            "trailing",
+            &[
+                ("pmic.dtsi", "&pmic { compatible = \"x,pmic\"; };\n"),
+                (
+                    "board.dts",
+                    "/dts-v1/;\n/ { pmic: pmic { }; };\n#include \"pmic.dtsi\"\n&pmic { status = \"okay\"; };\n",
+                ),
+            ],
+        );
+        for graph in [nested.import("board.dts"), trailing.import("board.dts")] {
+            assert!(graph.includes.is_empty() && graph.trailing_includes.is_empty());
+            assert!(graph.nodes.iter().all(|n| n.inherited.is_none()));
+        }
+    }
+
+    #[test]
+    fn keeps_layers_with_includes_inside_included_files() {
+        let board = Board::new(
+            "deep",
+            &[
+                (
+                    "soc.dtsi",
+                    "/ { cpus {\n#include \"opp.dtsi\"\n}; uart0: serial { }; };\n",
+                ),
+                ("opp.dtsi", "cpu0: cpu { };\n"),
+                (
+                    "board.dts",
+                    "/dts-v1/;\n#include \"soc.dtsi\"\n\
+                     /omit-if-no-ref/ &uart0;\n\
+                     &uart0 { status = \"okay\"; };\n\
+                     rl: &{/} { };\n",
+                ),
+            ],
+        );
+        let graph = board.import("board.dts");
+        assert!(node(&graph, "/cpus/cpu").inherited.is_some());
+        assert_eq!(
+            crate::to_dts(&graph).unwrap(),
+            "/dts-v1/;\n\n#include \"soc.dtsi\"\n\n\
+             rl: &{/} {\n};\n\n\
+             &uart0 {\n\tstatus = \"okay\";\n};\n\n\
+             /omit-if-no-ref/ &uart0;\n\n"
+        );
     }
 }

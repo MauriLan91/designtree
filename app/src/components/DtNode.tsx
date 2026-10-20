@@ -1,12 +1,15 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CHILD_HANDLE, PARENT_HANDLE, PHANDLE_HANDLE, REF_HANDLE, type DtFlowNode } from "../model";
+import { CHILD_HANDLE, PARENT_HANDLE, PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
 
 /** Canvas node for a devicetree node: hierarchy handles top/bottom, phandle handles left/right. */
 export function DtNode({ data, selected }: NodeProps<DtFlowNode>) {
   const isRoot = data.name === "/";
   const fullName = data.unitAddress ? `${data.name}@${data.unitAddress}` : data.name;
   return (
-    <div className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}`}>
+    <div
+      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}`}
+      title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
+    >
       {!isRoot && <Handle type="target" id={PARENT_HANDLE} position={Position.Top} className="h-tree" />}
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
       <div className="dt-node-title">
@@ -14,6 +17,7 @@ export function DtNode({ data, selected }: NodeProps<DtFlowNode>) {
         {fullName}
       </div>
       {data.compatible.length > 0 && <div className="dt-node-compat">{data.compatible[0]}</div>}
+      {data.inherited && <div className="dt-node-origin">{baseName(data.inherited.file)}</div>}
       {data.properties.length > 0 && (
         <div className="dt-node-props">
           {data.properties.length} propert{data.properties.length === 1 ? "y" : "ies"}

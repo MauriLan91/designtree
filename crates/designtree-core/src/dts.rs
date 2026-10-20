@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::model::{Cell, EdgeKind, Graph, Node, PropertyValue, ValueChunk};
@@ -5,26 +6,87 @@ use crate::validate::{validate, ValidationError};
 
 /// Generates devicetree source from a design. Fails if the graph does not
 /// pass [`validate`].
+///
+/// A design imported from a board file with includes is written the same
+/// way: its include directives, then only what the board adds or changes
+/// on top of the included files, as `&label { ... };` overrides. Use
+/// [`to_dts_flat`] for one self-contained tree.
 pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
-    let errors = validate(graph);
-    if !errors.is_empty() {
-        return Err(errors);
+    if graph.includes.is_empty() && graph.trailing_includes.is_empty() {
+        return to_dts_flat(graph);
     }
+    check(graph)?;
     let root = graph.root().expect("validated graph has a root");
 
     let mut out = String::from("/dts-v1/;\n\n");
-    for reserve in &graph.memreserves {
+    write_memreserves(graph, false, &mut out);
+    for include in &graph.includes {
+        let _ = writeln!(out, "{include}");
+    }
+    out.push('\n');
+    for target in &graph.deleted_nodes {
+        let _ = writeln!(out, "/delete-node/ {};", format_reference(target));
+    }
+    if !graph.deleted_nodes.is_empty() {
+        out.push('\n');
+    }
+    // Phandles in inherited values name a node by any of its labels; edges
+    // use its main label.
+    let primary_labels: HashMap<&str, &str> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| n.label.as_deref().map(|primary| (n, primary)))
+        .flat_map(|(n, primary)| n.labels().map(move |l| (l.as_str(), primary)))
+        .collect();
+    write_overrides(graph, root, &primary_labels, &mut out);
+    // `/omit-if-no-ref/` the board adds to inherited nodes.
+    for node in &graph.nodes {
+        if node.omit_if_no_ref && node.inherited.as_ref().is_some_and(|b| !b.omit_if_no_ref) {
+            let target = base_label(node).map_or(node.id.0.as_str(), String::as_str);
+            let _ = writeln!(out, "/omit-if-no-ref/ {};\n", format_reference(target));
+        }
+    }
+    for include in &graph.trailing_includes {
+        let _ = writeln!(out, "{include}");
+    }
+    Ok(out)
+}
+
+/// Generates devicetree source for the whole tree, included nodes and all.
+pub fn to_dts_flat(graph: &Graph) -> Result<String, Vec<ValidationError>> {
+    check(graph)?;
+    let root = graph.root().expect("validated graph has a root");
+    let mut out = String::from("/dts-v1/;\n\n");
+    write_memreserves(graph, true, &mut out);
+    write_node(graph, root, 0, &mut out);
+    Ok(out)
+}
+
+fn check(graph: &Graph) -> Result<(), Vec<ValidationError>> {
+    let errors = validate(graph);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+fn write_memreserves(graph: &Graph, inherited_too: bool, out: &mut String) {
+    let reserves: Vec<_> = graph
+        .memreserves
+        .iter()
+        .filter(|r| inherited_too || !r.inherited)
+        .collect();
+    for reserve in &reserves {
         let _ = writeln!(
             out,
             "/memreserve/ {:#x} {:#x};",
             reserve.address, reserve.size
         );
     }
-    if !graph.memreserves.is_empty() {
+    if !reserves.is_empty() {
         out.push('\n');
     }
-    write_node(graph, root, 0, &mut out);
-    Ok(out)
 }
 
 /// Width of a tab in kernel sources, used to wrap long values.
@@ -66,39 +128,160 @@ impl Item {
     }
 }
 
-fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
+/// Writes what the board changes on the inherited `node` as an override
+/// (`&label { ... };`, `/ { ... };` for the root), then the overrides of
+/// its labeled inherited descendants.
+fn write_overrides(
+    graph: &Graph,
+    node: &Node,
+    primary_labels: &HashMap<&str, &str>,
+    out: &mut String,
+) {
+    let mut deferred = Vec::new();
+    let body = override_body(graph, node, 1, primary_labels, &mut deferred);
+    let new_labels = new_labels(node);
+    if !body.is_empty() || !new_labels.is_empty() {
+        for label in &new_labels {
+            let _ = write!(out, "{label}: ");
+        }
+        // dtc takes no label before `/ {`, so a new root label needs `&{/}`.
+        match (node.is_root(), base_label(node)) {
+            (true, _) if new_labels.is_empty() => out.push_str("/ {\n"),
+            (true, _) => out.push_str("&{/} {\n"),
+            (false, Some(target)) => {
+                let _ = writeln!(out, "{} {{", format_reference(target));
+            }
+            (false, None) => unreachable!("only labeled nodes get an override"),
+        }
+        out.push_str(&body);
+        out.push_str("};\n\n");
+    }
+    for node in deferred {
+        write_overrides(graph, node, primary_labels, out);
+    }
+}
+
+/// The changes to the inherited `node`, indented for `depth`: deleted and
+/// changed properties, the nodes the board adds (whole), and changes to
+/// unlabeled inherited children (nested). Labeled inherited children get
+/// their own override and go to `deferred`.
+fn override_body<'a>(
+    graph: &'a Graph,
+    node: &'a Node,
+    depth: usize,
+    primary_labels: &HashMap<&str, &str>,
+    deferred: &mut Vec<&'a Node>,
+) -> String {
     let indent = "\t".repeat(depth);
-    let inner = "\t".repeat(depth + 1);
+    let base: Vec<(&str, Option<String>)> = node
+        .inherited
+        .iter()
+        .flat_map(|b| &b.properties)
+        .map(|p| {
+            let value = with_primary_labels(primary_labels, &p.value);
+            (p.name.as_str(), one_line(&property_items(&value)))
+        })
+        .collect();
 
-    let _ = write!(out, "{indent}");
-    for label in node.labels() {
-        let _ = write!(out, "{label}: ");
+    let mut body = String::new();
+    let current = node_properties(graph, node);
+    for (name, _) in &base {
+        if !current.iter().any(|(n, _)| n == name) {
+            let _ = writeln!(body, "{indent}/delete-property/ {name};");
+        }
     }
-    if node.omit_if_no_ref {
-        out.push_str("/omit-if-no-ref/ ");
+    for (name, value) in current {
+        if !base.contains(&(name.as_str(), one_line(&value))) {
+            write_any_property(&mut body, depth, &name, value);
+        }
     }
-    let _ = writeln!(out, "{} {{", node.full_name());
+    for child in graph.children(&node.id) {
+        let mut piece = String::new();
+        if child.inherited.is_none() {
+            write_node(graph, child, depth, &mut piece);
+        } else if base_label(child).is_some() {
+            deferred.push(child);
+        } else {
+            let inner = override_body(graph, child, depth + 1, primary_labels, deferred);
+            let new_labels = new_labels(child);
+            if !inner.is_empty() || !new_labels.is_empty() {
+                piece.push_str(&indent);
+                for label in new_labels {
+                    let _ = write!(piece, "{label}: ");
+                }
+                let _ = writeln!(piece, "{} {{", child.full_name());
+                piece.push_str(&inner);
+                let _ = writeln!(piece, "{indent}}};");
+            }
+        }
+        // Kernel style: a blank line before each node, but not first.
+        if !piece.is_empty() {
+            if !body.is_empty() {
+                body.push('\n');
+            }
+            body.push_str(&piece);
+        }
+    }
+    body
+}
 
-    let mut has_properties = false;
+/// A label the included files give `node` and that it still has.
+fn base_label(node: &Node) -> Option<&String> {
+    node.inherited
+        .as_ref()?
+        .labels
+        .iter()
+        .find(|l| node.labels().any(|own| own == *l))
+}
+
+/// Labels of `node` that the included files do not give it.
+fn new_labels(node: &Node) -> Vec<&String> {
+    let base = node
+        .inherited
+        .as_ref()
+        .map(|b| b.labels.as_slice())
+        .unwrap_or_default();
+    node.labels().filter(|l| !base.contains(l)).collect()
+}
+
+/// `value` with phandles to labeled nodes written with the node's main
+/// label, as reference edges are, so that equal values compare equal.
+fn with_primary_labels(
+    primary_labels: &HashMap<&str, &str>,
+    value: &PropertyValue,
+) -> PropertyValue {
+    let mut value = value.clone();
+    if let PropertyValue::Mixed(chunks) = &mut value {
+        for chunk in chunks {
+            if let ValueChunk::Cells { cells, .. } = chunk {
+                for cell in cells {
+                    if let Cell::Phandle { phandle } = cell {
+                        if let Some(primary) = primary_labels.get(phandle.as_str()) {
+                            *phandle = (*primary).to_owned();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    value
+}
+
+/// Properties of `node` in output order: `compatible`, the others, then
+/// phandle lists from reference edges. `None` is a boolean property.
+fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>)> {
+    let mut props = Vec::new();
     if !node.compatible.is_empty() {
-        has_properties = true;
         let items = node.compatible.iter().map(|s| Item::single(quote(s)));
-        write_property(out, depth + 1, "compatible", items.collect());
+        props.push(("compatible".to_owned(), Some(items.collect())));
     }
     for prop in &node.properties {
-        has_properties = true;
-        match &prop.value {
-            PropertyValue::Empty => {
-                let _ = writeln!(out, "{inner}{};", prop.name);
-            }
-            value => write_property(out, depth + 1, &prop.name, value_items(value)),
-        }
+        props.push((prop.name.clone(), property_items(&prop.value)));
     }
     // Reference edges with the same property form one phandle list.
     let mut phandle_lists: Vec<(&str, Vec<Item>)> = Vec::new();
     for edge in graph.references(&node.id) {
         if let EdgeKind::Reference { property, args } = &edge.kind {
-            has_properties = true;
             let target = graph
                 .node(&edge.to)
                 .and_then(|n| n.label.as_deref())
@@ -113,7 +296,54 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
         }
     }
     for (property, items) in phandle_lists {
-        write_property(out, depth + 1, property, items);
+        props.push((property.to_owned(), Some(items)));
+    }
+    props
+}
+
+fn property_items(value: &PropertyValue) -> Option<Vec<Item>> {
+    match value {
+        PropertyValue::Empty => None,
+        value => Some(value_items(value)),
+    }
+}
+
+/// A value on one line, to compare values.
+fn one_line(value: &Option<Vec<Item>>) -> Option<String> {
+    value.as_ref().map(|items| {
+        items
+            .iter()
+            .map(|i| format!("{}{}{}", i.open, i.tokens.join(" "), i.close))
+            .collect::<Vec<_>>()
+            .join(", ")
+    })
+}
+
+fn write_any_property(out: &mut String, depth: usize, name: &str, value: Option<Vec<Item>>) {
+    match value {
+        None => {
+            let _ = writeln!(out, "{}{name};", "\t".repeat(depth));
+        }
+        Some(items) => write_property(out, depth, name, items),
+    }
+}
+
+fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
+    let indent = "\t".repeat(depth);
+
+    let _ = write!(out, "{indent}");
+    for label in node.labels() {
+        let _ = write!(out, "{label}: ");
+    }
+    if node.omit_if_no_ref {
+        out.push_str("/omit-if-no-ref/ ");
+    }
+    let _ = writeln!(out, "{} {{", node.full_name());
+
+    let properties = node_properties(graph, node);
+    let has_properties = !properties.is_empty();
+    for (name, value) in properties {
+        write_any_property(out, depth + 1, &name, value);
     }
 
     // Kernel style: a blank line separates properties from subnodes and
@@ -286,6 +516,7 @@ mod tests {
             omit_if_no_ref: false,
             compatible: vec![],
             properties: vec![],
+            inherited: None,
             position: Position::default(),
         }
     }

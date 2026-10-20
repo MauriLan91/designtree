@@ -48,7 +48,9 @@ See [app/README.md](app/README.md) for prerequisites and canvas conventions.
 ## Command line
 
 ```sh
-# Generate DTS from a sample design
+# Generate DTS from a sample design. A design imported from a board file is
+# written back as a board file: its includes, then only the board's changes
+# as &label { } overrides (--flatten writes the whole tree instead).
 cargo run --bin designtree -- export examples/simple-board.json
 
 # Import an existing devicetree source into a design. #include and macros
@@ -67,8 +69,10 @@ cargo run --release --bin designtree -- index linux -o catalog.json
 ```
 
 Against Linux 7.3, 3320 of the 3326 arm and arm64 board files import and
-export to the same compiled tree as the kernel build (the rest include
-RISC-V files outside the checkout). To measure it on a kernel tree:
+export to the same compiled tree as the kernel build, both as a board file
+(3104 of them keep their includes and overrides) and as a flat tree; the
+rest include RISC-V files outside the checkout. To measure it on a kernel
+tree:
 
 ```sh
 DESIGNTREE_LINUX_SRC=~/linux cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture

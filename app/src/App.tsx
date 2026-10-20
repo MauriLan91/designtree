@@ -30,6 +30,7 @@ import {
   genericNodeName,
   guessReferenceProperty,
   isDtNode,
+  deletionTarget,
   toDesign,
   uniqueLabel,
   type Binding,
@@ -54,6 +55,8 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
   // Design data with no place on the canvas, kept for saving and export.
   const [extras, setExtras] = useState<DesignExtras>({});
+  // Inherited nodes the user chose to override; the others stay read-only.
+  const [overriding, setOverriding] = useState<Set<string>>(new Set());
   const [dts, setDts] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -95,11 +98,17 @@ export default function App() {
   }, [nodes, edges, extras]);
 
   const isValidConnection: IsValidConnection = useCallback(
-    (c) =>
-      c.source !== c.target &&
-      ((c.sourceHandle === CHILD_HANDLE && c.targetHandle === PARENT_HANDLE) ||
-        (c.sourceHandle === REF_HANDLE && c.targetHandle === PHANDLE_HANDLE)),
-    [],
+    (c) => {
+      // Inherited nodes keep their place in the tree; only overrides can change them.
+      const target = nodes.find((n) => n.id === c.target);
+      const inherited = target !== undefined && isDtNode(target) && target.data.inherited !== undefined;
+      return (
+        c.source !== c.target &&
+        ((c.sourceHandle === CHILD_HANDLE && c.targetHandle === PARENT_HANDLE && !inherited) ||
+          (c.sourceHandle === REF_HANDLE && c.targetHandle === PHANDLE_HANDLE))
+      );
+    },
+    [nodes],
   );
 
   const onConnect = useCallback(
@@ -173,10 +182,43 @@ export default function App() {
     [addNode, screenToFlowPosition],
   );
 
-  const onBeforeDelete: OnBeforeDelete<FlowNode, Edge> = useCallback(async ({ nodes: del, edges: delEdges }) => {
-    const keep = del.filter((n) => !(isDtNode(n) && n.data.name === "/"));
-    return { nodes: keep, edges: delEdges };
-  }, []);
+  const onBeforeDelete: OnBeforeDelete<FlowNode, Edge> = useCallback(
+    async ({ nodes: del, edges: delEdges }) => {
+      const ids = new Set(del.filter((n) => !(isDtNode(n) && n.data.name === "/")).map((n) => n.id));
+      const isChildEdge = (e: Edge) => e.sourceHandle === CHILD_HANDLE;
+      // Deleting an inherited node deletes its subtree, as /delete-node/ does.
+      const stack = nodes.filter((n) => ids.has(n.id) && isDtNode(n) && n.data.inherited).map((n) => n.id);
+      while (stack.length > 0) {
+        const id = stack.pop()!;
+        for (const e of edges) {
+          if (isChildEdge(e) && e.source === id && !ids.has(e.target)) {
+            ids.add(e.target);
+            stack.push(e.target);
+          }
+        }
+      }
+      const removed = nodes.filter((n) => ids.has(n.id));
+      // Export deletes only the topmost inherited nodes; their subtrees go with them.
+      const parentOf = (id: string) => edges.find((e) => isChildEdge(e) && e.target === id)?.source;
+      const deleted = removed
+        .filter(isDtNode)
+        .filter((n) => n.data.inherited && !ids.has(parentOf(n.id) ?? ""))
+        .map(deletionTarget);
+      if (deleted.length > 0) {
+        setExtras((x) => ({ ...x, deleted_nodes: [...(x.deleted_nodes ?? []), ...deleted] }));
+      }
+      // An inherited node keeps its parent while it exists.
+      const inheritedIds = new Set(nodes.filter((n) => isDtNode(n) && n.data.inherited).map((n) => n.id));
+      const removedEdges = new Set(
+        delEdges.filter((e) => !(isChildEdge(e) && inheritedIds.has(e.target) && !ids.has(e.target))).map((e) => e.id),
+      );
+      return {
+        nodes: removed,
+        edges: edges.filter((e) => removedEdges.has(e.id) || ids.has(e.source) || ids.has(e.target)),
+      };
+    },
+    [nodes, edges],
+  );
 
   const groupSelection = () => {
     const members = selectedNodes.filter((n) => !n.parentId);
@@ -227,6 +269,7 @@ export default function App() {
     setNodes(d.nodes);
     setEdges(d.edges);
     setExtras(d.extras);
+    setOverriding(new Set());
   };
 
   const loadDesign = async (load: () => Promise<Design>) => {
@@ -235,6 +278,7 @@ export default function App() {
       setNodes(d.nodes);
       setEdges(d.edges);
       setExtras(d.extras);
+      setOverriding(new Set());
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([String(e)]);
@@ -320,6 +364,8 @@ export default function App() {
           node={selectedNodes.length === 1 ? selectedNodes[0] : null}
           edge={selectedNodes.length === 0 ? selectedEdge : null}
           onNodeChange={updateNodeData}
+          overriding={overriding}
+          onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
           onEdgeChange={updateEdgeData}
         />
         <DtsPreview dts={dts} errors={errors} />

@@ -294,6 +294,7 @@ mod tests {
             omit_if_no_ref: false,
             compatible: vec![],
             properties: vec![],
+            inherited: None,
             position: Position::default(),
         }
     }

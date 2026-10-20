@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Edge } from "@xyflow/react";
 import {
+  baseName,
   formatProperties,
   parseProperties,
   type DtFlowNode,
@@ -14,10 +15,23 @@ interface Props {
   edge: Edge | null;
   onNodeChange: (id: string, data: Partial<DtNodeData> | { title: string }) => void;
   onEdgeChange: (id: string, data: RefData) => void;
+  /** Inherited nodes unlocked for editing. */
+  overriding: Set<string>;
+  onOverride: (id: string) => void;
 }
 
-export function Inspector({ node, edge, onNodeChange, onEdgeChange }: Props) {
-  if (node?.type === "dt") return <NodeInspector key={node.id} node={node} onChange={onNodeChange} />;
+export function Inspector({ node, edge, onNodeChange, onEdgeChange, overriding, onOverride }: Props) {
+  if (node?.type === "dt") {
+    return (
+      <NodeInspector
+        key={node.id}
+        node={node}
+        onChange={onNodeChange}
+        overriding={overriding.has(node.id)}
+        onOverride={() => onOverride(node.id)}
+      />
+    );
+  }
   if (node?.type === "group") {
     return (
       <section className="inspector">
@@ -62,7 +76,17 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange }: Props) {
   );
 }
 
-function NodeInspector({ node, onChange }: { node: DtFlowNode; onChange: Props["onNodeChange"] }) {
+function NodeInspector({
+  node,
+  onChange,
+  overriding,
+  onOverride,
+}: {
+  node: DtFlowNode;
+  onChange: Props["onNodeChange"];
+  overriding: boolean;
+  onOverride: () => void;
+}) {
   const { data } = node;
   const [propsText, setPropsText] = useState(formatProperties(data.properties));
   const [propsError, setPropsError] = useState<string | null>(null);
@@ -80,33 +104,55 @@ function NodeInspector({ node, onChange }: { node: DtFlowNode; onChange: Props["
   const present = new Set(["compatible", ...data.properties.map((p) => p.name)]);
   const missing = data.binding?.properties?.filter((p) => p.required && !present.has(p.name)) ?? [];
   const isRoot = data.name === "/";
+  // Inherited nodes are read-only until the user chooses to override them.
+  const locked = data.inherited !== undefined && !overriding;
 
   return (
     <section className="inspector">
       <h2>Node</h2>
       {data.binding?.title && <p className="hint">{data.binding.title}</p>}
+      {data.inherited && (
+        <div className="inherited-note">
+          Defined in <code title={data.inherited.file}>{baseName(data.inherited.file)}</code>. Changes are exported as
+          an override in the board file, the included file stays as it is.
+          {locked && (
+            <div>
+              <button onClick={onOverride}>Override</button>
+            </div>
+          )}
+        </div>
+      )}
       <div className="row">
         <label>
           Name
-          <input value={data.name} disabled={isRoot} onChange={(e) => onChange(node.id, { name: e.target.value })} />
+          <input
+            value={data.name}
+            disabled={isRoot || data.inherited !== undefined}
+            onChange={(e) => onChange(node.id, { name: e.target.value })}
+          />
         </label>
         <label>
           Unit address
           <input
             value={data.unitAddress ?? ""}
-            disabled={isRoot}
+            disabled={isRoot || data.inherited !== undefined}
             onChange={(e) => onChange(node.id, { unitAddress: e.target.value })}
           />
         </label>
       </div>
       <label>
         Label
-        <input value={data.label ?? ""} onChange={(e) => onChange(node.id, { label: e.target.value })} />
+        <input
+          value={data.label ?? ""}
+          disabled={data.inherited?.labels?.includes(data.label ?? "") || locked}
+          onChange={(e) => onChange(node.id, { label: e.target.value })}
+        />
       </label>
       <label>
         Compatible (comma separated)
         <input
           value={data.compatible.join(", ")}
+          disabled={locked}
           onChange={(e) =>
             onChange(node.id, { compatible: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
           }
@@ -117,6 +163,7 @@ function NodeInspector({ node, onChange }: { node: DtFlowNode; onChange: Props["
         <textarea
           rows={8}
           spellCheck={false}
+          readOnly={locked}
           value={propsText}
           placeholder={'reg = <0x10000000 0x100>\nstatus = "okay"'}
           onChange={(e) => setPropsText(e.target.value)}
