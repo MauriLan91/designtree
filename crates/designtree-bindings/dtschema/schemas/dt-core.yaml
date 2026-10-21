@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright 2018 Linaro Ltd.
+# Copyright 2018 Arm Ltd.
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/dt-core.yaml#
+$schema: http://devicetree.org/meta-schemas/base.yaml#
+
+title: Core Devicetree Properties
+
+description: Schema for core devicetree bindings
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+# always select the core schema
+select: true
+
+properties:
+  $nodename:
+    $ref: types.yaml#/definitions/string
+  compatible:
+    $ref: types.yaml#/definitions/string-array
+    items:
+      # Keep in sync with make_compatible_schema()
+      pattern: '^[a-zA-Z0-9][a-zA-Z0-9,+\-._/]+$'
+  cpu:
+    description:
+      Phandles to a CPU node associated with the referring node.
+    oneOf:
+      - type: object
+      - $ref: types.yaml#/definitions/phandle
+  cpus:
+    description:
+      Phandles to CPU nodes associated with the referring node.
+    oneOf:
+      - type: object
+      - $ref: types.yaml#/definitions/phandle-array
+        items:
+          maxItems: 1
+  label:
+    $ref: types.yaml#/definitions/string
+  dma-coherent:
+    $ref: types.yaml#/definitions/flag
+  dma-noncoherent:
+    $ref: types.yaml#/definitions/flag
+  firmware-name:
+    $ref: types.yaml#/definitions/string-array
+    description:
+      The filename for a device's firmware file. It is typically a single
+      entry, but some devices have multiple firmware files. It can also
+      be just a stem name used to construct the full firmware filename(s).
+  secure-status:
+    $ref: types.yaml#/definitions/string
+    enum: [ okay, disabled, reserved, fail ]
+  status:
+    oneOf:
+      - type: object
+      - $ref: types.yaml#/definitions/string
+        enum: [ okay, disabled, reserved, fail, fail-needs-probe ]
+  phandle:
+    $ref: types.yaml#/definitions/uint32
+
+patternProperties:
+  '^#.*-cells$':
+    $ref: types.yaml#/definitions/uint32
+    maximum: 8
+
+  '.*-names$':
+    $ref: types.yaml#/definitions/non-unique-string-array
+
+  '.*-supply$':
+    oneOf:
+      - type: object
+      - $ref: types.yaml#/definitions/phandle
+
+  # property and node namespace overlaps. Catch both here
+  '^[a-zA-Z0-9][a-zA-Z0-9#,+\-._]{0,63}$':
+    type: [object, integer, array, boolean, 'null']
+
+  # Anything with a '@' is definitely a node
+  '^[a-zA-Z0-9][a-zA-Z0-9,+\-._]{0,63}@[0-9a-fA-F]+(,[0-9a-fA-F]+)*$':
+    type: object
+
+  # Anything beginnning and ending with '__' is a generated node
+  '^__.*__$':
+    type: object
+
+  # Anything with a '#' is single cell number
+  '^#[a-zA-Z0-9,+\-._]{0,63}$':
+    $ref: types.yaml#/definitions/uint32
+
+additionalProperties: false
+
+...

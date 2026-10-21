@@ -66,6 +66,8 @@ cargo run --bin designtree -- validate examples/simple-board.json
 git clone --depth 1 --filter=blob:none --sparse https://github.com/torvalds/linux.git
 git -C linux sparse-checkout set Documentation/devicetree/bindings
 cargo run --release --bin designtree -- index linux -o catalog.json
+# How many schemas and property types were resolved (backlog goal G2)
+cargo run --release --bin designtree -- index linux --stats
 ```
 
 Against Linux 7.3, 3320 of the 3326 arm and arm64 board files import and
@@ -78,11 +80,15 @@ tree:
 DESIGNTREE_LINUX_SRC=~/linux cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture
 ```
 
-Against a current kernel tree the indexer finds about 5,700 binding schemas
-covering more than 26,000 compatible strings in under 20 seconds.
+Against Linux 7.3 the indexer reads all 5,715 binding schemas in about a
+second and resolves the type of 38,004 of their 38,013 properties; every
+resolved type agrees with dt-schema's own property type database
+(`dt-extract-props`). The 9 left are not typed by any schema.
 
 ## License
 
 MIT, see [LICENSE](LICENSE). The kernel binding schemas indexed at runtime
 keep their own licenses (mostly `GPL-2.0-only OR BSD-2-Clause`); DesignTree
-does not redistribute them.
+does not redistribute them. The dt-schema core schemas embedded in
+`crates/designtree-bindings/dtschema` are BSD-2-Clause, see the license file
+there.

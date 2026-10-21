@@ -19,9 +19,14 @@ enum Command {
     Index {
         /// Path to a Linux kernel source checkout.
         linux_src: PathBuf,
-        /// Output file (JSON). Prints to stdout when omitted.
+        /// Output file (JSON). Prints to stdout when omitted, unless
+        /// --stats is given.
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Print how many schemas were indexed and how many properties
+        /// have a resolved type, against the G2 targets.
+        #[arg(long)]
+        stats: bool,
     },
     /// Import devicetree source (.dts) into a design file.
     ///
@@ -67,13 +72,23 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::Index { linux_src, output } => {
+        Command::Index {
+            linux_src,
+            output,
+            stats,
+        } => {
             let catalog = designtree_bindings::index_kernel_tree(&linux_src)?;
             eprintln!(
                 "indexed {} bindings ({} skipped)",
                 catalog.bindings.len(),
                 catalog.skipped.len()
             );
+            if stats {
+                println!("{}", catalog.stats());
+            }
+            if stats && output.is_none() {
+                return Ok(());
+            }
             write_output(output, &serde_json::to_string_pretty(&catalog)?)
         }
         Command::Import {

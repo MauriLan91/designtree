@@ -4,9 +4,15 @@
 //!
 //! The indexer is intentionally lenient: kernel schemas use the full JSON
 //! Schema vocabulary, and we only extract what the editor needs to offer a
-//! node in its palette (compatible strings, properties, required list).
+//! node in its palette (compatible strings, typed properties, required
+//! list). Property types are resolved through `$ref` and `allOf` into the
+//! kernel schemas and the dt-schema core schemas (`/schemas/types.yaml`),
+//! which are embedded because the kernel tree does not ship them.
 //! Files that fail to parse are reported, not fatal.
 
+mod resolve;
+
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -34,12 +40,106 @@ pub enum IndexError {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A property value type: the definitions of dt-schema's `types.yaml`,
+/// plus `node` for a child node that shares the property namespace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PropertyType {
+    Flag,
+    String,
+    StringArray,
+    NonUniqueStringArray,
+    Uint8,
+    Uint8Array,
+    Uint8Matrix,
+    Int8,
+    Int8Array,
+    Int8Matrix,
+    Uint16,
+    Uint16Array,
+    Uint16Matrix,
+    Int16,
+    Int16Array,
+    Int16Matrix,
+    Uint32,
+    Uint32Array,
+    Uint32Matrix,
+    Int32,
+    Int32Array,
+    Int32Matrix,
+    Uint64,
+    Uint64Array,
+    Uint64Matrix,
+    Int64,
+    Int64Array,
+    Int64Matrix,
+    Phandle,
+    PhandleArray,
+    /// `reg`-style address and size cells.
+    Address,
+    Node,
+}
+
+impl PropertyType {
+    /// The type named by a `types.yaml#/definitions/<name>` reference.
+    pub fn from_definition(name: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(name.to_owned()))
+            .ok()
+            .filter(|ty| *ty != PropertyType::Node)
+    }
+
+    /// The array type whose items have this type (`uint32` gives
+    /// `uint32-array`, `uint32-array` gives `uint32-matrix`).
+    fn array_of(self) -> Option<Self> {
+        use PropertyType::*;
+        Some(match self {
+            String => StringArray,
+            Uint8 => Uint8Array,
+            Uint8Array => Uint8Matrix,
+            Int8 => Int8Array,
+            Int8Array => Int8Matrix,
+            Uint16 => Uint16Array,
+            Uint16Array => Uint16Matrix,
+            Int16 => Int16Array,
+            Int16Array => Int16Matrix,
+            Uint32 => Uint32Array,
+            Uint32Array => Uint32Matrix,
+            Int32 => Int32Array,
+            Int32Array => Int32Matrix,
+            Uint64 => Uint64Array,
+            Uint64Array => Uint64Matrix,
+            Int64 => Int64Array,
+            Int64Array => Int64Matrix,
+            Phandle => PhandleArray,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PropertySpec {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub required: bool,
+    /// Value type; `None` when the schemas do not pin one down.
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub ty: Option<PropertyType>,
+    /// Allowed values, when the schema lists them.
+    #[serde(rename = "enum", default, skip_serializing_if = "Vec::is_empty")]
+    pub enum_values: Vec<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    /// Bounds of each number in the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum: Option<serde_json::Number>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maximum: Option<serde_json::Number>,
+    /// Bounds on the number of entries of an array value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_items: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_items: Option<u64>,
 }
 
 /// One entry of the element library, derived from one schema file.
@@ -72,6 +172,70 @@ impl Catalog {
             .iter()
             .find(|b| b.compatibles.iter().any(|c| c == compatible))
     }
+
+    /// The G2 metrics of the backlog: how many schemas were indexed and how
+    /// many of their properties have a resolved type.
+    pub fn stats(&self) -> Stats {
+        let properties = self.bindings.iter().flat_map(|b| &b.properties);
+        Stats {
+            bindings: self.bindings.len(),
+            skipped: self.skipped.len(),
+            properties: properties.clone().count(),
+            typed: properties.filter(|p| p.ty.is_some()).count(),
+        }
+    }
+}
+
+/// Indexing coverage, see [`Catalog::stats`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stats {
+    pub bindings: usize,
+    pub skipped: usize,
+    pub properties: usize,
+    pub typed: usize,
+}
+
+impl Stats {
+    /// Percentage of binding schemas indexed (G2 target: 95 %).
+    pub fn indexed_percent(&self) -> f64 {
+        percent(self.bindings, self.bindings + self.skipped)
+    }
+
+    /// Percentage of properties with a resolved type (G2 target: 90 %).
+    pub fn typed_percent(&self) -> f64 {
+        percent(self.typed, self.properties)
+    }
+}
+
+/// An empty catalog counts as 0 %, so it never meets a target.
+fn percent(part: usize, whole: usize) -> f64 {
+    if whole == 0 {
+        0.0
+    } else {
+        100.0 * part as f64 / whole as f64
+    }
+}
+
+impl fmt::Display for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mark = |ok: bool| if ok { "ok" } else { "below target" };
+        writeln!(
+            f,
+            "schemas indexed:  {}/{} ({:.1} %, target 95 %: {})",
+            self.bindings,
+            self.bindings + self.skipped,
+            self.indexed_percent(),
+            mark(self.indexed_percent() >= 95.0)
+        )?;
+        write!(
+            f,
+            "properties typed: {}/{} ({:.1} %, target 90 %: {})",
+            self.typed,
+            self.properties,
+            self.typed_percent(),
+            mark(self.typed_percent() >= 90.0)
+        )
+    }
 }
 
 /// Indexes every binding schema of a kernel source tree.
@@ -95,66 +259,48 @@ pub fn index_dir(root: &Path) -> Result<Catalog, IndexError> {
         .collect();
     files.sort();
 
+    // Bindings refer to each other, so every file is read before any is
+    // indexed.
+    let mut docs = Vec::new();
     for path in files {
         let rel = path
             .strip_prefix(root)
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        match parse_schema_file(&path, &rel) {
-            Ok(Some(binding)) => catalog.bindings.push(binding),
-            Ok(None) => {}
+        match read_schema(&path) {
+            Ok(doc) => docs.push((rel, doc)),
             Err(err) => catalog.skipped.push((rel, err.to_string())),
         }
     }
+    let schemas = resolve::Schemas::new(docs.iter().cloned());
+    catalog.bindings = docs
+        .iter()
+        .filter_map(|(rel, doc)| binding(&schemas, doc, rel))
+        .collect();
     Ok(catalog)
 }
 
-fn parse_schema_file(path: &Path, rel: &str) -> Result<Option<Binding>, IndexError> {
+fn read_schema(path: &Path) -> Result<Value, IndexError> {
     let text = fs::read_to_string(path).map_err(|source| IndexError::Io {
         path: path.to_path_buf(),
         source,
     })?;
-    let doc: Value = serde_norway::from_str(&text).map_err(|source| IndexError::Yaml {
+    serde_norway::from_str(&text).map_err(|source| IndexError::Yaml {
         path: path.to_path_buf(),
         source,
-    })?;
-    Ok(parse_schema(&doc, rel))
+    })
 }
 
-/// Extracts a [`Binding`] from a parsed schema. Returns `None` for documents
-/// that are not dt-schema bindings (e.g. helper files without `$id`).
-pub fn parse_schema(doc: &Value, rel: &str) -> Option<Binding> {
+/// Extracts a [`Binding`] from a parsed schema. Returns `None` for
+/// documents that are not dt-schema bindings (e.g. helper files without
+/// `$id`).
+fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding> {
     doc.get("$id")?;
 
-    let required: Vec<String> = doc
-        .get("required")
-        .and_then(Value::as_sequence)
-        .map(|seq| {
-            seq.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default();
-
     let mut compatibles = Vec::new();
-    let mut properties = Vec::new();
-    if let Some(props) = doc.get("properties").and_then(Value::as_mapping) {
-        for (key, spec) in props {
-            let Some(name) = key.as_str() else { continue };
-            if name == "compatible" {
-                collect_strings(spec, &mut compatibles);
-            }
-            properties.push(PropertySpec {
-                name: name.to_owned(),
-                description: spec
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(|s| s.trim().to_owned()),
-                required: required.iter().any(|r| r == name),
-            });
-        }
+    if let Some(spec) = doc.get("properties").and_then(|p| p.get("compatible")) {
+        collect_strings(spec, &mut compatibles);
     }
     compatibles.sort();
     compatibles.dedup();
@@ -172,7 +318,7 @@ pub fn parse_schema(doc: &Value, rel: &str) -> Option<Binding> {
             .and_then(Value::as_str)
             .map(|s| s.trim().to_owned()),
         compatibles,
-        properties,
+        properties: schemas.properties(&format!("/schemas/{rel}"), doc),
     })
 }
 

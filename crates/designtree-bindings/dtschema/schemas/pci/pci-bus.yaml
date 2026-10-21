@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: (GPL2.0-only OR BSD-2-Clause)
+# Copyright 2018 Linaro Ltd.
+# Copyright 2024 Arm Ltd.
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/pci/pci-bus.yaml#
+$schema: http://devicetree.org/meta-schemas/base.yaml#
+
+title: PCI Host Bridge nodes
+
+description:
+  For compatibility with existing references from host bridge bindings. New
+  users should reference pci-host-bridge.yaml instead.
+
+maintainers:
+  - Rob Herring <robh@kernel.org>
+
+$ref: pci-host-bridge.yaml#
+
+properties:
+  # Remove when existing users fixed
+  reg: true
+
+additionalProperties: true
