@@ -41,13 +41,24 @@ export interface DesignNode {
   omit_if_no_ref?: boolean;
   compatible?: string[];
   properties?: Property[];
+  /** Set when the node comes from an included file (an SoC .dtsi). */
+  inherited?: Inherited;
   position: Position;
+}
+
+/** The definition of a node in the included files; export writes only what differs. */
+export interface Inherited {
+  file: string;
+  labels?: string[];
+  properties?: Property[];
+  omit_if_no_ref?: boolean;
 }
 
 /** Values above 2^53 - 1 come as hex strings ("0x..."). */
 export interface MemReserve {
   address: number | string;
   size: number | string;
+  inherited?: boolean;
 }
 
 export type DesignEdge =
@@ -68,6 +79,11 @@ export interface Design {
   edges: DesignEdge[];
   groups: DesignGroup[];
   memreserves?: MemReserve[];
+  /** Include directives of the board file (with its #defines). */
+  includes?: string[];
+  trailing_includes?: string[];
+  /** Inherited nodes the board deletes: labels, or paths starting with `/`. */
+  deleted_nodes?: string[];
 }
 
 /** The parts of a design that belong to the whole tree, not to a node or group. */
@@ -98,6 +114,7 @@ export interface DtNodeData extends Record<string, unknown> {
   omitIfNoRef?: boolean;
   compatible: string[];
   properties: Property[];
+  inherited?: Inherited;
   /** Binding the node was created from; editor-only, not saved. */
   binding?: Binding;
 }
@@ -165,6 +182,7 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
     omit_if_no_ref: n.data.omitIfNoRef,
     compatible: n.data.compatible,
     properties: n.data.properties,
+    inherited: n.data.inherited,
     position: absolutePosition(n, byId),
   }));
 
@@ -234,6 +252,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
         omitIfNoRef: n.omit_if_no_ref,
         compatible: n.compatible ?? [],
         properties: n.properties ?? [],
+        inherited: n.inherited,
       },
     };
   });
@@ -433,4 +452,18 @@ export function uniqueLabel(base: string, nodes: FlowNode[]): string {
   let i = 0;
   while (taken.has(`${clean}${i}`)) i++;
   return `${clean}${i}`;
+}
+
+/**
+ * How export refers to an inherited node it deletes: a label the included
+ * files give it, else its path (the id of an imported node).
+ */
+export function deletionTarget(node: DtFlowNode): string {
+  const own = [node.data.label, ...(node.data.extraLabels ?? [])];
+  return node.data.inherited?.labels?.find((l) => own.includes(l)) ?? node.id;
+}
+
+/** File name without directories, for display. */
+export function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path;
 }

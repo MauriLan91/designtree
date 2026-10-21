@@ -127,6 +127,11 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .dt-node-label { color: var(--accent); margin-right: 4px; }
 .dt-node-compat { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; margin-top: 2px; }
 .dt-node-props { color: var(--muted); font-size: 11px; margin-top: 2px; }
+/* Nodes from included files: dashed and muted until the board overrides them. */
+.dt-node.inherited { border-style: dashed; background: var(--code); }
+.dt-node-origin { color: var(--muted); font-size: 10px; margin-top: 2px; font-style: italic; }
+.inherited-note { border: 1px dashed var(--muted); border-radius: 4px; padding: 6px 8px; font-size: 12px; }
+.inherited-note button { margin-top: 6px; }
 .react-flow__handle.h-tree { background: var(--accent); width: 9px; height: 9px; }
 .react-flow__handle.h-ref { background: var(--ref); width: 9px; height: 9px; border-radius: 2px; }
 

@@ -83,7 +83,7 @@ pub struct Document {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TopItem {
     /// `/ { ... };`
-    Root(NodeBody),
+    Root(NodeBody, Pos),
     /// `&label { ... };` or `&{/path} { ... };`, optionally preceded by
     /// labels to add to the target (`new: &old { };`).
     Override {
@@ -96,7 +96,7 @@ pub enum TopItem {
     /// `/omit-if-no-ref/ &label;`
     OmitIfNoRef(Reference),
     /// `/memreserve/ address size;`
-    MemReserve { address: u64, size: u64 },
+    MemReserve { address: u64, size: u64, pos: Pos },
 }
 
 /// `&label`, `&{/path}` or `&{label/path}`; `target` is the label, the path
@@ -462,7 +462,7 @@ impl Parser {
                         let address = self.primary()?;
                         let size = self.primary()?;
                         self.expect(';')?;
-                        items.push(TopItem::MemReserve { address, size });
+                        items.push(TopItem::MemReserve { address, size, pos });
                     }
                     Some(word) => return self.top_level_keyword(pos, word),
                     None => {
@@ -470,7 +470,7 @@ impl Parser {
                             return self.error(pos, "missing `/dts-v1/;` before the root node");
                         }
                         self.bump();
-                        items.push(TopItem::Root(self.node_body()?));
+                        items.push(TopItem::Root(self.node_body()?, pos));
                     }
                 },
                 Some('&') => {

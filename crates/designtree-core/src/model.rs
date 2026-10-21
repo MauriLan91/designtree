@@ -139,8 +139,31 @@ pub struct Node {
     pub compatible: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
+    /// Set when the node comes from an included file (an SoC `.dtsi`).
+    /// Export then writes only what differs from that definition, as an
+    /// override (`&label { ... };`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherited: Option<Inherited>,
     #[serde(default)]
     pub position: Position,
+}
+
+/// The definition of a node in the included files, before the board file
+/// changed it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Inherited {
+    /// File that first defines the node, as written in the import.
+    pub file: String,
+    /// Labels the included files give the node.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
+    /// Properties as the included files define them, `compatible` and
+    /// phandle lists included (as [`PropertyValue::Mixed`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<Property>,
+    /// The included files mark the node `/omit-if-no-ref/`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub omit_if_no_ref: bool,
 }
 
 impl Node {
@@ -212,6 +235,21 @@ pub struct Graph {
     /// `/memreserve/` entries: memory regions the OS must not use.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub memreserves: Vec<MemReserve>,
+    /// Include directives of the board file, in order (`#include
+    /// "imx8mp.dtsi"`), with its `#define`s and `#undef`s. Export writes
+    /// them, then only the board's own content; nodes from the included
+    /// files are marked [`Node::inherited`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub includes: Vec<String>,
+    /// Directives like [`Graph::includes`] that come after the board's
+    /// first node, written at the end (an included PMIC `.dtsi` that fills
+    /// in a node the board declares).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trailing_includes: Vec<String>,
+    /// Inherited nodes the board deletes, as reference targets (a label,
+    /// or a path starting with `/`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deleted_nodes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,6 +258,9 @@ pub struct MemReserve {
     pub address: u64,
     #[serde(with = "json_safe_u64")]
     pub size: u64,
+    /// Comes from an included file.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inherited: bool,
 }
 
 impl Graph {

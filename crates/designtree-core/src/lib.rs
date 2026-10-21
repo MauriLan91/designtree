@@ -13,7 +13,7 @@ pub mod parse;
 mod preprocess;
 pub mod validate;
 
-pub use dts::to_dts;
+pub use dts::{to_dts, to_dts_flat};
 pub use import::{import_dts, import_dts_file, ImportError};
 pub use layout::auto_layout;
 pub use model::*;

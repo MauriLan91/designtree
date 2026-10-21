@@ -1,6 +1,8 @@
 //! G1 round-trip corpus (see docs/backlog.md): imports kernel board files,
 //! exports them, and checks that dtc compiles the export to the same tree
-//! the kernel build compiles from the original.
+//! the kernel build compiles from the original. Both exports are checked:
+//! the board file (includes and overrides, built next to the original) and
+//! the flat tree.
 //!
 //! Needs a kernel source tree, `cpp` and `dtc`:
 //!
@@ -15,13 +17,11 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use designtree_core::{import_dts_file, to_dts, ImportOptions};
+use designtree_core::{import_dts_file, to_dts, to_dts_flat, ImportOptions};
 
-/// Preprocesses `path` the way the kernel build does.
-fn kernel_cpp(linux: &Path, path: &Path) -> Result<String, String> {
+/// Preprocesses `source` the way the kernel build does for a file in `dir`.
+fn kernel_cpp(linux: &Path, dir: &Path, source: &str) -> Result<String, String> {
     let include = linux.join("scripts/dtc/include-prefixes");
-    let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let dir = path.parent().expect("a board file has a directory");
     common::run(
         "cpp",
         &[
@@ -36,19 +36,30 @@ fn kernel_cpp(linux: &Path, path: &Path) -> Result<String, String> {
             "assembler-with-cpp",
             "-",
         ],
-        &source,
+        source,
     )
 }
 
-fn check(linux: &Path, path: &Path) -> Result<(), String> {
+/// Checks one board file; true if its export keeps the includes.
+fn check(linux: &Path, path: &Path) -> Result<bool, String> {
     let graph =
         import_dts_file(path, &ImportOptions::kernel(linux)).map_err(|e| format!("import: {e}"))?;
-    let exported = to_dts(&graph).map_err(|e| format!("export: {e:?}"))?;
-    let expected = common::canonical(&kernel_cpp(linux, path)?, path.parent())?;
-    let actual = common::canonical(&exported, None).map_err(|e| format!("exported source: {e}"))?;
+    let dir = path.parent().expect("a board file has a directory");
+    let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let expected = common::canonical(&kernel_cpp(linux, dir, &source)?, Some(dir))?;
+
+    let flat = to_dts_flat(&graph).map_err(|e| format!("export: {e:?}"))?;
+    let actual = common::canonical(&flat, None).map_err(|e| format!("flat export: {e}"))?;
+    if let Some(difference) = common::first_difference(&expected, &actual) {
+        return Err(format!("flat export: {difference}"));
+    }
+
+    let board = to_dts(&graph).map_err(|e| format!("export: {e:?}"))?;
+    let actual = common::canonical(&kernel_cpp(linux, dir, &board)?, Some(dir))
+        .map_err(|e| format!("board export: {e}"))?;
     match common::first_difference(&expected, &actual) {
-        Some(difference) => Err(difference),
-        None => Ok(()),
+        Some(difference) => Err(format!("board export: {difference}")),
+        None => Ok(!graph.includes.is_empty()),
     }
 }
 
@@ -70,10 +81,12 @@ fn g1_corpus() {
         .collect();
 
     let mut passed = 0;
+    let mut layered = 0;
     for file in &files {
         match check(&linux, &linux.join(file)) {
-            Ok(()) => {
+            Ok(keeps_includes) => {
                 passed += 1;
+                layered += usize::from(keeps_includes);
                 println!("ok    {file}");
             }
             Err(reason) => println!("FAIL  {file}: {reason}"),
@@ -81,7 +94,8 @@ fn g1_corpus() {
     }
     let rate = 100.0 * passed as f64 / files.len() as f64;
     println!(
-        "G1: {passed}/{} board files round-trip ({rate:.0}%)",
+        "G1: {passed}/{} board files round-trip ({rate:.0}%), \
+         {layered} exported as includes and overrides",
         files.len()
     );
     assert!(

@@ -32,3 +32,8 @@ npm run tauri build   # release bundle
 - Right handle → left handle: phandle reference (`clocks = <&osc>;`). The
   property name is guessed from the target's `#...-cells` and can be edited.
 - Select nodes and press **Group** to create a visual group.
+- Nodes from an included `.dtsi` (after **Import .dts…** of a board file)
+  have a dashed border and show their file. They are read-only until you
+  press **Override** in the inspector; their changes, and deleting them,
+  are exported as `&label { }` overrides and `/delete-node/` in the board
+  file. They cannot be moved to another parent.

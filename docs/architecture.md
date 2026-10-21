@@ -20,7 +20,12 @@ replaceable layer.
 - `validate` returns every structural problem (missing root, detached nodes,
   cycles, duplicate labels, references to unlabeled nodes) so the editor can
   highlight them all at once.
-- `to_dts` emits devicetree source from a valid graph.
+- `to_dts` emits devicetree source from a valid graph. For a design
+  imported from a board file with includes it writes a board file: the
+  include directives (with the board's `#define`s), `/delete-node/` for
+  deleted inherited nodes, then only the differences from the included
+  definitions as `&label { }` overrides (`/ { }` for the root, nested blocks
+  for unlabeled nodes). `to_dts_flat` always writes the whole tree.
 - `import_dts` turns devicetree source into a graph in three stages:
   `preprocess` does what the kernel's `cpp` run does (`#include`, macros,
   `#if`, dtc's `/include/`) in-process, writing line markers so positions
@@ -33,9 +38,17 @@ replaceable layer.
   middle of a cell list) are kept exactly as `mixed` values. Node ids are
   node paths. Include directories come from `ImportOptions`; inside a kernel
   tree the kernel's `scripts/dtc/include-prefixes` is found automatically.
+  Every item's file decides where it belongs: nodes created by included
+  files are marked `inherited` and keep their included definition
+  (properties and labels), which is what export diffs against. When that
+  layering cannot be expressed as overrides (an include inside a node, or
+  an include after the board's nodes that fills them in, as Allwinner PMIC
+  files do), the import is flat: no includes, nothing inherited.
 - `tests/g1_corpus.rs` measures goal G1: it imports and exports the board
   files listed in `tests/corpus/g1.txt` and compares them, through `dtc`,
   with what the kernel build compiles (needs a kernel tree, `cpp`, `dtc`).
+  Both the board export (built next to the original) and the flat export
+  are checked.
 - Canvas positions and groups are stored but never affect the output.
 
 ## designtree-bindings
@@ -61,7 +74,6 @@ candidate next step).
 
 ## Next steps
 
-- Inherited `.dtsi` nodes kept as `&label { }` overrides on export.
 - Property editor driven by the schema types (`$ref` to `/schemas/types.yaml`).
 - Schema validation of node properties against the catalog.
 - `dtc` integration to produce `.dtb` and catch compiler errors.

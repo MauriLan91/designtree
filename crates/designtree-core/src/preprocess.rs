@@ -126,13 +126,22 @@ pub(crate) const DIRECTIVES: &[&str] = &[
     "warning", "pragma", "line", "ident",
 ];
 
+/// The result of [`preprocess`].
+pub(crate) struct Preprocessed {
+    pub text: String,
+    /// Include directives of the top file, in order (`#include "a.dtsi"`),
+    /// with its `#define`s and `#undef`s, which may configure the included
+    /// files; each with its line.
+    pub directives: Vec<(u32, String)>,
+}
+
 /// Preprocesses `source`, read from `file`.
 pub(crate) fn preprocess(
     source: &str,
     file: &Path,
     options: &ImportOptions,
     read: ReadFile,
-) -> Result<String, ImportError> {
+) -> Result<Preprocessed, ImportError> {
     let mut preprocessor = Preprocessor {
         options,
         read,
@@ -149,6 +158,7 @@ pub(crate) fn preprocess(
             })
             .collect(),
         out: String::new(),
+        directives: Vec::new(),
         depth: 0,
         files: 0,
         bytes_read: 0,
@@ -156,7 +166,10 @@ pub(crate) fn preprocess(
         nesting: Cell::new(0),
     };
     preprocessor.file(source, file)?;
-    Ok(preprocessor.out)
+    Ok(Preprocessed {
+        text: preprocessor.out,
+        directives: preprocessor.directives,
+    })
 }
 
 struct Macro {
@@ -194,6 +207,7 @@ struct Preprocessor<'a> {
     read: ReadFile<'a>,
     macros: HashMap<String, Macro>,
     out: String,
+    directives: Vec<(u32, String)>,
     /// Nesting of `#include`.
     depth: usize,
     files: usize,
@@ -249,11 +263,22 @@ impl Preprocessor<'_> {
                     _ if !active => {}
                     "include" => {
                         let target = self.include_target(rest).map_err(fail)?;
+                        self.directive(
+                            line.number,
+                            match &target {
+                                IncludeTarget::Quoted(file) => format!("#include \"{file}\""),
+                                IncludeTarget::Angle(file) => format!("#include <{file}>"),
+                            },
+                        );
                         self.include(&target, path, &name, line.number)?;
                     }
-                    "define" => self.define(rest).map_err(fail)?,
+                    "define" => {
+                        self.define(rest).map_err(fail)?;
+                        self.directive(line.number, line.text.trim().to_owned());
+                    }
                     "undef" => {
                         self.macros.remove(identifier(rest));
+                        self.directive(line.number, line.text.trim().to_owned());
                     }
                     "error" => return Err(fail(format!("#error {}", rest.trim()))),
                     _ => {} // #warning, #pragma, #line, #ident
@@ -267,9 +292,11 @@ impl Preprocessor<'_> {
                 self.flush(&name, &mut block)?;
                 let fail = |message: String| ImportError::new(&*name, line.number, message);
                 let target = match quoted(rest.trim()) {
-                    Some(target) => IncludeTarget::Quoted(target.to_owned()),
+                    Some(target) => target.to_owned(),
                     None => return Err(fail("expected `/include/ \"file\"`".into())),
                 };
+                self.directive(line.number, format!("/include/ \"{target}\""));
+                let target = IncludeTarget::Quoted(target);
                 self.include(&target, path, &name, line.number)?;
                 continue;
             }
@@ -283,6 +310,13 @@ impl Preprocessor<'_> {
                 "`#if` without `#endif`",
             )),
             None => Ok(()),
+        }
+    }
+
+    /// Records a directive of the top file, at `line`, for [`Preprocessed`].
+    fn directive(&mut self, line: u32, text: String) {
+        if self.depth == 0 {
+            self.directives.push((line, text));
         }
     }
 
@@ -889,7 +923,7 @@ mod tests {
                 .cloned()
                 .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
         };
-        preprocess(files[0].1, Path::new(files[0].0), options, &read)
+        preprocess(files[0].1, Path::new(files[0].0), options, &read).map(|p| p.text)
     }
 
     /// Output lines without line markers, blank lines and whitespace.

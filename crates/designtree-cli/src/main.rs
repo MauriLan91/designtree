@@ -49,12 +49,19 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Generate devicetree source from a design file.
+    /// Generate devicetree source from a design file. A design imported
+    /// from a board file with includes becomes a board file again: its
+    /// includes plus overrides, to be built next to the original like the
+    /// kernel does (cpp, then dtc). Use --flatten for a self-contained tree.
     Export {
         design: PathBuf,
         /// Output file (.dts). Prints to stdout when omitted.
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Write the whole tree instead of the board's includes and
+        /// overrides.
+        #[arg(long)]
+        flatten: bool,
     },
 }
 
@@ -99,7 +106,15 @@ fn main() -> Result<()> {
             designtree_core::auto_layout(&mut graph);
             write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
-        Command::Export { design, output } => match designtree_core::to_dts(&load(&design)?) {
+        Command::Export {
+            design,
+            output,
+            flatten,
+        } => match if flatten {
+            designtree_core::to_dts_flat(&load(&design)?)
+        } else {
+            designtree_core::to_dts(&load(&design)?)
+        } {
             Ok(dts) => write_output(output, &dts),
             Err(errors) => {
                 for error in &errors {
