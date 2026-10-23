@@ -155,3 +155,10 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   pointer-events: all;
 }
 .ref-edge-label.selected { background: var(--ref); color: white; }
+
+.typed-props { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.typed-props legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.typed-field.toggle { flex-direction: row; align-items: center; justify-content: space-between; }
+.typed-field.todo > span:first-child { color: var(--ref); }
+.typed-field em { font-style: normal; font-size: 11px; }
+.typed-field .error { font-size: 11px; }

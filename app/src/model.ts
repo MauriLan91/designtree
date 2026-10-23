@@ -303,7 +303,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
 //   local-mac-address = [00 11 22 33 44 55]
 //   dma-coherent
 
-function parseCell(token: string): number {
+export function parseCell(token: string): number {
   const n = Number(token);
   if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
     throw new Error(`invalid cell "${token}"`);
