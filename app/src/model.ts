@@ -137,6 +137,8 @@ export interface DtNodeData extends Record<string, unknown> {
   inherited?: Inherited;
   /** Binding the node was created from; editor-only, not saved. */
   binding?: Binding;
+  /** Pre-filled placeholder properties the user has not reviewed yet; editor-only. */
+  todo?: string[];
 }
 
 export interface GroupData extends Record<string, unknown> {

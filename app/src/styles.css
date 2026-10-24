@@ -162,3 +162,4 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .typed-field.todo > span:first-child { color: var(--ref); }
 .typed-field em { font-style: normal; font-size: 11px; }
 .typed-field .error { font-size: 11px; }
+.dt-node-todo { color: var(--ref); font-size: 11px; }

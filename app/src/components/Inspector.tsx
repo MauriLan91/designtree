@@ -3,6 +3,7 @@ import type { Edge } from "@xyflow/react";
 import { backend, inTauri } from "../backend";
 import {
   checkValue,
+  clearEditedTodo,
   editorKind,
   fromInputText,
   setProperty,
@@ -110,12 +111,15 @@ function NodeInspector({
   const rawKey = formatProperties(rawProps);
   useEffect(() => setPropsText(rawKey), [rawKey]);
 
+  const setProps = (properties: Property[]) =>
+    onChange(node.id, { properties, todo: clearEditedTodo(data.todo, data.properties, properties) });
+
   const commitProps = () => {
     try {
       const parsed = parseProperties(propsText, rawProps);
       const replaced = new Set(parsed.map((p) => p.name));
       const kept = data.properties.filter((p) => typedNames.has(p.name) && !replaced.has(p.name));
-      onChange(node.id, { properties: [...kept, ...parsed] });
+      setProps([...kept, ...parsed]);
       setPropsError(null);
     } catch (e) {
       setPropsError((e as Error).message);
@@ -189,7 +193,8 @@ function NodeInspector({
               key={spec.name}
               spec={spec}
               prop={data.properties.find((p) => p.name === spec.name)}
-              onSet={(value) => onChange(node.id, { properties: setProperty(data.properties, spec.name, value) })}
+              todo={data.todo?.includes(spec.name)}
+              onSet={(value) => setProps(setProperty(data.properties, spec.name, value))}
             />
           ))}
         </fieldset>
@@ -244,10 +249,12 @@ function useBinding(created: Binding | undefined, compatible: string | undefined
 function TypedField({
   spec,
   prop,
+  todo: placeholder,
   onSet,
 }: {
   spec: PropertySpec;
   prop: Property | undefined;
+  todo?: boolean;
   onSet: (value: Property["value"] | null) => void;
 }) {
   const kind = editorKind(spec) as EditorKind;
@@ -265,11 +272,11 @@ function TypedField({
     }
   };
   const warning = error ?? checkValue(spec, prop?.value);
-  const todo = spec.required && !prop;
+  const todo = placeholder || (spec.required && !prop);
   const hint = [spec.description, spec.default !== undefined ? `Default: ${JSON.stringify(spec.default)}` : ""]
     .filter(Boolean)
     .join("\n\n");
-  const placeholder = spec.default !== undefined ? String(spec.default) : kind === "numbers" ? "e.g. 0x10 0x20" : "";
+  const hintText = spec.default !== undefined ? String(spec.default) : kind === "numbers" ? "e.g. 0x10 0x20" : "";
 
   let input;
   if (kind === "flag") {
@@ -289,7 +296,7 @@ function TypedField({
     input = (
       <input
         value={text}
-        placeholder={placeholder}
+        placeholder={hintText}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => commit(text)}
         onKeyDown={(e) => e.key === "Enter" && commit(text)}
