@@ -68,7 +68,11 @@ pub enum ValueChunk {
 pub enum Cell {
     /// A JSON number up to 2^53 - 1, a hex string (`"0x..."`) above that,
     /// so that JavaScript reads every value exactly.
-    Number(#[serde(with = "json_safe_u64")] #[ts(type = "number | string")] u64),
+    Number(
+        #[serde(with = "json_safe_u64")]
+        #[ts(type = "number | string")]
+        u64,
+    ),
     /// `&target`, replaced by the phandle of the target node.
     Phandle { phandle: String },
 }
