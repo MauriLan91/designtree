@@ -18,6 +18,7 @@ import { DtNode } from "./components/DtNode";
 import { DtsPreview } from "./components/DtsPreview";
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
+import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { Inspector } from "./components/Inspector";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
@@ -62,7 +63,7 @@ export default function App() {
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
   const [designPath, setDesignPath] = useState<string | null>(null);
-  const [build, setBuild] = useState<{ ok: boolean; text: string } | null>(null);
+  const [build, setBuild] = useState<BuildState | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
@@ -334,13 +335,30 @@ export default function App() {
   const buildDtb = async () => {
     const target = designPath ? designPath.replace(/\.[^./\\]*$/, "") + ".dtb" : await dialogs.pickDtbToSave();
     if (!target) return;
-    setBuild({ ok: true, text: "Building…" });
+    setBuild({ running: true, problems: [] });
     try {
       const result = await backend.buildDtb(toDesign(nodes, edges, extras), target);
-      setBuild({ ok: true, text: `Built ${result.output}${result.warnings ? `\n\n${result.warnings}` : ""}` });
+      setBuild({
+        running: false,
+        output: result.output ?? undefined,
+        message: result.log,
+        problems: result.problems,
+      });
     } catch (e) {
-      setBuild({ ok: false, text: String(e) });
+      setBuild({ running: false, message: String(e), problems: [] });
     }
+  };
+
+  const focusNode = (id: string) => {
+    setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
+    setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : ({ ...n, selected: n.id === id } as FlowNode))));
+    fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
+  };
+
+  const nodeName = (id: string) => {
+    const node = nodes.find((n) => n.id === id);
+    if (!node || !isDtNode(node)) return undefined;
+    return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
 
   const chooseDtc = async () => {
@@ -400,12 +418,7 @@ export default function App() {
           onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
           onEdgeChange={updateEdgeData}
         />
-        {build && (
-          <section className={`build${build.ok ? "" : " failed"}`}>
-            <h2>Build</h2>
-            <pre>{build.text}</pre>
-          </section>
-        )}
+        {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview dts={dts} errors={errors} />
       </aside>
     </div>

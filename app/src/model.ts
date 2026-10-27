@@ -123,6 +123,16 @@ export interface Binding {
   properties?: PropertySpec[];
 }
 
+/** A dtc error or warning, attached to the node it is about when that could be found. */
+export interface Problem {
+  severity: "warning" | "error";
+  message: string;
+  /** Line in the generated source. */
+  line?: number;
+  /** Id of the node the message is about. */
+  node?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Canvas representation
 

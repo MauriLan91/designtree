@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use crate::model::{Cell, EdgeKind, Graph, Node, PropertyValue, ValueChunk};
+use crate::model::{Cell, EdgeKind, Graph, Node, NodeId, PropertyValue, ValueChunk};
 use crate::validate::{validate, ValidationError};
 
 /// Generates devicetree source from a design. Fails if the graph does not
@@ -54,12 +54,64 @@ pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
 
 /// Generates devicetree source for the whole tree, included nodes and all.
 pub fn to_dts_flat(graph: &Graph) -> Result<String, Vec<ValidationError>> {
+    to_dts_flat_mapped(graph).map(|(dts, _)| dts)
+}
+
+/// Like [`to_dts_flat`], also returning which lines of the source belong to
+/// which node, to attach compiler messages to nodes.
+pub fn to_dts_flat_mapped(graph: &Graph) -> Result<(String, SourceMap), Vec<ValidationError>> {
     check(graph)?;
     let root = graph.root().expect("validated graph has a root");
     let mut out = String::from("/dts-v1/;\n\n");
     write_memreserves(graph, true, &mut out);
-    write_node(graph, root, 0, &mut out);
-    Ok(out)
+    let mut map = SourceMap::default();
+    write_node(graph, root, 0, "", &mut out, &mut map);
+    Ok((out, map))
+}
+
+/// The lines (1-based, inclusive) a node's block takes in generated source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeSpan {
+    pub node: NodeId,
+    /// Full path of the node, as dtc prints it (`/soc/serial@1000`).
+    pub path: String,
+    pub first_line: u32,
+    pub last_line: u32,
+}
+
+/// Where each node is in a generated devicetree source.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceMap {
+    /// In order of appearance, so a parent precedes its children.
+    pub spans: Vec<NodeSpan>,
+    /// Newlines in the source up to `counted_to`, for [`Self::line_at`].
+    counted_to: usize,
+    newlines: u32,
+}
+
+impl SourceMap {
+    /// The node whose block contains `line`: the innermost one, so a
+    /// property line maps to its node and not to the node's parents.
+    pub fn node_at_line(&self, line: u32) -> Option<&NodeSpan> {
+        self.spans
+            .iter()
+            .filter(|s| s.first_line <= line && line <= s.last_line)
+            .min_by_key(|s| s.last_line - s.first_line)
+    }
+
+    pub fn node_at_path(&self, path: &str) -> Option<&NodeSpan> {
+        self.spans.iter().find(|s| s.path == path)
+    }
+
+    /// The line `out` ends on so far; `out` only ever grows between calls.
+    fn line_at(&mut self, out: &str) -> u32 {
+        self.newlines += out.as_bytes()[self.counted_to..]
+            .iter()
+            .filter(|b| **b == b'\n')
+            .count() as u32;
+        self.counted_to = out.len();
+        self.newlines + 1
+    }
 }
 
 fn check(graph: &Graph) -> Result<(), Vec<ValidationError>> {
@@ -198,7 +250,14 @@ fn override_body<'a>(
     for child in graph.children(&node.id) {
         let mut piece = String::new();
         if child.inherited.is_none() {
-            write_node(graph, child, depth, &mut piece);
+            write_node(
+                graph,
+                child,
+                depth,
+                "",
+                &mut piece,
+                &mut SourceMap::default(),
+            );
         } else if base_label(child).is_some() {
             deferred.push(child);
         } else {
@@ -328,8 +387,28 @@ fn write_any_property(out: &mut String, depth: usize, name: &str, value: Option<
     }
 }
 
-fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
+fn write_node(
+    graph: &Graph,
+    node: &Node,
+    depth: usize,
+    parent_path: &str,
+    out: &mut String,
+    map: &mut SourceMap,
+) {
     let indent = "\t".repeat(depth);
+    let path = match (node.is_root(), parent_path) {
+        (true, _) => "/".to_owned(),
+        (false, "/") | (false, "") => format!("/{}", node.full_name()),
+        (false, parent) => format!("{parent}/{}", node.full_name()),
+    };
+    let first_line = map.line_at(out);
+    let span = map.spans.len();
+    map.spans.push(NodeSpan {
+        node: node.id.clone(),
+        path: path.clone(),
+        first_line,
+        last_line: first_line,
+    });
 
     let _ = write!(out, "{indent}");
     for label in node.labels() {
@@ -352,9 +431,10 @@ fn write_node(graph: &Graph, node: &Node, depth: usize, out: &mut String) {
         if has_properties || i > 0 {
             out.push('\n');
         }
-        write_node(graph, child, depth + 1, out);
+        write_node(graph, child, depth + 1, &path, out, map);
     }
     let _ = writeln!(out, "{indent}}};");
+    map.spans[span].last_line = map.line_at(out) - 1;
 }
 
 /// Writes `name = item, item;`, wrapping at [`MAX_COLUMNS`] and aligning
