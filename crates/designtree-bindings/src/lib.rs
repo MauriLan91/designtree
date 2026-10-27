@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_norway::Value;
 use thiserror::Error;
+use ts_rs::TS;
 use walkdir::WalkDir;
 
 /// Location of the binding schemas inside a kernel source tree.
@@ -42,7 +43,7 @@ pub enum IndexError {
 
 /// A property value type: the definitions of dt-schema's `types.yaml`,
 /// plus `node` for a child node that shares the property namespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum PropertyType {
     Flag,
@@ -116,7 +117,7 @@ impl PropertyType {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct PropertySpec {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -127,23 +128,29 @@ pub struct PropertySpec {
     pub ty: Option<PropertyType>,
     /// Allowed values, when the schema lists them.
     #[serde(rename = "enum", default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(type = "Array<unknown>", optional)]
     pub enum_values: Vec<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "unknown", optional)]
     pub default: Option<serde_json::Value>,
     /// Bounds of each number in the value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
     pub minimum: Option<serde_json::Number>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
     pub maximum: Option<serde_json::Number>,
     /// Bounds on the number of entries of an array value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
     pub min_items: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
     pub max_items: Option<u64>,
 }
 
 /// One entry of the element library, derived from one schema file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Binding {
     /// Path relative to the bindings directory, e.g. `serial/8250.yaml`.
     pub path: String,

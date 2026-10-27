@@ -1,137 +1,48 @@
-// Mirror of the designtree-core JSON format plus conversion to and from the
-// React Flow canvas. Keep in sync with crates/designtree-core/src/model.rs.
+// Conversion between the design file (types generated from the Rust model in
+// model.gen.ts) and the React Flow canvas.
 import type { Edge, Node } from "@xyflow/react";
 
-export type PropertyValue =
-  | { type: "empty" }
-  | { type: "cells"; value: number[] }
-  | { type: "strings"; value: string[] }
-  | { type: "bytes"; value: number[] }
-  | { type: "mixed"; value: ValueChunk[] };
+import type {
+  Binding,
+  Cell,
+  Graph,
+  Group,
+  Inherited,
+  MemReserve,
+  Node as GraphNode,
+  Edge as GraphEdge,
+  Position,
+  Problem,
+  Property,
+  PropertySpec,
+  PropertyType,
+  PropertyValue,
+  ValueChunk,
+} from "./model.gen";
 
-/**
- * Values above 2^53 - 1 come as hex strings ("0x...") so they stay exact.
- * Reference targets are labels, or node paths when they start with `/`.
- */
-export type Cell = number | string | { phandle: string };
+export type {
+  Binding,
+  Cell,
+  Inherited,
+  MemReserve,
+  Position,
+  Problem,
+  Property,
+  PropertySpec,
+  PropertyType,
+  PropertyValue,
+  ValueChunk,
+};
 
-export type ValueChunk =
-  | { type: "cells"; bits: number; cells: Cell[] }
-  | { type: "string"; value: string }
-  | { type: "bytes"; value: number[] }
-  | { type: "path"; target: string };
-
-export interface Property {
-  name: string;
-  value: PropertyValue;
-}
-
-export interface Position {
-  x: number;
-  y: number;
-}
-
-export interface DesignNode {
-  id: string;
-  name: string;
-  unit_address?: string;
-  label?: string;
-  /** More labels for the same node; references use `label`. */
-  extra_labels?: string[];
-  omit_if_no_ref?: boolean;
-  compatible?: string[];
-  properties?: Property[];
-  /** Set when the node comes from an included file (an SoC .dtsi). */
-  inherited?: Inherited;
-  position: Position;
-}
-
-/** The definition of a node in the included files; export writes only what differs. */
-export interface Inherited {
-  file: string;
-  labels?: string[];
-  properties?: Property[];
-  omit_if_no_ref?: boolean;
-}
-
-/** Values above 2^53 - 1 come as hex strings ("0x..."). */
-export interface MemReserve {
-  address: number | string;
-  size: number | string;
-  inherited?: boolean;
-}
-
-export type DesignEdge =
-  | { from: string; to: string; kind: "child" }
-  | { from: string; to: string; kind: "reference"; property: string; args?: number[] };
-
-export interface DesignGroup {
-  id: string;
-  title: string;
-  members: string[];
-  subgroups?: DesignGroup[];
-  position?: Position;
-  size?: { width: number; height: number };
-}
-
-export interface Design {
-  nodes: DesignNode[];
-  edges: DesignEdge[];
-  groups: DesignGroup[];
-  memreserves?: MemReserve[];
-  /** Include directives of the board file (with its #defines). */
-  includes?: string[];
-  trailing_includes?: string[];
-  /** Inherited nodes the board deletes: labels, or paths starting with `/`. */
-  deleted_nodes?: string[];
-}
+// The wire format comes from the Rust types (model.gen.ts); the editor
+// keeps its own names for the design file.
+export type Design = Graph;
+export type DesignNode = GraphNode;
+export type DesignEdge = GraphEdge;
+export type DesignGroup = Group;
 
 /** The parts of a design that belong to the whole tree, not to a node or group. */
 export type DesignExtras = Omit<Design, "nodes" | "edges" | "groups">;
-
-/** dt-schema `types.yaml` definitions, plus `node` for child nodes. */
-export type PropertyType =
-  | "flag"
-  | "string"
-  | "string-array"
-  | "non-unique-string-array"
-  | `${"uint" | "int"}${8 | 16 | 32 | 64}`
-  | `${"uint" | "int"}${8 | 16 | 32 | 64}-${"array" | "matrix"}`
-  | "phandle"
-  | "phandle-array"
-  | "address"
-  | "node";
-
-export interface PropertySpec {
-  name: string;
-  description?: string;
-  required: boolean;
-  type?: PropertyType;
-  enum?: unknown[];
-  default?: unknown;
-  minimum?: number;
-  maximum?: number;
-  min_items?: number;
-  max_items?: number;
-}
-
-export interface Binding {
-  path: string;
-  category: string;
-  title?: string;
-  compatibles?: string[];
-  properties?: PropertySpec[];
-}
-
-/** A dtc error or warning, attached to the node it is about when that could be found. */
-export interface Problem {
-  severity: "warning" | "error";
-  message: string;
-  /** Line in the generated source. */
-  line?: number;
-  /** Id of the node the message is about. */
-  node?: string;
-}
 
 // ---------------------------------------------------------------------------
 // Canvas representation
@@ -278,13 +189,13 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
       parentId: parent?.id,
       data: {
         name: n.name,
-        unitAddress: n.unit_address,
-        label: n.label,
+        unitAddress: n.unit_address ?? undefined,
+        label: n.label ?? undefined,
         extraLabels: n.extra_labels,
         omitIfNoRef: n.omit_if_no_ref,
         compatible: n.compatible ?? [],
         properties: n.properties ?? [],
-        inherited: n.inherited,
+        inherited: n.inherited ?? undefined,
       },
     };
   });

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Stable identifier of a node inside a [`Graph`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(transparent)]
 pub struct NodeId(pub String);
 
@@ -12,14 +13,14 @@ impl From<&str> for NodeId {
 }
 
 /// Position of an element on the editor canvas. Ignored by DTS generation.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
 }
 
 /// The value of a devicetree property.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "value", rename_all = "kebab-case")]
 pub enum PropertyValue {
     /// Boolean property, present without a value (`dma-coherent;`).
@@ -41,7 +42,7 @@ pub enum PropertyValue {
 ///
 /// Reference targets in chunks are a label (`uart0`), or a node path when
 /// they start with `/` (`/soc/serial@0`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ValueChunk {
     /// `<...>` cell list, `bits` wide (8, 16, 32 or 64).
@@ -62,12 +63,16 @@ pub enum ValueChunk {
 }
 
 /// One element of a cell list.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(untagged)]
 pub enum Cell {
     /// A JSON number up to 2^53 - 1, a hex string (`"0x..."`) above that,
     /// so that JavaScript reads every value exactly.
-    Number(#[serde(with = "json_safe_u64")] u64),
+    Number(
+        #[serde(with = "json_safe_u64")]
+        #[ts(type = "number | string")]
+        u64,
+    ),
     /// `&target`, replaced by the phandle of the target node.
     Phandle { phandle: String },
 }
@@ -104,20 +109,20 @@ mod json_safe_u64 {
 }
 
 /// Size of a group frame on the editor canvas.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Property {
     pub name: String,
     pub value: PropertyValue,
 }
 
 /// A devicetree node placed on the canvas.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Node {
     pub id: NodeId,
     /// Node name without unit address, e.g. `serial`. The root node is `/`.
@@ -150,7 +155,7 @@ pub struct Node {
 
 /// The definition of a node in the included files, before the board file
 /// changed it.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct Inherited {
     /// File that first defines the node, as written in the import.
     pub file: String,
@@ -185,7 +190,7 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum EdgeKind {
     /// `to` is a child of `from` in the devicetree hierarchy.
@@ -201,7 +206,7 @@ pub enum EdgeKind {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Edge {
     pub from: NodeId,
     pub to: NodeId,
@@ -210,7 +215,7 @@ pub struct Edge {
 }
 
 /// Visual grouping of nodes (like a Simulink subsystem). Does not affect output.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Group {
     pub id: String,
     pub title: String,
@@ -224,7 +229,7 @@ pub struct Group {
 }
 
 /// A complete design, serialized as the project file.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 pub struct Graph {
     #[serde(default)]
     pub nodes: Vec<Node>,
@@ -252,11 +257,13 @@ pub struct Graph {
     pub deleted_nodes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct MemReserve {
     #[serde(with = "json_safe_u64")]
+    #[ts(type = "number | string")]
     pub address: u64,
     #[serde(with = "json_safe_u64")]
+    #[ts(type = "number | string")]
     pub size: u64,
     /// Comes from an included file.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

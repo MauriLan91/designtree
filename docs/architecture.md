@@ -91,9 +91,10 @@ The GUI only needs three operations, all JSON in and out:
 3. ask for `to_dts` to preview or save the output.
 
 These are `#[tauri::command]` functions in `app/src-tauri/src/lib.rs`. The
-TypeScript mirror of the model lives in `app/src/model.ts` and must be kept in
-sync with `designtree-core` (generating it with `ts-rs` or `specta` is a
-candidate next step).
+TypeScript types of the wire format are generated from the Rust types with
+`ts-rs` into `app/src/model.gen.ts`; `app/src/model.ts` re-exports them and
+adds the canvas conversion. `cargo test` fails when the generated file is
+stale; regenerate it with `UPDATE_TS=1 cargo test -p designtree --test typegen`.
 
 ## Next steps
 

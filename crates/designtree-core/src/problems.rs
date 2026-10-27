@@ -13,18 +13,19 @@
 //! node path in the message.
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::dts::SourceMap;
 use crate::model::NodeId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Warning,
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Problem {
     pub severity: Severity,
     pub message: String,
