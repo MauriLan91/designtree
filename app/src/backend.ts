@@ -1,7 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Binding, Design } from "./model";
+import type { Binding, Design, Problem } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -11,8 +11,10 @@ export interface CatalogSummary {
 }
 
 export interface BuildResult {
-  output: string;
-  warnings: string;
+  /** The .dtb, when the build succeeded. */
+  output: string | null;
+  log: string;
+  problems: Problem[];
 }
 
 export const inTauri = isTauri();

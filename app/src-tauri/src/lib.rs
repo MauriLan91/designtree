@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use designtree_bindings::{Binding, Catalog};
-use designtree_core::{Graph, ImportOptions};
+use designtree_core::dtc::DtcError;
+use designtree_core::{Graph, ImportOptions, Problem};
 use serde::Serialize;
 use tauri::State;
 
@@ -146,8 +147,13 @@ fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
 
 #[derive(Serialize)]
 struct BuildResult {
-    output: PathBuf,
-    warnings: String,
+    /// The `.dtb`, when the build succeeded.
+    output: Option<PathBuf>,
+    /// dtc's messages that are not about a single node, or all of them
+    /// when none could be parsed.
+    log: String,
+    /// dtc's errors and warnings, attached to nodes where possible.
+    problems: Vec<Problem>,
 }
 
 /// Sets the `dtc` program used by `build_dtb`; `None` goes back to `PATH`.
@@ -157,14 +163,16 @@ fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) {
 }
 
 /// Compiles the whole tree (includes flattened, so no preprocessor is
-/// needed) to a `.dtb` at `output`. Runs off the UI thread.
+/// needed) to a `.dtb` at `output`. A failed build is not an `Err`: dtc's
+/// errors come back as problems so the UI can show them on the nodes.
+/// Runs off the UI thread.
 #[tauri::command(async)]
 fn build_dtb(
     design: Graph,
     output: PathBuf,
     state: State<AppState>,
 ) -> Result<BuildResult, String> {
-    let dts = designtree_core::to_dts_flat(&design).map_err(|errors| {
+    let (dts, map) = designtree_core::to_dts_flat_mapped(&design).map_err(|errors| {
         errors
             .iter()
             .map(ToString::to_string)
@@ -176,12 +184,19 @@ fn build_dtb(
             .filter(|p| !p.is_empty())
             .map(PathBuf::from)
     });
-    let built = designtree_core::dtc::compile_dtb(&dts, &output, dtc.as_deref())
-        .map_err(|e| e.to_string())?;
-    Ok(BuildResult {
-        output,
-        warnings: built.warnings,
-    })
+    match designtree_core::dtc::compile_dtb(&dts, &output, dtc.as_deref()) {
+        Ok(built) => Ok(BuildResult {
+            output: Some(output),
+            problems: designtree_core::parse_problems(&built.warnings, &map),
+            log: built.warnings,
+        }),
+        Err(DtcError::Failed(log)) => Ok(BuildResult {
+            output: None,
+            problems: designtree_core::parse_problems(&log, &map),
+            log,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]

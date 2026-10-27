@@ -166,3 +166,9 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .build { padding: 12px; border-bottom: 1px solid var(--border); }
 .build pre { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; font-size: 12px; background: var(--code); border-radius: 6px; padding: 8px; }
 .build.failed pre { color: var(--danger); }
+.build .problems { list-style: none; margin: 4px 0 0; padding: 0; max-height: 200px; overflow: auto; }
+.build .problems button { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 3px 4px; font-size: 12px; color: var(--text); }
+.build .problems button:enabled:hover { background: var(--code); cursor: pointer; }
+.build .problems .error b { color: var(--danger); }
+.build .problems .warning b { color: var(--ref); }
+.build .problems code { color: var(--accent); }
