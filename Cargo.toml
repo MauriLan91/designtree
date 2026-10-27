@@ -22,4 +22,5 @@ tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 thiserror = "2"
+ts-rs = "12"
 walkdir = "2"

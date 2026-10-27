@@ -22,7 +22,8 @@ npm run tauri build   # release bundle
 | Path | Content |
 | --- | --- |
 | `src-tauri/src/lib.rs` | Tauri commands: load kernel bindings, search, validate, export, open/save |
-| `src/model.ts` | Design types (mirror of `designtree-core`) and canvas conversion |
+| `src/model.gen.ts` | Design types generated from the Rust types (do not edit) |
+| `src/model.ts` | Re-exports the generated types and converts to and from the canvas |
 | `src/backend.ts` | Typed wrappers around the Tauri commands |
 | `src/components/` | Palette, canvas node, inspector, DTS preview |
 

@@ -217,7 +217,7 @@ function NodeInspector({
           <strong>Required by the binding:</strong>
           <ul>
             {missing.map((p) => (
-              <li key={p.name} title={p.description}>{p.name}</li>
+              <li key={p.name} title={p.description ?? undefined}>{p.name}</li>
             ))}
           </ul>
         </div>
