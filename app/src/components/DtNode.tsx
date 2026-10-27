@@ -23,6 +23,9 @@ export function DtNode({ data, selected }: NodeProps<DtFlowNode>) {
           {data.properties.length} propert{data.properties.length === 1 ? "y" : "ies"}
         </div>
       )}
+      {data.todo && data.todo.length > 0 && (
+        <div className="dt-node-todo" title={`Fill in: ${data.todo.join(", ")}`}>to do: {data.todo.join(", ")}</div>
+      )}
       <Handle type="source" id={REF_HANDLE} position={Position.Right} className="h-ref" title="References (phandle)" />
       <Handle type="source" id={CHILD_HANDLE} position={Position.Bottom} className="h-tree" title="Children" />
     </div>

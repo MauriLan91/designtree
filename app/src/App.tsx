@@ -17,6 +17,7 @@ import { backend, dialogs, inTauri } from "./backend";
 import { DtNode } from "./components/DtNode";
 import { DtsPreview } from "./components/DtsPreview";
 import { GroupNode } from "./components/GroupNode";
+import { initialProperties } from "./schemaProps";
 import { Inspector } from "./components/Inspector";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
@@ -148,6 +149,7 @@ export default function App() {
             y: rect.top + rect.height * 0.15 + (Math.random() - 0.5) * 60,
           });
         })();
+      const initial = binding ? initialProperties(binding) : null;
       const node: DtFlowNode = {
         id,
         type: "dt",
@@ -155,8 +157,9 @@ export default function App() {
         data: {
           name: binding ? genericNodeName(binding) : "node",
           compatible: binding?.compatibles?.slice(0, 1) ?? [],
-          properties: [],
+          properties: initial?.properties ?? [],
           binding: binding ?? undefined,
+          todo: initial?.todo.length ? initial.todo : undefined,
         },
       };
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]);
@@ -290,7 +293,7 @@ export default function App() {
       const d = fromDesign(await backend.autoLayout(toDesign(nodes, edges)));
       // Keep editor-only data (bindings) that the design file does not carry.
       const old = new Map(nodes.map((n) => [n.id, n]));
-      setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding } } : n)));
+      setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding, todo: (old.get(n.id) as DtFlowNode | undefined)?.data.todo } } : n)));
       setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     } catch (e) {
       setErrors([String(e)]);
