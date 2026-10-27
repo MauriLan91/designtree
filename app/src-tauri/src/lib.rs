@@ -16,6 +16,8 @@ struct AppState {
     /// Kernel tree of the loaded catalog; its include directories are used
     /// when importing devicetrees from outside a kernel tree.
     linux_src: RwLock<Option<PathBuf>>,
+    /// Configured `dtc` program; `PATH` is searched when unset.
+    dtc_path: RwLock<Option<PathBuf>>,
 }
 
 #[derive(Serialize)]
@@ -142,6 +144,46 @@ fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
     designtree_core::import_dts_file(&path, &options).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+struct BuildResult {
+    output: PathBuf,
+    warnings: String,
+}
+
+/// Sets the `dtc` program used by `build_dtb`; `None` goes back to `PATH`.
+#[tauri::command]
+fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) {
+    *state.dtc_path.write().unwrap() = path;
+}
+
+/// Compiles the whole tree (includes flattened, so no preprocessor is
+/// needed) to a `.dtb` at `output`. Runs off the UI thread.
+#[tauri::command(async)]
+fn build_dtb(
+    design: Graph,
+    output: PathBuf,
+    state: State<AppState>,
+) -> Result<BuildResult, String> {
+    let dts = designtree_core::to_dts_flat(&design).map_err(|errors| {
+        errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
+    let dtc = state.dtc_path.read().unwrap().clone().or_else(|| {
+        std::env::var_os("DESIGNTREE_DTC")
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from)
+    });
+    let built = designtree_core::dtc::compile_dtb(&dts, &output, dtc.as_deref())
+        .map_err(|e| e.to_string())?;
+    Ok(BuildResult {
+        output,
+        warnings: built.warnings,
+    })
+}
+
 #[tauri::command]
 fn write_text(path: PathBuf, content: String) -> Result<(), String> {
     fs::write(path, content).map_err(|e| e.to_string())
@@ -162,6 +204,8 @@ pub fn run() {
             open_design,
             import_dts,
             write_text,
+            set_dtc_path,
+            build_dtb,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DesignTree");

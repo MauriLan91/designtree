@@ -163,3 +163,6 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .typed-field em { font-style: normal; font-size: 11px; }
 .typed-field .error { font-size: 11px; }
 .dt-node-todo { color: var(--ref); font-size: 11px; }
+.build { padding: 12px; border-bottom: 1px solid var(--border); }
+.build pre { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; font-size: 12px; background: var(--code); border-radius: 6px; padding: 8px; }
+.build.failed pre { color: var(--danger); }

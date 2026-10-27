@@ -5,6 +5,7 @@
 //! become phandle properties (`clocks = <&osc 0>;`). Groups are a purely
 //! visual concept and never affect the generated source.
 
+pub mod dtc;
 pub mod dts;
 pub mod import;
 pub mod layout;

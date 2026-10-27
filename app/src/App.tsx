@@ -60,6 +60,9 @@ export default function App() {
   const [overriding, setOverriding] = useState<Set<string>>(new Set());
   const [dts, setDts] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  /** File the design was last opened from or saved to; the .dtb goes next to it. */
+  const [designPath, setDesignPath] = useState<string | null>(null);
+  const [build, setBuild] = useState<{ ok: boolean; text: string } | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
@@ -273,15 +276,19 @@ export default function App() {
     setEdges(d.edges);
     setExtras(d.extras);
     setOverriding(new Set());
+    setDesignPath(null);
+    setBuild(null);
   };
 
-  const loadDesign = async (load: () => Promise<Design>) => {
+  const loadDesign = async (load: () => Promise<Design>, path: string | null = null) => {
     try {
       const d = fromDesign(await load());
       setNodes(d.nodes);
       setEdges(d.edges);
       setExtras(d.extras);
       setOverriding(new Set());
+      setDesignPath(path);
+      setBuild(null);
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([String(e)]);
@@ -302,7 +309,7 @@ export default function App() {
 
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
-    if (path) await loadDesign(() => backend.openDesign(path));
+    if (path) await loadDesign(() => backend.openDesign(path), path);
   };
 
   const importDts = async () => {
@@ -312,13 +319,33 @@ export default function App() {
 
   const saveDesign = async () => {
     const path = await dialogs.pickDesignToSave();
-    if (path) await backend.saveDesign(path, toDesign(nodes, edges, extras));
+    if (path) {
+      await backend.saveDesign(path, toDesign(nodes, edges, extras));
+      setDesignPath(path);
+    }
   };
 
   const exportDts = async () => {
     if (!dts) return;
     const path = await dialogs.pickDtsToSave();
     if (path) await backend.writeText(path, dts);
+  };
+
+  const buildDtb = async () => {
+    const target = designPath ? designPath.replace(/\.[^./\\]*$/, "") + ".dtb" : await dialogs.pickDtbToSave();
+    if (!target) return;
+    setBuild({ ok: true, text: "Building…" });
+    try {
+      const result = await backend.buildDtb(toDesign(nodes, edges, extras), target);
+      setBuild({ ok: true, text: `Built ${result.output}${result.warnings ? `\n\n${result.warnings}` : ""}` });
+    } catch (e) {
+      setBuild({ ok: false, text: String(e) });
+    }
+  };
+
+  const chooseDtc = async () => {
+    const path = await dialogs.pickDtc();
+    if (path) await backend.setDtcPath(path);
   };
 
   const updateNodeData = (id: string, data: object) =>
@@ -335,6 +362,8 @@ export default function App() {
         <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
         <button onClick={exportDts} disabled={!inTauri || !dts || errors.length > 0}>Export .dts…</button>
+        <button onClick={buildDtb} disabled={!inTauri || errors.length > 0}>Build .dtb</button>
+        <button onClick={chooseDtc} disabled={!inTauri} title="Use a dtc program that is not in PATH">dtc path…</button>
         <span className="sep" />
         <button onClick={autoLayout} disabled={!inTauri}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
@@ -371,6 +400,12 @@ export default function App() {
           onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
           onEdgeChange={updateEdgeData}
         />
+        {build && (
+          <section className={`build${build.ok ? "" : " failed"}`}>
+            <h2>Build</h2>
+            <pre>{build.text}</pre>
+          </section>
+        )}
         <DtsPreview dts={dts} errors={errors} />
       </aside>
     </div>
