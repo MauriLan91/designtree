@@ -4,10 +4,12 @@
 //! the board file (includes and overrides, built next to the original) and
 //! the flat tree.
 //!
-//! Needs a kernel source tree, `cpp` and `dtc`:
+//! Needs a kernel source tree, `cpp` and `dtc`. CI uses a sparse checkout of
+//! a pinned tag (`scripts/fetch-kernel-dts.sh`), which is enough:
 //!
 //! ```sh
-//! DESIGNTREE_LINUX_SRC=~/linux cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture
+//! scripts/fetch-kernel-dts.sh ~/linux-g1
+//! DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture
 //! ```
 //!
 //! `DESIGNTREE_G1_THRESHOLD` sets the pass rate in percent (default 90);

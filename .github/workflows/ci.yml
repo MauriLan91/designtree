@@ -40,3 +40,48 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  # G1: import, export and recompile a fixed corpus of kernel board files and
+  # compare with the kernel build. Fails below DESIGNTREE_G1_THRESHOLD percent.
+  g1-corpus:
+    runs-on: ubuntu-latest
+    env:
+      KERNEL_TAG: v7.3
+      DESIGNTREE_G1_THRESHOLD: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache the kernel devicetree sources
+        id: kernel
+        uses: actions/cache@v4
+        with:
+          path: ~/linux-g1
+          # The key names everything that decides what the checkout holds.
+          key: linux-g1-${{ env.KERNEL_TAG }}-${{ hashFiles('scripts/fetch-kernel-dts.sh') }}
+      - name: Sparse checkout of the kernel at the pinned tag
+        if: steps.kernel.outputs.cache-hit != 'true'
+        run: scripts/fetch-kernel-dts.sh ~/linux-g1
+      - name: Run the corpus
+        shell: bash
+        env:
+          DESIGNTREE_REQUIRE_DTC: 1
+        run: |
+          export DESIGNTREE_LINUX_SRC="$HOME/linux-g1"
+          cargo test --release -p designtree-core --test g1_corpus -- --ignored --nocapture | tee g1.log
+      - name: Report the pass rate
+        if: always()
+        shell: bash
+        run: |
+          [ -f g1.log ] || exit 0
+          {
+            echo "### G1 round-trip corpus (kernel $KERNEL_TAG)"
+            grep '^G1:' g1.log || echo "The corpus did not finish."
+            if grep -q '^FAIL' g1.log; then
+              echo
+              echo '```'
+              grep '^FAIL' g1.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
