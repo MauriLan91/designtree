@@ -172,3 +172,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .build .problems .error b { color: var(--danger); }
 .build .problems .warning b { color: var(--ref); }
 .build .problems code { color: var(--accent); }
+.macro-suggestions { list-style: none; margin: -4px 0 0; padding: 2px; border: 1px solid var(--border); border-radius: 6px; max-height: 160px; overflow: auto; }
+.macro-suggestions button { display: flex; justify-content: space-between; width: 100%; border: 0; background: none; padding: 2px 6px; font-size: 12px; text-align: left; color: var(--text); }
+.macro-suggestions button:hover { background: var(--code); cursor: pointer; }
+.macro-suggestions span { color: var(--muted); }

@@ -30,6 +30,7 @@ import {
   emptyDesign,
   fromDesign,
   genericNodeName,
+  expectedSpecifierCells,
   guessReferenceProperty,
   isDtNode,
   deletionTarget,
@@ -84,6 +85,11 @@ export default function App() {
 
   const selectedNodes = nodes.filter((n) => n.selected);
   const selectedEdge = edges.find((e) => e.selected) ?? null;
+  const providerNode = selectedEdge && nodes.find((n) => n.id === selectedEdge.target);
+  const providerCells =
+    selectedEdge?.data && providerNode && isDtNode(providerNode)
+      ? expectedSpecifierCells(providerNode.data, (selectedEdge.data as RefData).property)
+      : undefined;
 
   // Regenerate the preview whenever the design changes.
   useEffect(() => {
@@ -417,6 +423,7 @@ export default function App() {
           overriding={overriding}
           onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
           onEdgeChange={updateEdgeData}
+          providerCells={providerCells}
         />
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview dts={dts} errors={errors} />

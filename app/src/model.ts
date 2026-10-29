@@ -5,6 +5,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type {
   Binding,
   Cell,
+  DtMacro,
   Graph,
   Group,
   Inherited,
@@ -23,6 +24,7 @@ import type {
 export type {
   Binding,
   Cell,
+  DtMacro,
   Inherited,
   MemReserve,
   Position,
@@ -350,6 +352,18 @@ const PROVIDER_PROPERTIES: [string, string][] = [
   ["#io-channel-cells", "io-channels"],
   ["#thermal-sensor-cells", "thermal-sensors"],
 ];
+
+/**
+ * Number of specifier cells a provider expects for a consumer property
+ * (`gpios`, `reset-gpios` and `cs-gpios` all use `#gpio-cells`), from the
+ * provider's `#...-cells` property; undefined when it does not say.
+ */
+export function expectedSpecifierCells(provider: DtNodeData, property: string): number | undefined {
+  const entry = PROVIDER_PROPERTIES.find(([, prop]) => property === prop || property.endsWith(`-${prop}`));
+  const cellsProperty = entry?.[0] ?? (property.endsWith("-gpios") ? "#gpio-cells" : undefined);
+  const found = provider.properties.find((p) => p.name === cellsProperty);
+  return found?.value.type === "cells" ? found.value.value[0] : undefined;
+}
 
 export function guessReferenceProperty(target: DtNodeData): string {
   for (const [cells, prop] of PROVIDER_PROPERTIES) {
