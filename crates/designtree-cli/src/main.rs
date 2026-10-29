@@ -47,6 +47,9 @@ enum Command {
     },
     /// Check a design file for structural errors.
     Validate { design: PathBuf },
+    /// Print the interrupt tree of a design file: each controller with the
+    /// devices wired to it, and the devices that have no usable parent.
+    Interrupts { design: PathBuf },
     /// Arrange the nodes of a design file automatically.
     Layout {
         design: PathBuf,
@@ -115,6 +118,41 @@ fn main() -> Result<()> {
                 eprintln!("error: {error}");
             }
             bail!("{} problem(s) found", errors.len())
+        }
+        Command::Interrupts { design } => {
+            let graph = load(&design)?;
+            let tree = designtree_core::interrupt_tree(&graph);
+            let name = |id: &designtree_core::NodeId| {
+                graph
+                    .node(id)
+                    .map_or_else(|| id.0.clone(), |n| n.full_name())
+            };
+            fn print(
+                tree: &designtree_core::InterruptTree,
+                name: &dyn Fn(&designtree_core::NodeId) -> String,
+                parent: Option<&designtree_core::NodeId>,
+                depth: usize,
+            ) {
+                for controller in tree
+                    .controllers
+                    .iter()
+                    .filter(|c| c.parent.as_ref() == parent)
+                {
+                    println!("{}{}", "  ".repeat(depth), name(&controller.node));
+                    for device in &controller.devices {
+                        // A cascaded controller is printed as a controller below.
+                        if !tree.controllers.iter().any(|c| &c.node == device) {
+                            println!("{}- {}", "  ".repeat(depth + 1), name(device));
+                        }
+                    }
+                    print(tree, name, Some(&controller.node), depth + 1);
+                }
+            }
+            print(&tree, &name, None, 0);
+            for problem in &tree.problems {
+                eprintln!("warning: {}: {}", name(&problem.node), problem.message);
+            }
+            Ok(())
         }
         Command::Layout { design, output } => {
             let mut graph = load(&design)?;

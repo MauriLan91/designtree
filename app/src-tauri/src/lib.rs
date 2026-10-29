@@ -7,7 +7,7 @@ use std::sync::RwLock;
 
 use designtree_bindings::{Binding, Catalog, DtMacro};
 use designtree_core::dtc::DtcError;
-use designtree_core::{Graph, ImportOptions, Problem};
+use designtree_core::{Graph, ImportOptions, InterruptTree, Problem};
 use serde::Serialize;
 use tauri::State;
 
@@ -152,6 +152,12 @@ fn validate_design(design: Graph) -> Vec<String> {
         .collect()
 }
 
+/// Which controller each device interrupts, and what is missing.
+#[tauri::command]
+fn interrupt_tree(design: Graph) -> InterruptTree {
+    designtree_core::interrupt_tree(&design)
+}
+
 /// Arranges nodes and bus groups; the caller keeps its own copy for undo.
 #[tauri::command]
 fn auto_layout(mut design: Graph) -> Graph {
@@ -258,6 +264,7 @@ pub fn run() {
             search_dt_macros,
             resolve_dt_macros,
             validate_design,
+            interrupt_tree,
             auto_layout,
             export_dts,
             save_design,

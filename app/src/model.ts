@@ -9,6 +9,7 @@ import type {
   Graph,
   Group,
   Inherited,
+  InterruptTree,
   MemReserve,
   Node as GraphNode,
   Edge as GraphEdge,
@@ -23,6 +24,7 @@ import type {
 
 export type {
   Binding,
+  InterruptTree,
   Cell,
   DtMacro,
   Inherited,
