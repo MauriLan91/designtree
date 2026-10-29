@@ -42,6 +42,8 @@ CI runs the same, plus the G1 corpus (`g1-corpus` job). Rust tests that need
   the test fails when the file is stale.
 - **G1 corpus** (round trip of 50 kernel board files): `scripts/fetch-kernel-dts.sh ~/linux-g1`,
   then `DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture`.
+- **Cloud sessions**: `scripts/cloud-session-setup.sh` installs the system
+  packages, npm packages and crates a fresh container needs (`docs/cloud-sessions.md`).
 - Tauri on Linux needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`;
   `cargo` builds of `app/src-tauri` also need `app/dist` to exist (`mkdir -p app/dist`).
 
