@@ -10,8 +10,9 @@ use std::path::PathBuf;
 
 use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
 use designtree_core::{
-    Cell, Edge, EdgeKind, Graph, Group, Inherited, MemReserve, Node, NodeId, Position, Problem,
-    Property, PropertyValue, Severity, Size, ValueChunk,
+    Cell, Edge, EdgeKind, Graph, Group, Inherited, InterruptController, InterruptProblem,
+    InterruptTree, MemReserve, Node, NodeId, Position, Problem, Property, PropertyValue, Severity,
+    Size, ValueChunk,
 };
 use ts_rs::{Config, TS};
 
@@ -38,6 +39,9 @@ fn generate() -> String {
         Group::decl(&cfg),
         MemReserve::decl(&cfg),
         Graph::decl(&cfg),
+        InterruptController::decl(&cfg),
+        InterruptProblem::decl(&cfg),
+        InterruptTree::decl(&cfg),
         Problem::decl(&cfg),
         Severity::decl(&cfg),
         PropertyType::decl(&cfg),

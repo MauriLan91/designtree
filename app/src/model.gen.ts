@@ -100,6 +100,26 @@ trailing_includes?: Array<string>,
  */
 deleted_nodes?: Array<string>, };
 
+export type InterruptController = { node: NodeId, 
+/**
+ * The controller this one cascades into; `None` for a top-level
+ * controller such as the GIC.
+ */
+parent?: NodeId, 
+/**
+ * Devices wired to this controller, in design order.
+ */
+devices: Array<NodeId>, };
+
+export type InterruptProblem = { node: NodeId, message: string, };
+
+export type InterruptTree = { controllers: Array<InterruptController>, 
+/**
+ * Devices that cannot be placed under a controller, and malformed
+ * specifiers.
+ */
+problems: Array<InterruptProblem>, };
+
 export type Problem = { severity: Severity, message: string, 
 /**
  * Line in the generated source, when dtc gave one.
