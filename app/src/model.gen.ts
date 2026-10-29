@@ -167,3 +167,23 @@ export type DtMacro = { name: string, value: number,
  * Header as written in `#include <...>`, e.g. `dt-bindings/gpio/gpio.h`.
  */
 header: string, };
+
+export type SocDtsi = { 
+/**
+ * `arm64`, `arm`, `riscv`, ... (the directory under `arch/`).
+ */
+arch: string, 
+/**
+ * The directory under `boot/dts/` (`freescale`, `rockchip`); empty for
+ * files that lie directly in it.
+ */
+vendor: string, 
+/**
+ * The file name without `.dtsi`, with the subdirectory in front when
+ * the vendor directory has them (`imx/imx6q`).
+ */
+name: string, 
+/**
+ * Path relative to the kernel tree, with `/` separators.
+ */
+path: string, };

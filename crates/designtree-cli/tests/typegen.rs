@@ -12,7 +12,7 @@ use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
 use designtree_core::{
     Cell, Edge, EdgeKind, Graph, Group, Inherited, InterruptController, InterruptProblem,
     InterruptTree, MemReserve, Node, NodeId, Position, Problem, Property, PropertyValue, Severity,
-    Size, ValueChunk,
+    Size, SocDtsi, ValueChunk,
 };
 use ts_rs::{Config, TS};
 
@@ -48,6 +48,7 @@ fn generate() -> String {
         PropertySpec::decl(&cfg),
         Binding::decl(&cfg),
         DtMacro::decl(&cfg),
+        SocDtsi::decl(&cfg),
     ];
     let mut out = String::from(HEADER);
     for decl in decls {
