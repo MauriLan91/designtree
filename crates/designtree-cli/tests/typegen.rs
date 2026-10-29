@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use designtree_bindings::{Binding, PropertySpec, PropertyType};
+use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
 use designtree_core::{
     Cell, Edge, EdgeKind, Graph, Group, Inherited, MemReserve, Node, NodeId, Position, Problem,
     Property, PropertyValue, Severity, Size, ValueChunk,
@@ -43,6 +43,7 @@ fn generate() -> String {
         PropertyType::decl(&cfg),
         PropertySpec::decl(&cfg),
         Binding::decl(&cfg),
+        DtMacro::decl(&cfg),
     ];
     let mut out = String::from(HEADER);
     for decl in decls {

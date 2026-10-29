@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Edge } from "@xyflow/react";
 import { backend, inTauri } from "../backend";
+import { SpecifierEditor } from "./SpecifierEditor";
 import {
   checkValue,
   clearEditedTodo,
@@ -30,11 +31,13 @@ interface Props {
   onNodeChange: (id: string, data: Partial<DtNodeData> | { title: string }) => void;
   onEdgeChange: (id: string, data: RefData) => void;
   /** Inherited nodes unlocked for editing. */
+  /** Specifier cells the selected reference's provider expects. */
+  providerCells?: number;
   overriding: Set<string>;
   onOverride: (id: string) => void;
 }
 
-export function Inspector({ node, edge, onNodeChange, onEdgeChange, overriding, onOverride }: Props) {
+export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride }: Props) {
   if (node?.type === "dt") {
     return (
       <NodeInspector
@@ -66,19 +69,11 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, overriding, 
           Property
           <input value={data.property} onChange={(e) => onEdgeChange(edge.id, { ...data, property: e.target.value })} />
         </label>
-        <label>
-          Specifier cells
-          <input
-            value={data.args.join(" ")}
-            placeholder="e.g. 1 0"
-            onChange={(e) =>
-              onEdgeChange(edge.id, {
-                ...data,
-                args: e.target.value.split(/\s+/).filter(Boolean).map(Number).filter(Number.isInteger),
-              })
-            }
-          />
-        </label>
+        <SpecifierEditor
+          args={data.args}
+          expected={providerCells}
+          onChange={(args) => onEdgeChange(edge.id, { ...data, args })}
+        />
       </section>
     );
   }

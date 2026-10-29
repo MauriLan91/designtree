@@ -10,12 +10,14 @@
 //! which are embedded because the kernel tree does not ship them.
 //! Files that fail to parse are reported, not fatal.
 
+mod macros;
 mod resolve;
 
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use macros::{index_dt_macros, DtMacro};
 use serde::{Deserialize, Serialize};
 use serde_norway::Value;
 use thiserror::Error;

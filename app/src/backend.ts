@@ -1,7 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Binding, Design, Problem } from "./model";
+import type { Binding, Design, DtMacro, Problem } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -30,6 +30,8 @@ export const backend = {
     invoke<CatalogSummary>("load_kernel_bindings", { linuxSrc }),
   searchBindings: (query: string, category: string | null, limit = 200) =>
     invoke<Binding[]>("search_bindings", { query, category, limit }),
+  searchDtMacros: (query: string, limit = 12) => invoke<DtMacro[]>("search_dt_macros", { query, limit }),
+  resolveDtMacros: (names: string[]) => invoke<(number | null)[]>("resolve_dt_macros", { names }),
   validateDesign: (design: Design) => invoke<string[]>("validate_design", { design }),
   autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
   exportDts: (design: Design) => invoke<string>("export_dts", { design }),

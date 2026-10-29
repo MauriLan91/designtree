@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use designtree_bindings::{Binding, Catalog};
+use designtree_bindings::{Binding, Catalog, DtMacro};
 use designtree_core::dtc::DtcError;
 use designtree_core::{Graph, ImportOptions, Problem};
 use serde::Serialize;
@@ -17,6 +17,8 @@ struct AppState {
     /// Kernel tree of the loaded catalog; its include directories are used
     /// when importing devicetrees from outside a kernel tree.
     linux_src: RwLock<Option<PathBuf>>,
+    /// Constants of the kernel's `dt-bindings` headers, for naming cells.
+    macros: RwLock<Vec<DtMacro>>,
     /// Configured `dtc` program; `PATH` is searched when unset.
     dtc_path: RwLock<Option<PathBuf>>,
 }
@@ -49,6 +51,7 @@ fn load_kernel_bindings(
         categories,
         skipped: catalog.skipped.len(),
     };
+    *state.macros.write().unwrap() = designtree_bindings::index_dt_macros(&linux_src);
     *state.catalog.write().unwrap() = catalog;
     *state.linux_src.write().unwrap() = Some(linux_src);
     Ok(summary)
@@ -78,6 +81,46 @@ fn search_bindings(
         })
         .take(limit)
         .cloned()
+        .collect()
+}
+
+/// Constants of the loaded kernel tree whose name contains `query`
+/// (case-insensitive), names that start with it first.
+#[tauri::command]
+fn search_dt_macros(query: String, limit: usize, state: State<AppState>) -> Vec<DtMacro> {
+    let query = query.to_uppercase();
+    let macros = state.macros.read().unwrap();
+    let (mut prefix, mut inner) = (Vec::new(), Vec::new());
+    let mut seen = std::collections::HashSet::new();
+    for m in macros.iter() {
+        let starts = m.name.starts_with(&query);
+        if !(starts || m.name.contains(&query)) {
+            continue;
+        }
+        // Several headers can define the same name; the first one counts.
+        if !seen.insert(m.name.as_str()) {
+            continue;
+        }
+        if starts {
+            prefix.push(m);
+        } else {
+            inner.push(m);
+        }
+        if prefix.len() >= limit {
+            break;
+        }
+    }
+    prefix.extend(inner);
+    prefix.into_iter().take(limit).cloned().collect()
+}
+
+/// The values of constants by exact name; `None` for an unknown name.
+#[tauri::command]
+fn resolve_dt_macros(names: Vec<String>, state: State<AppState>) -> Vec<Option<u32>> {
+    let macros = state.macros.read().unwrap();
+    names
+        .iter()
+        .map(|name| macros.iter().find(|m| &m.name == name).map(|m| m.value))
         .collect()
 }
 
@@ -212,6 +255,8 @@ pub fn run() {
             startup_args,
             load_kernel_bindings,
             search_bindings,
+            search_dt_macros,
+            resolve_dt_macros,
             validate_design,
             auto_layout,
             export_dts,

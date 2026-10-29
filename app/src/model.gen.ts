@@ -141,3 +141,9 @@ path: string,
  * Library category, taken from the first directory component (`serial`).
  */
 category: string, title?: string | null, compatibles?: Array<string>, properties?: Array<PropertySpec>, };
+
+export type DtMacro = { name: string, value: number, 
+/**
+ * Header as written in `#include <...>`, e.g. `dt-bindings/gpio/gpio.h`.
+ */
+header: string, };
