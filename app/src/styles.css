@@ -190,3 +190,9 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .soc-list button { display: flex; justify-content: space-between; width: 100%; border: 0; background: none; padding: 3px 6px; font-size: 12px; text-align: left; color: var(--text); }
 .soc-list button:hover { background: var(--code); cursor: pointer; }
 .soc-list span { color: var(--muted); }
+.palette h3 { font-size: 11px; color: var(--muted); margin: 4px 0 -2px; font-weight: 600; }
+.binding-list.short { flex: none; max-height: 140px; }
+.binding-row { display: flex; align-items: center; gap: 6px; }
+.binding-text { flex: 1; min-width: 0; }
+.star { border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--muted); cursor: pointer; }
+.star[aria-pressed="true"] { background: none; color: var(--ref); }

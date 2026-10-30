@@ -57,7 +57,8 @@ fn load_kernel_bindings(
     Ok(summary)
 }
 
-/// Searches the loaded catalog by compatible string, title or path.
+/// Searches the loaded catalog by compatible string, title or path; best
+/// match first.
 #[tauri::command]
 fn search_bindings(
     query: String,
@@ -65,23 +66,20 @@ fn search_bindings(
     limit: usize,
     state: State<AppState>,
 ) -> Vec<Binding> {
-    let query = query.to_lowercase();
     let catalog = state.catalog.read().unwrap();
     catalog
-        .bindings
-        .iter()
-        .filter(|b| category.as_ref().is_none_or(|c| &b.category == c))
-        .filter(|b| {
-            query.is_empty()
-                || b.path.contains(&query)
-                || b.compatibles.iter().any(|c| c.contains(&query))
-                || b.title
-                    .as_ref()
-                    .is_some_and(|t| t.to_lowercase().contains(&query))
-        })
-        .take(limit)
+        .search(&query, category.as_deref(), limit)
+        .into_iter()
         .cloned()
         .collect()
+}
+
+/// The bindings with the given schema paths (favorites, recents), in that
+/// order; paths the loaded kernel does not have are left out.
+#[tauri::command]
+fn get_bindings(paths: Vec<String>, state: State<AppState>) -> Vec<Binding> {
+    let catalog = state.catalog.read().unwrap();
+    catalog.by_paths(&paths).into_iter().cloned().collect()
 }
 
 /// Constants of the loaded kernel tree whose name contains `query`
@@ -285,6 +283,7 @@ pub fn run() {
             startup_args,
             load_kernel_bindings,
             search_bindings,
+            get_bindings,
             search_dt_macros,
             resolve_dt_macros,
             validate_design,

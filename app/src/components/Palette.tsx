@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
+import { loadList, saveList, toggled, withRecent } from "../libraryHistory";
 import type { Binding } from "../model";
 
 export const DRAG_MIME = "application/x-designtree-binding";
@@ -18,6 +19,10 @@ export function Palette({ onAdd, initialKernel }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("");
   const [results, setResults] = useState<Binding[]>([]);
+  const [favorites, setFavorites] = useState(() => loadList("favorites"));
+  const [recents, setRecents] = useState(() => loadList("recents"));
+  const [favoriteBindings, setFavoriteBindings] = useState<Binding[]>([]);
+  const [recentBindings, setRecentBindings] = useState<Binding[]>([]);
 
   const loadKernel = async (dir: string | null) => {
     if (!dir) return;
@@ -43,6 +48,58 @@ export function Palette({ onAdd, initialKernel }: Props) {
     }, 150);
     return () => clearTimeout(t);
   }, [summary, query, category]);
+
+  // Favorites and recents are kept by path; the loaded kernel resolves them.
+  useEffect(() => {
+    if (!summary) return;
+    backend.getBindings(favorites).then(setFavoriteBindings, () => setFavoriteBindings([]));
+    backend.getBindings(recents).then(setRecentBindings, () => setRecentBindings([]));
+  }, [summary, favorites, recents]);
+
+  const toggleFavorite = (b: Binding) => {
+    const next = toggled(favorites, b.path);
+    setFavorites(next);
+    saveList("favorites", next);
+  };
+  const used = (b: Binding) => {
+    const next = withRecent(recents, b.path);
+    setRecents(next);
+    saveList("recents", next);
+  };
+  const add = (b: Binding) => {
+    used(b);
+    onAdd(b);
+  };
+
+  const row = (b: Binding, key: string) => (
+    <li
+      key={key}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, JSON.stringify(b));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnd={(e) => e.dataTransfer.dropEffect !== "none" && used(b)}
+      onDoubleClick={() => add(b)}
+      title={`${b.path}\nDrag onto the canvas or double-click to add`}
+    >
+      <div className="binding-row">
+        <div className="binding-text">
+          <div className="binding-title">{b.title ?? b.path}</div>
+          <div className="binding-compat">{b.compatibles?.[0] ?? b.path}</div>
+        </div>
+        <button
+          className="star"
+          aria-pressed={favorites.includes(b.path)}
+          aria-label={favorites.includes(b.path) ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => toggleFavorite(b)}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {favorites.includes(b.path) ? "★" : "☆"}
+        </button>
+      </div>
+    </li>
+  );
 
   return (
     <aside className="panel palette">
@@ -75,23 +132,19 @@ export function Palette({ onAdd, initialKernel }: Props) {
               <option key={c}>{c}</option>
             ))}
           </select>
-          <ul className="binding-list">
-            {results.map((b) => (
-              <li
-                key={b.path}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(DRAG_MIME, JSON.stringify(b));
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDoubleClick={() => onAdd(b)}
-                title={`${b.path}\nDrag onto the canvas or double-click to add`}
-              >
-                <div className="binding-title">{b.title ?? b.path}</div>
-                <div className="binding-compat">{b.compatibles?.[0] ?? b.path}</div>
-              </li>
-            ))}
-          </ul>
+          {!query.trim() && favoriteBindings.length > 0 && (
+            <>
+              <h3>Favorites</h3>
+              <ul className="binding-list short">{favoriteBindings.map((b) => row(b, `f:${b.path}`))}</ul>
+            </>
+          )}
+          {!query.trim() && recentBindings.length > 0 && (
+            <>
+              <h3>Recent</h3>
+              <ul className="binding-list short">{recentBindings.map((b) => row(b, `r:${b.path}`))}</ul>
+            </>
+          )}
+          <ul className="binding-list">{results.map((b) => row(b, b.path))}</ul>
         </>
       )}
     </aside>
