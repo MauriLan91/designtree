@@ -7,12 +7,14 @@ export const DRAG_MIME = "application/x-designtree-binding";
 
 interface Props {
   onAdd: (binding: Binding | null) => void;
-  /** Kernel tree to index immediately, e.g. from the startup arguments. */
-  initialKernel?: string | null;
+  /** Kernel tree to index now: from the startup arguments, or picked in the kernel settings. */
+  requestedKernel?: string | null;
+  /** Called with the summary of each kernel tree that was indexed. */
+  onKernelLoaded?: (summary: CatalogSummary) => void;
 }
 
 /** Element library built from the kernel binding schemas. */
-export function Palette({ onAdd, initialKernel }: Props) {
+export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const [summary, setSummary] = useState<CatalogSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,9 @@ export function Palette({ onAdd, initialKernel }: Props) {
     setLoading(true);
     setError(null);
     try {
-      setSummary(await backend.loadKernelBindings(dir));
+      const loaded = await backend.loadKernelBindings(dir);
+      setSummary(loaded);
+      onKernelLoaded?.(loaded);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -38,8 +42,8 @@ export function Palette({ onAdd, initialKernel }: Props) {
   };
 
   useEffect(() => {
-    loadKernel(initialKernel ?? null);
-  }, [initialKernel]);
+    loadKernel(requestedKernel ?? null);
+  }, [requestedKernel]);
 
   useEffect(() => {
     if (!summary) return;
@@ -120,6 +124,7 @@ export function Palette({ onAdd, initialKernel }: Props) {
         <>
           <p className="hint">
             {summary.bindings.toLocaleString()} bindings, {summary.compatibles.toLocaleString()} compatibles
+            {summary.version && ` · kernel ${summary.version}`}
           </p>
           <input
             placeholder="Search compatible or title"

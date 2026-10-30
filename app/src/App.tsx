@@ -19,6 +19,7 @@ import { DtsPreview } from "./components/DtsPreview";
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
+import { KernelSettings } from "./components/KernelSettings";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { Inspector } from "./components/Inspector";
@@ -74,7 +75,10 @@ export default function App() {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
-  const [initialKernel, setInitialKernel] = useState<string | null>(null);
+  const [requestedKernel, setRequestedKernel] = useState<string | null>(null);
+  /** The kernel the library is built from. */
+  const [kernel, setKernel] = useState<{ path: string; version: string | null } | null>(null);
+  const [showKernels, setShowKernels] = useState(false);
 
   useEffect(() => {
     if (!inTauri) return;
@@ -85,9 +89,11 @@ export default function App() {
         setEdges(d.edges);
         setExtras(d.extras);
       }
-      setInitialKernel(args.linux_src);
+      setRequestedKernel(args.linux_src);
     }, (e) => setErrors([String(e)]));
   }, [setNodes, setEdges]);
+
+  const kernelWarning = !!extras.kernel && !!kernel?.version && extras.kernel !== kernel.version;
 
   const selectedNodes = nodes.filter((n) => n.selected);
   const selectedEdge = edges.find((e) => e.selected) ?? null;
@@ -345,7 +351,10 @@ export default function App() {
   const saveDesign = async () => {
     const path = await dialogs.pickDesignToSave();
     if (path) {
-      await backend.saveDesign(path, toDesign(nodes, edges, extras));
+      // The design is now built against the library's kernel.
+      const version = kernel?.version ?? extras.kernel;
+      await backend.saveDesign(path, { ...toDesign(nodes, edges, extras), kernel: version });
+      setExtras((x) => ({ ...x, kernel: version }));
       setDesignPath(path);
     }
   };
@@ -408,6 +417,9 @@ export default function App() {
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
         <button onClick={exportDts} disabled={!inTauri || !dts || errors.length > 0}>Export .dts…</button>
         <button onClick={buildDtb} disabled={!inTauri || errors.length > 0}>Build .dtb</button>
+        <button onClick={() => setShowKernels(true)} disabled={!inTauri} title="Kernel checkouts the library can be built from">
+          Kernels…
+        </button>
         <button onClick={chooseDtc} disabled={!inTauri} title="Use a dtc program that is not in PATH">dtc path…</button>
         <span className="sep" />
         <button onClick={() => setShowInterrupts((v) => !v)} disabled={!inTauri} aria-pressed={showInterrupts}>
@@ -417,8 +429,14 @@ export default function App() {
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
       </header>
-      <Palette onAdd={(b) => addNode(b)} initialKernel={initialKernel} />
+      <Palette onAdd={(b) => addNode(b)} requestedKernel={requestedKernel} onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })} />
       <main ref={canvasRef} className="canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+        {kernelWarning && (
+          <div className="kernel-warning" role="alert">
+            This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
+            Bindings may differ; pick another checkout under Kernels…
+          </div>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -453,6 +471,16 @@ export default function App() {
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview dts={dts} errors={errors} />
       </aside>
+      {showKernels && (
+        <KernelSettings
+          active={kernel?.path ?? null}
+          onUse={(path) => {
+            setShowKernels(false);
+            setRequestedKernel(path);
+          }}
+          onClose={() => setShowKernels(false)}
+        />
+      )}
       {pickingSoc && (
         <SocPicker
           onClose={() => setPickingSoc(false)}

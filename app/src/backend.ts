@@ -8,6 +8,16 @@ export interface CatalogSummary {
   compatibles: number;
   categories: string[];
   skipped: number;
+  path: string;
+  /** From the kernel's Makefile; null when it has none. */
+  version: string | null;
+  /** The index came from the cache. */
+  cached: boolean;
+}
+
+export interface KernelInfo {
+  path: string;
+  version: string | null;
 }
 
 export interface BuildResult {
@@ -28,6 +38,9 @@ export const backend = {
   startupArgs: () => invoke<StartupArgs>("startup_args"),
   loadKernelBindings: (linuxSrc: string) =>
     invoke<CatalogSummary>("load_kernel_bindings", { linuxSrc }),
+  listKernels: () => invoke<KernelInfo[]>("list_kernels"),
+  addKernel: (path: string) => invoke<KernelInfo>("add_kernel", { path }),
+  removeKernel: (path: string) => invoke<KernelInfo[]>("remove_kernel", { path }),
   searchBindings: (query: string, category: string | null, limit = 200) =>
     invoke<Binding[]>("search_bindings", { query, category, limit }),
   getBindings: (paths: string[]) => invoke<Binding[]>("get_bindings", { paths }),

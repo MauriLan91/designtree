@@ -10,6 +10,7 @@
 //! which are embedded because the kernel tree does not ship them.
 //! Files that fail to parse are reported, not fatal.
 
+mod kernel;
 mod macros;
 mod resolve;
 mod search;
@@ -18,6 +19,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use kernel::{index_kernel_tree_cached, kernel_version, CacheStatus};
 pub use macros::{index_dt_macros, DtMacro};
 use serde::{Deserialize, Serialize};
 use serde_norway::Value;
