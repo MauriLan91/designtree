@@ -33,7 +33,7 @@ export function GroupNode({ id, data, selected }: NodeProps<GroupFlowNode>) {
   }
 
   const ports = data.ports ?? [];
-  const row = (direction: "in" | "out") => ports.filter((p) => p.direction === direction);
+  const portsOf = (direction: "in" | "out") => ports.filter((p) => p.direction === direction);
   return (
     <div className={`group-block${selected ? " selected" : ""}`}>
       <div className="group-block-title">
@@ -41,7 +41,7 @@ export function GroupNode({ id, data, selected }: NodeProps<GroupFlowNode>) {
         {data.title}
       </div>
       {(["in", "out"] as const).map((direction) =>
-        row(direction).map((port, i) => {
+        portsOf(direction).map((port, i) => {
           const top = HEADER_HEIGHT + i * PORT_ROW_HEIGHT + PORT_ROW_HEIGHT / 2;
           return (
             <div key={port.id}>
