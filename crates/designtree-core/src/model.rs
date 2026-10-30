@@ -226,6 +226,9 @@ pub struct Group {
     pub position: Position,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<Size>,
+    /// Shown as one block whose ports are the edges that cross its border.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
 }
 
 /// A complete design, serialized as the project file.
@@ -295,5 +298,28 @@ impl Graph {
         self.edges
             .iter()
             .filter(move |e| &e.from == id && matches!(e.kind, EdgeKind::Reference { .. }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_group_is_expanded_unless_the_file_says_otherwise() {
+        let group = |extra: &str| -> Group {
+            serde_json::from_str(&format!(
+                r#"{{"id":"g","title":"SoC","members":[],"position":{{"x":0,"y":0}}{extra}}}"#
+            ))
+            .unwrap()
+        };
+        assert!(!group("").collapsed);
+        assert!(group(r#","collapsed":true"#).collapsed);
+
+        // Expanded groups do not write the field, so older files stay as they were.
+        let text = serde_json::to_string(&group("")).unwrap();
+        assert!(!text.contains("collapsed"));
+        let text = serde_json::to_string(&group(r#","collapsed":true"#)).unwrap();
+        assert!(text.contains(r#""collapsed":true"#));
     }
 }
