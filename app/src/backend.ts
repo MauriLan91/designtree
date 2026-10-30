@@ -1,7 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Binding, Design, DtMacro, InterruptTree, Problem } from "./model";
+import type { Binding, Design, DtMacro, InterruptTree, Problem, SocDtsi } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -39,6 +39,8 @@ export const backend = {
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),
   importDts: (path: string) => invoke<Design>("import_dts", { path }),
+  listSocs: () => invoke<SocDtsi[]>("list_socs"),
+  newBoard: (soc: string) => invoke<Design>("new_board", { soc }),
   setDtcPath: (path: string | null) => invoke<void>("set_dtc_path", { path }),
   buildDtb: (design: Design, output: string) => invoke<BuildResult>("build_dtb", { design, output }),
   writeText: (path: string, content: string) => invoke<void>("write_text", { path, content }),

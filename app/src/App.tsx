@@ -19,6 +19,7 @@ import { DtsPreview } from "./components/DtsPreview";
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
+import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { Inspector } from "./components/Inspector";
 import { DRAG_MIME, Palette } from "./components/Palette";
@@ -68,6 +69,7 @@ export default function App() {
   const [designPath, setDesignPath] = useState<string | null>(null);
   const [build, setBuild] = useState<BuildState | null>(null);
   const [showInterrupts, setShowInterrupts] = useState(false);
+  const [pickingSoc, setPickingSoc] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
@@ -398,6 +400,9 @@ export default function App() {
       <header className="toolbar">
         <span className="brand">DesignTree</span>
         <button onClick={newDesign}>New</button>
+        <button onClick={() => setPickingSoc(true)} disabled={!inTauri} title="Start a board from a SoC .dtsi of the loaded kernel tree">
+          New from SoC…
+        </button>
         <button onClick={openDesign} disabled={!inTauri}>Open…</button>
         <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
@@ -448,6 +453,15 @@ export default function App() {
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview dts={dts} errors={errors} />
       </aside>
+      {pickingSoc && (
+        <SocPicker
+          onClose={() => setPickingSoc(false)}
+          onPick={(soc) => {
+            setPickingSoc(false);
+            loadDesign(() => backend.newBoard(soc.path));
+          }}
+        />
+      )}
     </div>
   );
 }

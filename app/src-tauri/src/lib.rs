@@ -194,6 +194,30 @@ fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
     designtree_core::import_dts_file(&path, &options).map_err(|e| e.to_string())
 }
 
+/// SoC `.dtsi` files of the loaded kernel tree, for starting a board.
+#[tauri::command(async)]
+fn list_socs(state: State<AppState>) -> Result<Vec<designtree_core::SocDtsi>, String> {
+    let linux = loaded_kernel_tree(&state)?;
+    Ok(designtree_core::list_soc_dtsi(&linux))
+}
+
+/// An empty board that includes the SoC `.dtsi` `soc` of the loaded kernel
+/// tree.
+#[tauri::command(async)]
+fn new_board(soc: String, state: State<AppState>) -> Result<Graph, String> {
+    let linux = loaded_kernel_tree(&state)?;
+    designtree_core::new_board(&linux, &soc).map_err(|e| e.to_string())
+}
+
+fn loaded_kernel_tree(state: &AppState) -> Result<PathBuf, String> {
+    state
+        .linux_src
+        .read()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "Load a kernel source tree first".to_string())
+}
+
 #[derive(Serialize)]
 struct BuildResult {
     /// The `.dtb`, when the build succeeded.
@@ -270,6 +294,8 @@ pub fn run() {
             save_design,
             open_design,
             import_dts,
+            list_socs,
+            new_board,
             write_text,
             set_dtc_path,
             build_dtb,

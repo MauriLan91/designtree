@@ -14,6 +14,7 @@ pub mod model;
 pub mod parse;
 mod preprocess;
 pub mod problems;
+pub mod soc;
 pub mod validate;
 
 pub use dts::{to_dts, to_dts_flat, to_dts_flat_mapped, NodeSpan, SourceMap};
@@ -23,4 +24,5 @@ pub use layout::auto_layout;
 pub use model::*;
 pub use preprocess::ImportOptions;
 pub use problems::{parse_problems, Problem, Severity};
+pub use soc::{list_soc_dtsi, new_board, SocDtsi};
 pub use validate::{validate, ValidationError};

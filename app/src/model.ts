@@ -19,6 +19,7 @@ import type {
   PropertySpec,
   PropertyType,
   PropertyValue,
+  SocDtsi,
   ValueChunk,
 } from "./model.gen";
 
@@ -35,6 +36,7 @@ export type {
   PropertySpec,
   PropertyType,
   PropertyValue,
+  SocDtsi,
   ValueChunk,
 };
 
