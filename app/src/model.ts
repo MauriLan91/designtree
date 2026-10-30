@@ -68,8 +68,23 @@ export interface DtNodeData extends Record<string, unknown> {
   todo?: string[];
 }
 
+/** An edge that crosses the border of a collapsed group (see collapse.ts). */
+export interface GroupPort {
+  /** Handle id on the block. */
+  id: string;
+  /** `in`: something outside points at a node inside; `out`: the other way round. */
+  direction: "in" | "out";
+  label: string;
+}
+
 export interface GroupData extends Record<string, unknown> {
   title: string;
+  /** Drawn as one block with ports instead of a frame around its members. */
+  collapsed?: boolean;
+  /** The frame's size while the group is collapsed, to give back on expanding; editor-only. */
+  expandedSize?: { width: number; height: number };
+  /** Ports of a collapsed group; filled in for drawing, not saved. */
+  ports?: GroupPort[];
 }
 
 export interface RefData extends Record<string, unknown> {
@@ -155,7 +170,12 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
       .filter((n): n is GroupFlowNode => n.parentId === g.id && n.type === "group")
       .map(buildGroup),
     position: absolutePosition(g, byId),
-    size: { width: g.measured?.width ?? Number(g.style?.width ?? 300), height: g.measured?.height ?? Number(g.style?.height ?? 200) },
+    // A collapsed group is measured as its block; its own size is what the
+    // frame had (or still has once expanded).
+    size: g.data.collapsed
+      ? g.data.expandedSize ?? { width: 300, height: 200 }
+      : { width: g.measured?.width ?? Number(g.style?.width ?? 300), height: g.measured?.height ?? Number(g.style?.height ?? 200) },
+    collapsed: g.data.collapsed || undefined,
   });
   const designGroups = nodes
     .filter((n): n is GroupFlowNode => n.type === "group" && !n.parentId)
@@ -173,7 +193,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
     groupNodes.push({
       id: g.id,
       type: "group",
-      data: { title: g.title },
+      data: { title: g.title, collapsed: g.collapsed, expandedSize: g.collapsed ? (g.size ?? undefined) : undefined },
       position: parent ? { x: abs.x - parent.origin.x, y: abs.y - parent.origin.y } : abs,
       parentId: parent?.id,
       style: { width: g.size?.width ?? 300, height: g.size?.height ?? 200 },

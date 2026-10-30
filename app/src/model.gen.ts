@@ -68,7 +68,11 @@ export type EdgeKind = { "kind": "child" } | { "kind": "reference", property: st
 
 export type Edge = { from: NodeId, to: NodeId, } & ({ "kind": "child" } | { "kind": "reference", property: string, args?: Array<number>, });
 
-export type Group = { id: string, title: string, members: Array<NodeId>, subgroups?: Array<Group>, position: Position, size?: Size | null, };
+export type Group = { id: string, title: string, members: Array<NodeId>, subgroups?: Array<Group>, position: Position, size?: Size | null, 
+/**
+ * Shown as one block whose ports are the edges that cross its border.
+ */
+collapsed?: boolean, };
 
 export type MemReserve = { address: number | string, size: number | string, 
 /**

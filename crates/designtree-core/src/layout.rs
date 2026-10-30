@@ -275,6 +275,7 @@ fn bus_group(
             width: x1 - x0,
             height: y1 - y0,
         }),
+        collapsed: false,
     };
     (group, (x0, y0, x1, y1))
 }
@@ -435,6 +436,7 @@ mod tests {
             subgroups: vec![],
             position: Position::default(),
             size: None,
+            collapsed: false,
         };
         g.groups = vec![user.clone()];
         auto_layout(&mut g);
