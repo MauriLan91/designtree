@@ -12,6 +12,7 @@
 
 mod macros;
 mod resolve;
+mod search;
 
 use std::fmt;
 use std::fs;
