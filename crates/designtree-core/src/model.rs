@@ -255,6 +255,11 @@ pub struct Graph {
     /// or a path starting with `/`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted_nodes: Vec<String>,
+    /// Version of the kernel whose binding schemas the design was edited
+    /// against (`7.3`); the editor warns when it opens the design with
+    /// another one. Not part of the exported devicetree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

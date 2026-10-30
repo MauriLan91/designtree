@@ -98,7 +98,13 @@ trailing_includes?: Array<string>,
  * Inherited nodes the board deletes, as reference targets (a label,
  * or a path starting with `/`).
  */
-deleted_nodes?: Array<string>, };
+deleted_nodes?: Array<string>, 
+/**
+ * Version of the kernel whose binding schemas the design was edited
+ * against (`7.3`); the editor warns when it opens the design with
+ * another one. Not part of the exported devicetree.
+ */
+kernel?: string | null, };
 
 export type InterruptController = { node: NodeId, 
 /**

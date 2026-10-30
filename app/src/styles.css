@@ -196,3 +196,11 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .binding-text { flex: 1; min-width: 0; }
 .star { border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--muted); cursor: pointer; }
 .star[aria-pressed="true"] { background: none; color: var(--ref); }
+.modal-actions { gap: 6px; }
+.kernel-list { list-style: none; margin: 0; padding: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.kernel-list li { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.kernel-list li.active { border-color: var(--accent); }
+.kernel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kernel-text span { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kernel-list em { font-style: normal; font-size: 12px; color: var(--accent); }
+.kernel-warning { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 5; padding: 6px 10px; border: 1px solid var(--ref); border-radius: 6px; background: var(--panel); font-size: 12px; }

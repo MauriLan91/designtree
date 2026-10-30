@@ -9,7 +9,7 @@ use designtree_bindings::{Binding, Catalog, DtMacro};
 use designtree_core::dtc::DtcError;
 use designtree_core::{Graph, ImportOptions, InterruptTree, Problem};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 #[derive(Default)]
 struct AppState {
@@ -29,15 +29,120 @@ struct CatalogSummary {
     compatibles: usize,
     categories: Vec<String>,
     skipped: usize,
+    /// The kernel tree that was indexed.
+    path: PathBuf,
+    /// Its version, from the `Makefile`.
+    version: Option<String>,
+    /// The index came from the cache: no schema was read.
+    cached: bool,
 }
 
-/// Indexes the binding schemas of a kernel tree and keeps them in memory.
+/// A registered kernel checkout.
+#[derive(Serialize)]
+struct KernelInfo {
+    path: PathBuf,
+    version: Option<String>,
+}
+
+impl KernelInfo {
+    fn new(path: PathBuf) -> Self {
+        let version = designtree_bindings::kernel_version(&path);
+        Self { path, version }
+    }
+}
+
+/// The registered kernel checkouts live in one file of the app's config
+/// directory, the indexes in its cache directory.
+fn kernels_file(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("kernels.json"))
+}
+
+fn read_kernels(app: &AppHandle) -> Vec<PathBuf> {
+    let Ok(file) = kernels_file(app) else {
+        return Vec::new();
+    };
+    fs::read_to_string(file)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn write_kernels(app: &AppHandle, kernels: &[PathBuf]) -> Result<(), String> {
+    let file = kernels_file(app)?;
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let text = serde_json::to_string_pretty(kernels).map_err(|e| e.to_string())?;
+    fs::write(file, text).map_err(|e| e.to_string())
+}
+
+/// The absolute path of `path`, when it is a kernel source tree (it has
+/// binding schemas). Registered paths are always in this form, so that one
+/// checkout is not listed twice.
+fn kernel_tree(path: &std::path::Path) -> Result<PathBuf, String> {
+    let absolute = path
+        .canonicalize()
+        .map_err(|e| format!("`{}`: {e}", path.display()))?;
+    if !absolute.join(designtree_bindings::BINDINGS_DIR).is_dir() {
+        return Err(format!(
+            "`{}` does not look like a Linux source tree (missing {})",
+            path.display(),
+            designtree_bindings::BINDINGS_DIR
+        ));
+    }
+    Ok(absolute)
+}
+
+fn register_kernel(app: &AppHandle, path: &PathBuf) -> Result<(), String> {
+    let mut kernels = read_kernels(app);
+    if !kernels.contains(path) {
+        kernels.push(path.clone());
+        write_kernels(app, &kernels)?;
+    }
+    Ok(())
+}
+
+/// The registered kernel checkouts with their versions; those that are no
+/// longer there are listed without a version.
 #[tauri::command]
+fn list_kernels(app: AppHandle) -> Vec<KernelInfo> {
+    read_kernels(&app)
+        .into_iter()
+        .map(KernelInfo::new)
+        .collect()
+}
+
+/// Registers a kernel checkout.
+#[tauri::command]
+fn add_kernel(path: PathBuf, app: AppHandle) -> Result<KernelInfo, String> {
+    let path = kernel_tree(&path)?;
+    register_kernel(&app, &path)?;
+    Ok(KernelInfo::new(path))
+}
+
+/// Forgets a kernel checkout (its files and its cached index stay).
+#[tauri::command]
+fn remove_kernel(path: PathBuf, app: AppHandle) -> Result<Vec<KernelInfo>, String> {
+    let mut kernels = read_kernels(&app);
+    kernels.retain(|k| k != &path);
+    write_kernels(&app, &kernels)?;
+    Ok(kernels.into_iter().map(KernelInfo::new).collect())
+}
+
+/// Indexes the binding schemas of a kernel tree, from the cache when they
+/// have not changed, keeps them in memory, and registers the checkout.
+/// Runs off the UI thread: a first index reads thousands of files.
+#[tauri::command(async)]
 fn load_kernel_bindings(
     linux_src: PathBuf,
+    app: AppHandle,
     state: State<AppState>,
 ) -> Result<CatalogSummary, String> {
-    let catalog = designtree_bindings::index_kernel_tree(&linux_src).map_err(|e| e.to_string())?;
+    let linux_src = kernel_tree(&linux_src)?;
+    let cache_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let (catalog, status) = designtree_bindings::index_kernel_tree_cached(&linux_src, &cache_dir)
+        .map_err(|e| e.to_string())?;
     let mut categories: Vec<String> = catalog
         .bindings
         .iter()
@@ -50,10 +155,15 @@ fn load_kernel_bindings(
         compatibles: catalog.bindings.iter().map(|b| b.compatibles.len()).sum(),
         categories,
         skipped: catalog.skipped.len(),
+        version: designtree_bindings::kernel_version(&linux_src),
+        cached: status == designtree_bindings::CacheStatus::Hit,
+        path: linux_src.clone(),
     };
     *state.macros.write().unwrap() = designtree_bindings::index_dt_macros(&linux_src);
     *state.catalog.write().unwrap() = catalog;
-    *state.linux_src.write().unwrap() = Some(linux_src);
+    *state.linux_src.write().unwrap() = Some(linux_src.clone());
+    // A checkout that cannot be remembered is still loaded.
+    let _ = register_kernel(&app, &linux_src);
     Ok(summary)
 }
 
@@ -282,6 +392,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             startup_args,
             load_kernel_bindings,
+            list_kernels,
+            add_kernel,
+            remove_kernel,
             search_bindings,
             get_bindings,
             search_dt_macros,
