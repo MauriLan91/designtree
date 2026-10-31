@@ -16,6 +16,7 @@ import {
 import { backend, dialogs, inTauri } from "./backend";
 import { DtNode } from "./components/DtNode";
 import { DtsPreview } from "./components/DtsPreview";
+import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "./collapse";
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
@@ -383,9 +384,17 @@ export default function App() {
   };
 
   const focusNode = (id: string) => {
+    // A node inside a collapsed group is not drawn: open the group first.
+    const closed = new Set(collapsedAncestors(nodes, id));
     setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
-    setNodes((ns) => ns.map((n) => (n.selected === (n.id === id) ? n : ({ ...n, selected: n.id === id } as FlowNode))));
-    fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
+    setNodes((ns) =>
+      ns.map((n) => {
+        const opened = closed.has(n.id) && isGroupNode(n) ? toggleCollapsed(n) : n;
+        return opened.selected === (n.id === id) ? opened : ({ ...opened, selected: n.id === id } as FlowNode);
+      }),
+    );
+    if (closed.size) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
+    else fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
   };
 
   const nodeName = (id: string) => {
@@ -393,6 +402,8 @@ export default function App() {
     if (!node || !isDtNode(node)) return undefined;
     return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
+
+  const view = useMemo(() => collapseView(nodes, edges, (id) => nodeName(id) ?? id), [nodes, edges]);
 
   const chooseDtc = async () => {
     const path = await dialogs.pickDtc();
@@ -438,8 +449,8 @@ export default function App() {
           </div>
         )}
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={view.nodes}
+          edges={view.edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
