@@ -20,10 +20,12 @@ mod types;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt;
 use std::sync::{Arc, RwLock};
 
+use jsonschema::error::ValidationErrorKind;
 use jsonschema::paths::LocationSegment;
-use jsonschema::{Draft, Keyword, Retrieve, Uri, ValidationError, Validator};
+use jsonschema::{Draft, Keyword, Registry, Retrieve, Uri, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -119,19 +121,31 @@ pub struct SchemaProblem {
     pub schema: String,
 }
 
-/// Resolves `$ref`s between schemas from the processed set.
-struct Registry(Arc<BTreeMap<String, Value>>);
+/// `property: message (schema)`, without the node.
+impl fmt::Display for SchemaProblem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(property) = &self.property {
+            write!(f, "{property}: ")?;
+        }
+        f.write_str(&self.message)?;
+        if !self.schema.is_empty() {
+            write!(f, " ({})", self.schema)?;
+        }
+        Ok(())
+    }
+}
 
-impl Retrieve for Registry {
+/// A `$ref` to a schema the set does not have resolves to `false`, as in
+/// dt-validate: whatever relies on a missing schema fails instead of
+/// passing unchecked.
+struct MissingIsFalse;
+
+impl Retrieve for MissingIsFalse {
     fn retrieve(
         &self,
-        uri: &Uri<String>,
+        _uri: &Uri<String>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        let id = uri.as_str().trim_end_matches('#');
-        self.0
-            .get(id)
-            .cloned()
-            .ok_or_else(|| format!("no schema `{id}`").into())
+        Ok(Value::Bool(false))
     }
 }
 
@@ -202,14 +216,15 @@ impl<'i> Keyword<'i> for TypeSize {
 /// compiled on first use and kept, so the first check of a design is the
 /// slowest.
 pub struct Checker {
-    schemas: Arc<BTreeMap<String, Value>>,
+    /// Every processed schema, shared by all validators.
+    registry: Registry<'static>,
     types: types::TypeDb,
     /// Schema for each documented compatible string.
     by_compatible: HashMap<String, String>,
-    /// Schemas with a `select`, tried on every node.
-    selecting: Vec<String>,
-    /// `None` for a schema the validator cannot compile.
-    validators: RwLock<HashMap<String, Option<Arc<Validator>>>>,
+    /// Schemas with a `select`, tried on every node, with the selector.
+    selecting: Vec<(String, Value)>,
+    /// Compiled validators, or why one could not be compiled.
+    validators: RwLock<HashMap<String, Result<Arc<Validator>, String>>>,
 }
 
 impl Checker {
@@ -221,7 +236,7 @@ impl Checker {
         for (id, schema) in &schemas {
             match schema.get("select") {
                 Some(Value::Bool(false)) => {}
-                Some(_) => selecting.push(id.clone()),
+                Some(select) => selecting.push((id.clone(), select.clone())),
                 None => {
                     let Some(compatible) =
                         schema.get("properties").and_then(|p| p.get("compatible"))
@@ -240,8 +255,16 @@ impl Checker {
                 }
             }
         }
+        let resources = schemas.into_iter().map(|(id, s)| (id, Arc::new(s)));
+        // Only an invalid `$id` makes this fail; nothing can be checked then.
+        let registry = Registry::new()
+            .draft(Draft::Draft201909)
+            .retriever(MissingIsFalse)
+            .extend(resources)
+            .and_then(|builder| builder.prepare())
+            .unwrap_or_else(|_| Registry::new().prepare().expect("an empty registry"));
         Checker {
-            schemas: Arc::new(schemas),
+            registry,
             types,
             by_compatible,
             selecting,
@@ -253,36 +276,37 @@ impl Checker {
     /// themselves), so that the first check is not much slower than the
     /// next ones. Meant to run in the background after loading.
     pub fn warm_up(&self) {
-        for id in &self.selecting {
-            self.validator(&format!("{id}#select"));
-            self.validator(id);
+        for (id, select) in &self.selecting {
+            let _ = self.select_validator(id, select);
+            let _ = self.validator(id);
         }
     }
 
-    /// The validator of a schema (`key` = id) or of its `select` (`key` =
-    /// id + `#select`).
-    fn validator(&self, key: &str) -> Option<Arc<Validator>> {
-        if let Some(found) = self.validators.read().ok()?.get(key) {
-            return found.clone();
-        }
-        let (id, select) = match key.strip_suffix("#select") {
-            Some(id) => (id, true),
-            None => (key, false),
-        };
-        let schema = self.schemas.get(id)?;
-        let root = if select {
-            let mut select = schema.get("select")?.clone();
+    /// The validator of the schema `id`.
+    fn validator(&self, id: &str) -> Result<Arc<Validator>, String> {
+        self.compiled(id, || json!({ "$ref": id }))
+    }
+
+    /// The validator of the `select` of schema `id`.
+    fn select_validator(&self, id: &str, select: &Value) -> Result<Arc<Validator>, String> {
+        self.compiled(&format!("{id}#select"), || {
+            let mut select = select.clone();
             // Relative `$ref`s in the selector resolve against its schema.
             if let Value::Object(map) = &mut select {
                 map.insert("$id".into(), json!(id));
             }
             select
-        } else {
-            json!({ "$ref": id })
-        };
+        })
+    }
+
+    fn compiled(&self, key: &str, root: impl FnOnce() -> Value) -> Result<Arc<Validator>, String> {
+        if let Some(found) = self.validators.read().unwrap().get(key) {
+            return found.clone();
+        }
         let built = jsonschema::options()
             .with_draft(Draft::Draft201909)
-            .with_retriever(Registry(self.schemas.clone()))
+            .with_registry(&self.registry)
+            .with_retriever(MissingIsFalse)
             .with_keyword("typeSize", |_, value, _| {
                 let bits = value
                     .as_u64()
@@ -290,12 +314,13 @@ impl Checker {
                     .unwrap_or(32);
                 Ok(Box::new(TypeSize(bits)))
             })
-            .build(&root)
-            .ok()
-            .map(Arc::new);
-        if let Ok(mut validators) = self.validators.write() {
-            validators.insert(key.to_owned(), built.clone());
-        }
+            .build(&root())
+            .map(Arc::new)
+            .map_err(|e| e.to_string());
+        self.validators
+            .write()
+            .unwrap()
+            .insert(key.to_owned(), built.clone());
         built
     }
 
@@ -374,20 +399,27 @@ impl Checker {
                 ids.push(id);
             }
         }
-        for id in &self.selecting {
-            let selected = match self.schemas.get(id).and_then(|s| s.get("select")) {
-                Some(Value::Bool(true)) => true,
-                _ => self
-                    .validator(&format!("{id}#select"))
-                    .is_some_and(|v| v.is_valid(instance)),
-            };
+        for (id, select) in &self.selecting {
+            let selected = select == &Value::Bool(true)
+                || self
+                    .select_validator(id, select)
+                    .is_ok_and(|v| v.is_valid(instance));
             if selected {
                 ids.push(id);
             }
         }
         for id in ids {
-            let Some(validator) = self.validator(id) else {
-                continue;
+            let validator = match self.validator(id) {
+                Ok(validator) => validator,
+                Err(reason) => {
+                    out.push(SchemaProblem {
+                        node: path.to_owned(),
+                        property: None,
+                        message: format!("the binding cannot be checked: {reason}"),
+                        schema: schema_path(id),
+                    });
+                    continue;
+                }
             };
             for error in validator.iter_errors(instance) {
                 if (disabled || instance_disabled(&error)) && about_missing_or_extra(&error) {
@@ -450,9 +482,8 @@ fn about_missing_or_extra(error: &ValidationError) -> bool {
     if hit(error) {
         return true;
     }
-    use jsonschema::error::ValidationErrorKind as Kind;
     match error.kind() {
-        Kind::AnyOf { context } | Kind::OneOfNotValid { context } => {
+        ValidationErrorKind::AnyOf { context } | ValidationErrorKind::OneOfNotValid { context } => {
             context.iter().flatten().any(hit)
         }
         _ => false,
@@ -483,7 +514,49 @@ fn problem(instance: &Value, path: &str, id: &str, error: &ValidationError) -> S
     SchemaProblem {
         node,
         property,
-        message: error.to_string(),
-        schema: id.strip_prefix(ID_BASE).unwrap_or(id).to_owned(),
+        message: describe(error),
+        schema: schema_path(id),
+    }
+}
+
+/// `serial/8250.yaml` for the schema `$id` `http://devicetree.org/schemas/serial/8250.yaml`.
+fn schema_path(id: &str) -> String {
+    id.strip_prefix(ID_BASE).unwrap_or(id).to_owned()
+}
+
+/// The message of an error, like dt-schema's `format_error`: a failed
+/// `oneOf`/`anyOf` lists what would satisfy it instead of printing the
+/// instance, and a node is never printed whole.
+fn describe(error: &ValidationError) -> String {
+    match error.kind() {
+        ValidationErrorKind::AnyOf { context } | ValidationErrorKind::OneOfNotValid { context } => {
+            let depth = error.instance_path().segments().count();
+            let mut messages: Vec<String> = Vec::new();
+            for sub in context.iter().flatten() {
+                let below: Vec<String> = sub
+                    .instance_path()
+                    .segments()
+                    .skip(depth)
+                    .map(|s| match s {
+                        LocationSegment::Property(p) => p.into_owned(),
+                        LocationSegment::Index(i) => i.to_string(),
+                    })
+                    .collect();
+                let mut message = describe(sub);
+                if !below.is_empty() {
+                    message = format!("{}: {message}", below.join("/"));
+                }
+                if !messages.contains(&message) {
+                    messages.push(message);
+                }
+            }
+            match messages.len() {
+                0 => error.masked_with("the value").to_string(),
+                1 => messages.remove(0),
+                _ => format!("one of these must be fixed: {}", messages.join("; ")),
+            }
+        }
+        _ if error.instance().is_object() => error.masked_with("the node").to_string(),
+        _ => error.to_string(),
     }
 }

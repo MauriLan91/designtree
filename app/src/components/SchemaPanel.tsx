@@ -4,7 +4,8 @@ import { ProblemList } from "./ProblemList";
 export interface SchemaState {
   /** A check is running; the problems are from the previous one. */
   checking: boolean;
-  problems: Problem[];
+  /** Null when the design cannot be compiled, so it was not checked. */
+  problems: Problem[] | null;
 }
 
 interface Props {
@@ -15,15 +16,20 @@ interface Props {
 
 /** Problems the binding schemas find in the design, kept up to date while editing. */
 export function SchemaPanel({ schema, nodeName, onFocusNode }: Props) {
-  const count = schema.problems.length;
+  const problems = schema.problems ?? [];
+  const count = problems.length;
   return (
     <section className="build schema">
       <h2>Schema check</h2>
       <p className="hint">
-        {count === 0 ? "No problems found" : `${count} problem${count === 1 ? "" : "s"}`}
+        {schema.problems === null
+          ? "Not checked: the design has structural errors (see the DTS preview)"
+          : count === 0
+            ? "No problems found"
+            : `${count} problem${count === 1 ? "" : "s"}`}
         {schema.checking && " · checking…"}
       </p>
-      {count > 0 && <ProblemList problems={schema.problems} nodeName={nodeName} onFocusNode={onFocusNode} />}
+      {count > 0 && <ProblemList problems={problems} nodeName={nodeName} onFocusNode={onFocusNode} />}
     </section>
   );
 }

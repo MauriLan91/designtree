@@ -290,13 +290,13 @@ pub fn index_dir(root: &Path) -> Result<Catalog, IndexError> {
             Err(err) => catalog.skipped.push((rel, err.to_string())),
         }
     }
-    let schemas = resolve::Schemas::new(docs.iter().cloned());
+    let core = resolve::core_docs();
+    let schemas = resolve::Schemas::new(docs.iter().cloned(), core.iter().cloned());
     catalog.bindings = docs
         .iter()
         .filter_map(|(rel, doc)| binding(&schemas, doc, rel))
         .collect();
     // Kernel schemas first: they win over core schemas with the same `$id`.
-    let core = resolve::core_docs();
     catalog.schemas = SchemaSet::new(
         docs.iter()
             .chain(&core)

@@ -125,15 +125,29 @@ export default function App() {
     return () => clearTimeout(t);
   }, [nodes, edges, extras]);
 
+  // What the schema check depends on: moving or selecting nodes changes
+  // `nodes` but not the devicetree, and must not start a check.
+  const schemaInput = useMemo(() => {
+    const design = toDesign(nodes, edges, extras);
+    const tree = {
+      ...design,
+      nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
+      groups: [],
+    };
+    return { design: tree, key: JSON.stringify(tree) };
+  }, [nodes, edges, extras]);
+  const schemaKey = schemaInput.key;
+
   // Check the design against the binding schemas while editing; only the
   // latest check's answer is kept.
   useEffect(() => {
     if (!inTauri || !kernel) return;
+    const design = schemaInput.design;
     const t = setTimeout(async () => {
       const run = ++schemaRun.current;
       setSchema((s) => ({ ...s, checking: true }));
       try {
-        const problems = await backend.checkSchemas(toDesign(nodes, edges, extras));
+        const problems = await backend.checkSchemas(design);
         if (run === schemaRun.current) setSchema({ checking: false, problems });
       } catch (e) {
         if (run === schemaRun.current) {
@@ -142,11 +156,11 @@ export default function App() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [nodes, edges, extras, kernel]);
+  }, [schemaKey, kernel]);
 
   const nodeProblems = useMemo(() => {
     const byNode = new Map<string, string[]>();
-    for (const p of schema.problems) {
+    for (const p of schema.problems ?? []) {
       if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
     }
     return byNode;

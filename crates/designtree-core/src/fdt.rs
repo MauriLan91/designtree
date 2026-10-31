@@ -193,6 +193,8 @@ struct Flat {
     name: String,
     props: Vec<(String, Value)>,
     children: Vec<Flat>,
+    /// An `/omit-if-no-ref/` node nothing refers to.
+    omitted: bool,
 }
 
 /// Compiles a design to a devicetree blob. Fails if the graph does not
@@ -245,15 +247,17 @@ pub fn to_dtb(graph: &Graph) -> Result<Dtb, Vec<ValidationError>> {
             children: writer
                 .graph
                 .children(&node.id)
-                .filter(|c| !c.omit_if_no_ref || used.contains(&c.id))
                 .map(|c| build(writer, c, used))
                 .collect(),
+            omitted: node.omit_if_no_ref && !used.contains(&node.id),
         }
     }
     let mut tree = build(&writer, root, &used);
 
     // Phandles, in dtc's order: nodes in tree order, then properties and
     // references in order. Explicit `phandle` properties keep their value.
+    // dtc assigns them before dropping unreferenced `/omit-if-no-ref/`
+    // nodes, so references from those still take a number.
     let mut taken: HashSet<u32> = HashSet::new();
     let mut assigned: HashMap<NodeId, u32> = HashMap::new();
     fn explicit(flat: &Flat, taken: &mut HashSet<u32>, assigned: &mut HashMap<NodeId, u32>) {
@@ -313,6 +317,11 @@ pub fn to_dtb(graph: &Graph) -> Result<Dtb, Vec<ValidationError>> {
             .for_each(|c| patch(c, assigned, fresh));
     }
     patch(&mut tree, &assigned, &fresh.into_iter().collect());
+    fn prune(flat: &mut Flat) {
+        flat.children.retain(|c| !c.omitted);
+        flat.children.iter_mut().for_each(prune);
+    }
+    prune(&mut tree);
 
     let mut nodes = Vec::new();
     fn list(flat: &Flat, path: &str, nodes: &mut Vec<(String, NodeId)>) {

@@ -98,7 +98,9 @@ fn main() -> Result<()> {
             output,
             stats,
         } => {
-            let catalog = designtree_bindings::index_kernel_tree(&linux_src)?;
+            let mut catalog = designtree_bindings::index_kernel_tree(&linux_src)?;
+            // The processed schemas are for `check`, not for readers of the index.
+            catalog.schemas = Default::default();
             eprintln!(
                 "indexed {} bindings ({} skipped)",
                 catalog.bindings.len(),
@@ -239,15 +241,12 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
         println!("{}", serde_json::to_string_pretty(&problems)?);
     } else {
         for p in &problems {
-            let property = p
-                .property
-                .as_deref()
-                .map(|p| format!("{p}: "))
-                .unwrap_or_default();
-            println!("{}: {property}{} ({})", p.node, p.message, p.schema);
+            println!("{}: {p}", p.node);
         }
     }
-    eprintln!("{} problem(s)", problems.len());
+    if !problems.is_empty() {
+        bail!("{} problem(s) found", problems.len());
+    }
     Ok(())
 }
 

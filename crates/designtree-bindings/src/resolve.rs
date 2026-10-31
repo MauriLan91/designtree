@@ -46,11 +46,14 @@ type Candidate<'a> = (&'a str, &'a Value);
 
 impl Schemas {
     /// Builds the registry from the kernel schemas (path relative to the
-    /// bindings directory, document) and the embedded core schemas.
-    pub(crate) fn new(kernel: impl IntoIterator<Item = (String, Value)>) -> Self {
+    /// bindings directory, document) and the core schemas ([`core_docs`]).
+    pub(crate) fn new(
+        kernel: impl IntoIterator<Item = (String, Value)>,
+        core: impl IntoIterator<Item = (String, Value)>,
+    ) -> Self {
         let mut docs = HashMap::new();
         let mut order = Vec::new();
-        for (rel, doc) in core_docs() {
+        for (rel, doc) in core {
             let id = format!("/schemas/{rel}");
             order.push((id.clone(), applies_to_any_node(&doc)));
             docs.insert(id, doc);

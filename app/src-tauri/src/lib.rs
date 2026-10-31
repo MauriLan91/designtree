@@ -270,32 +270,26 @@ fn validate_design(design: Graph) -> Vec<String> {
 /// Empty until a kernel tree is loaded, and for a design that cannot be
 /// compiled (the DTS preview shows why). Runs off the UI thread.
 #[tauri::command(async)]
-fn check_schemas(design: Graph, state: State<AppState>) -> Result<Vec<Problem>, String> {
+fn check_schemas(design: Graph, state: State<AppState>) -> Result<Option<Vec<Problem>>, String> {
     let Some(checker) = state.checker.read().unwrap().clone() else {
-        return Ok(Vec::new());
+        return Ok(None);
     };
+    // A design with structural errors has no blob; the DTS preview shows why.
     let Ok(dtb) = designtree_core::to_dtb(&design) else {
-        return Ok(Vec::new());
+        return Ok(None);
     };
     let problems = checker.check_dtb(&dtb.blob).map_err(|e| e.to_string())?;
-    Ok(problems
-        .into_iter()
-        .map(|p| {
-            let mut message = match &p.property {
-                Some(property) => format!("{property}: {}", p.message),
-                None => p.message,
-            };
-            if !p.schema.is_empty() {
-                message.push_str(&format!(" ({})", p.schema));
-            }
-            Problem {
+    Ok(Some(
+        problems
+            .into_iter()
+            .map(|p| Problem {
                 severity: Severity::Error,
-                message,
+                message: format!("{p}"),
                 line: None,
                 node: dtb.node_at(&p.node).cloned(),
-            }
-        })
-        .collect())
+            })
+            .collect(),
+    ))
 }
 
 /// Which controller each device interrupts, and what is missing.
