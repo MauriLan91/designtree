@@ -54,6 +54,15 @@ replaceable layer.
   dtc: phandles assigned to referenced nodes, path references expanded,
   unreferenced `/omit-if-no-ref/` nodes dropped, with the path of each node.
   It feeds schema validation; the G1 corpus checks it against dtc.
+- `address_map` lists the `reg` regions under every bus, translated to CPU
+  addresses through the `ranges` of each bus above (an empty `ranges;` is
+  one to one; a bus without `ranges`, such as I2C, keeps local addresses).
+  It flags regions outside their bus's windows and enabled regions that
+  overlap, in CPU space across the whole tree and on each local bus. A node
+  may contain its descendants, `/reserved-memory` may overlap `/memory`, and
+  bridges with `ranges` are left out because their registers often span
+  devices placed elsewhere. Buses with more than two address or size cells
+  (PCI) are not translated.
 - Canvas positions and groups are stored but never affect the output.
 
 ## designtree-bindings
