@@ -85,3 +85,52 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  g3-corpus:
+    runs-on: ubuntu-latest
+    env:
+      KERNEL_TAG: v7.3
+      # dt-schema at the version of the embedded core schemas
+      # (crates/designtree-bindings/dtschema).
+      DTSCHEMA_VERSION: "2026.9"
+      DESIGNTREE_G3_THRESHOLD: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "dtschema==$DTSCHEMA_VERSION"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache the kernel devicetree sources
+        id: kernel
+        uses: actions/cache@v4
+        with:
+          path: ~/linux-g1
+          key: linux-g1-${{ env.KERNEL_TAG }}-${{ hashFiles('scripts/fetch-kernel-dts.sh') }}
+      - name: Sparse checkout of the kernel at the pinned tag
+        if: steps.kernel.outputs.cache-hit != 'true'
+        run: scripts/fetch-kernel-dts.sh ~/linux-g1
+      - name: Run the corpus
+        shell: bash
+        run: |
+          export DESIGNTREE_LINUX_SRC="$HOME/linux-g1"
+          cargo test --release -p designtree-cli --test g3_corpus -- --ignored --nocapture | tee g3.log
+      - name: Report the recall
+        if: always()
+        shell: bash
+        run: |
+          [ -f g3.log ] || exit 0
+          {
+            echo "### G3 seeded-error corpus (kernel $KERNEL_TAG, dt-schema $DTSCHEMA_VERSION)"
+            grep '^G3:' g3.log || echo "The corpus did not finish."
+            echo
+            grep '^|' g3.log || true
+            if grep -qE '^(MISS|ERROR)' g3.log; then
+              echo
+              echo '```'
+              grep -E '^(MISS|ERROR|        )' g3.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

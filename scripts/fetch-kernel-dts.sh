@@ -1,6 +1,7 @@
 #!/bin/sh
-# Sparse checkout of the parts of the Linux kernel the G1 round-trip corpus
-# needs (devicetree sources, dt-bindings headers), at a pinned tag.
+# Sparse checkout of the parts of the Linux kernel the G1 round-trip and G3
+# seeded-error corpora need (devicetree sources, dt-bindings headers,
+# binding schemas), at a pinned tag.
 #
 #   scripts/fetch-kernel-dts.sh [DIR]    DIR defaults to ~/linux-g1
 #
@@ -20,6 +21,7 @@ else
 fi
 # include/uapi/linux holds the input event codes that dt-bindings/input links to.
 git -C "$DIR" sparse-checkout set \
+    Documentation/devicetree/bindings \
     arch/arm/boot/dts arch/arm64/boot/dts \
     include/dt-bindings include/uapi/linux \
     scripts/dtc/include-prefixes
