@@ -6,7 +6,14 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// Runs `program` with `args`, feeding `input` on stdin.
+#[allow(dead_code)]
 pub fn run(program: &str, args: &[&str], input: &str) -> Result<String, String> {
+    let output = run_bytes(program, args, input.as_bytes())?;
+    String::from_utf8(output).map_err(|e| e.to_string())
+}
+
+/// Like [`run`], for binary input and output.
+pub fn run_bytes(program: &str, args: &[&str], input: &[u8]) -> Result<Vec<u8>, String> {
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::piped())
@@ -18,7 +25,7 @@ pub fn run(program: &str, args: &[&str], input: &str) -> Result<String, String> 
         .stdin
         .take()
         .expect("piped stdin")
-        .write_all(input.as_bytes())
+        .write_all(input)
         .map_err(|e| format!("writing to {program}: {e}"))?;
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
     if !output.status.success() {
@@ -27,7 +34,87 @@ pub fn run(program: &str, args: &[&str], input: &str) -> Result<String, String> 
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+    Ok(output.stdout)
+}
+
+/// The blob dtc compiles `dts` to.
+#[allow(dead_code)]
+pub fn compile(dts: &str, include_dir: Option<&Path>) -> Result<Vec<u8>, String> {
+    let include_dir = include_dir.map(|dir| dir.display().to_string());
+    let mut args = vec!["-q", "-I", "dts", "-O", "dtb"];
+    if let Some(dir) = &include_dir {
+        args.extend(["-i", dir.as_str()]);
+    }
+    args.push("-");
+    run_bytes("dtc", &args, dts.as_bytes())
+}
+
+/// A blob decompiled by dtc with nodes and properties sorted, and the
+/// path of the node each phandle number stands for.
+fn sorted_blob(blob: &[u8]) -> Result<(Vec<String>, HashMap<u64, String>), String> {
+    let text = run_bytes("dtc", &["-q", "-s", "-I", "dtb", "-O", "dts", "-"], blob)?;
+    let text = String::from_utf8(text).map_err(|e| e.to_string())?;
+    let mut lines = Vec::new();
+    let mut phandles = HashMap::new();
+    let mut stack: Vec<String> = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if let Some(name) = line.strip_suffix(" {") {
+            let path = match stack.last() {
+                None => "/".to_owned(),
+                Some(parent) if parent == "/" => format!("/{name}"),
+                Some(parent) => format!("{parent}/{name}"),
+            };
+            stack.push(path);
+        } else if line == "};" {
+            stack.pop();
+        } else if let Some(value) = line
+            .strip_prefix("phandle = <")
+            .and_then(|v| v.strip_suffix(">;"))
+        {
+            let number = u64::from_str_radix(value.trim_start_matches("0x"), 16).unwrap_or(0);
+            phandles.insert(number, stack.last().cloned().unwrap_or_default());
+            continue;
+        }
+        lines.push(line.to_owned());
+    }
+    Ok((lines, phandles))
+}
+
+/// Whether two blobs hold the same tree, whatever the order of nodes and
+/// properties and the numbers given to phandles: a number that differs
+/// must be a phandle of the same node on both sides. Returns the first
+/// difference.
+#[allow(dead_code)]
+pub fn blob_difference(expected: &[u8], actual: &[u8]) -> Result<Option<String>, String> {
+    let (theirs, their_phandles) = sorted_blob(expected)?;
+    let (ours, our_phandles) = sorted_blob(actual)?;
+    let number = |token: &str| {
+        let token = token.trim_matches(|c| matches!(c, '<' | '>' | ';' | ','));
+        token
+            .strip_prefix("0x")
+            .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+    };
+    let same = |a: &str, b: &str| {
+        let (a, b): (Vec<&str>, Vec<&str>) = (
+            a.split_whitespace().collect(),
+            b.split_whitespace().collect(),
+        );
+        a.len() == b.len()
+            && a.iter().zip(&b).all(|(x, y)| {
+                x == y
+                    || match (number(x), number(y)) {
+                        (Some(x), Some(y)) => their_phandles
+                            .get(&x)
+                            .is_some_and(|path| our_phandles.get(&y) == Some(path)),
+                        _ => false,
+                    }
+            })
+    };
+    let at = theirs.iter().zip(&ours).position(|(t, o)| !same(t, o));
+    Ok(match at {
+        None if theirs.len() == ours.len() => None,
+        _ => first_difference(&theirs, &ours),
+    })
 }
 
 // Not every test binary that includes this module uses every helper.
@@ -43,6 +130,7 @@ pub fn dtc_available() -> bool {
 /// of cells into `<...>` are dropped.
 ///
 /// `include_dir` is where dtc looks for `/include/` files.
+#[allow(dead_code)]
 pub fn canonical(dts: &str, include_dir: Option<&Path>) -> Result<Vec<String>, String> {
     let include_dir = include_dir.map(|dir| dir.display().to_string());
     let mut args = vec!["-q", "-I", "dts", "-O", "dts", "-s"];

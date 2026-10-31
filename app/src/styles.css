@@ -163,15 +163,17 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .typed-field em { font-style: normal; font-size: 11px; }
 .typed-field .error { font-size: 11px; }
 .dt-node-todo { color: var(--ref); font-size: 11px; }
+.dt-node.invalid { border-color: var(--danger); }
+.dt-node-errors { color: var(--danger); font-size: 11px; }
 .build { padding: 12px; border-bottom: 1px solid var(--border); }
 .build pre { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; font-size: 12px; background: var(--code); border-radius: 6px; padding: 8px; }
 .build.failed pre { color: var(--danger); }
-.build .problems { list-style: none; margin: 4px 0 0; padding: 0; max-height: 200px; overflow: auto; }
-.build .problems button { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 3px 4px; font-size: 12px; color: var(--text); }
-.build .problems button:enabled:hover { background: var(--code); cursor: pointer; }
-.build .problems .error b { color: var(--danger); }
-.build .problems .warning b { color: var(--ref); }
-.build .problems code { color: var(--accent); }
+.problems { list-style: none; margin: 4px 0 0; padding: 0; max-height: 200px; overflow: auto; }
+.problems button { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 3px 4px; font-size: 12px; color: var(--text); }
+.problems button:enabled:hover { background: var(--code); cursor: pointer; }
+.problems .error b { color: var(--danger); }
+.problems .warning b { color: var(--ref); }
+.problems code { color: var(--accent); }
 .macro-suggestions { list-style: none; margin: -4px 0 0; padding: 2px; border: 1px solid var(--border); border-radius: 6px; max-height: 160px; overflow: auto; }
 .macro-suggestions button { display: flex; justify-content: space-between; width: 100%; border: 0; background: none; padding: 2px 6px; font-size: 12px; text-align: left; color: var(--text); }
 .macro-suggestions button:hover { background: var(--code); cursor: pointer; }

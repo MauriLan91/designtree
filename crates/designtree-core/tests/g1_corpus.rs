@@ -2,7 +2,8 @@
 //! exports them, and checks that dtc compiles the export to the same tree
 //! the kernel build compiles from the original. Both exports are checked:
 //! the board file (includes and overrides, built next to the original) and
-//! the flat tree.
+//! the flat tree. The blob DesignTree writes itself (for schema checks)
+//! must equal the one dtc compiles from the original.
 //!
 //! Needs a kernel source tree, `cpp` and `dtc`. CI uses a sparse checkout of
 //! a pinned tag (`scripts/fetch-kernel-dts.sh`), which is enough:
@@ -19,7 +20,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use designtree_core::{import_dts_file, to_dts, to_dts_flat, ImportOptions};
+use designtree_core::{import_dts_file, to_dtb, to_dts, to_dts_flat, ImportOptions};
 
 /// Preprocesses `source` the way the kernel build does for a file in `dir`.
 fn kernel_cpp(linux: &Path, dir: &Path, source: &str) -> Result<String, String> {
@@ -48,7 +49,14 @@ fn check(linux: &Path, path: &Path) -> Result<bool, String> {
         import_dts_file(path, &ImportOptions::kernel(linux)).map_err(|e| format!("import: {e}"))?;
     let dir = path.parent().expect("a board file has a directory");
     let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let expected = common::canonical(&kernel_cpp(linux, dir, &source)?, Some(dir))?;
+    let preprocessed = kernel_cpp(linux, dir, &source)?;
+    let expected = common::canonical(&preprocessed, Some(dir))?;
+
+    let ours = to_dtb(&graph).map_err(|e| format!("blob: {e:?}"))?.blob;
+    let theirs = common::compile(&preprocessed, Some(dir))?;
+    if let Some(difference) = common::blob_difference(&theirs, &ours)? {
+        return Err(format!("blob: {difference}"));
+    }
 
     let flat = to_dts_flat(&graph).map_err(|e| format!("export: {e:?}"))?;
     let actual = common::canonical(&flat, None).map_err(|e| format!("flat export: {e}"))?;

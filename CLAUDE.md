@@ -14,8 +14,8 @@ repository never carries it.
 
 | Path | Role |
 | --- | --- |
-| `crates/designtree-core` | Graph model (`model.rs`), DTS parser/preprocessor/import, validation, DTS export, auto-layout, `dtc` runner, problem parsing. No GUI, no kernel-schema knowledge. |
-| `crates/designtree-bindings` | Indexes kernel binding schemas (YAML) into the element library. Depends on nothing from core. |
+| `crates/designtree-core` | Graph model (`model.rs`), DTS parser/preprocessor/import, structural validation, DTS and `.dtb` export, auto-layout, `dtc` runner, problem parsing. No GUI, no kernel-schema knowledge. |
+| `crates/designtree-bindings` | Indexes kernel binding schemas (YAML) into the element library, and validates `.dtb` blobs against them (`check/`, a port of dt-schema). Depends on nothing from core. |
 | `crates/designtree-cli` | `designtree` command line over both crates. Also hosts the type-generation test. |
 | `app/src-tauri` | Tauri shell: thin `#[tauri::command]` wrappers over the crates. Keep logic in the crates, not here. |
 | `app/src` | React + React Flow front end. `model.gen.ts` is generated; `model.ts` converts to and from the canvas. |

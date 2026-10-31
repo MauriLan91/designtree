@@ -16,6 +16,15 @@ const TYPES: &str = "/schemas/types.yaml";
 /// Bound on `$ref` chains, so cyclic schemas cannot loop.
 const MAX_DEPTH: usize = 24;
 
+/// The embedded dt-schema core schemas: (path relative to `schemas/`,
+/// document).
+pub(crate) fn core_docs() -> Vec<(String, Value)> {
+    CORE_SCHEMAS
+        .iter()
+        .filter_map(|(rel, text)| Some(((*rel).to_owned(), serde_norway::from_str(text).ok()?)))
+        .collect()
+}
+
 /// Every schema the indexer can refer to, by `$id` path (`/schemas/...`).
 pub(crate) struct Schemas {
     docs: HashMap<String, Value>,
@@ -41,12 +50,10 @@ impl Schemas {
     pub(crate) fn new(kernel: impl IntoIterator<Item = (String, Value)>) -> Self {
         let mut docs = HashMap::new();
         let mut order = Vec::new();
-        for (rel, text) in CORE_SCHEMAS {
-            if let Ok(doc) = serde_norway::from_str::<Value>(text) {
-                let id = format!("/schemas/{rel}");
-                order.push((id.clone(), applies_to_any_node(&doc)));
-                docs.insert(id, doc);
-            }
+        for (rel, doc) in core_docs() {
+            let id = format!("/schemas/{rel}");
+            order.push((id.clone(), applies_to_any_node(&doc)));
+            docs.insert(id, doc);
         }
         for (rel, doc) in kernel {
             let id = format!("/schemas/{rel}");

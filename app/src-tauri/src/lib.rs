@@ -3,11 +3,11 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
-use designtree_bindings::{Binding, Catalog, DtMacro};
+use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
 use designtree_core::dtc::DtcError;
-use designtree_core::{Graph, ImportOptions, InterruptTree, Problem};
+use designtree_core::{Graph, ImportOptions, InterruptTree, Problem, Severity};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -21,6 +21,8 @@ struct AppState {
     macros: RwLock<Vec<DtMacro>>,
     /// Configured `dtc` program; `PATH` is searched when unset.
     dtc_path: RwLock<Option<PathBuf>>,
+    /// Schema validation with the bindings of the loaded catalog.
+    checker: RwLock<Option<Arc<Checker>>>,
 }
 
 #[derive(Serialize)]
@@ -160,6 +162,10 @@ fn load_kernel_bindings(
         path: linux_src.clone(),
     };
     *state.macros.write().unwrap() = designtree_bindings::index_dt_macros(&linux_src);
+    let mut catalog = catalog;
+    let checker = Arc::new(Checker::new(std::mem::take(&mut catalog.schemas)));
+    *state.checker.write().unwrap() = Some(checker.clone());
+    std::thread::spawn(move || checker.warm_up());
     *state.catalog.write().unwrap() = catalog;
     *state.linux_src.write().unwrap() = Some(linux_src.clone());
     // A checkout that cannot be remembered is still loaded.
@@ -258,6 +264,38 @@ fn validate_design(design: Graph) -> Vec<String> {
         .iter()
         .map(ToString::to_string)
         .collect()
+}
+
+/// Checks every node against its binding schemas, like `make dtbs_check`.
+/// Empty until a kernel tree is loaded, and for a design that cannot be
+/// compiled (the DTS preview shows why). Runs off the UI thread.
+#[tauri::command(async)]
+fn check_schemas(design: Graph, state: State<AppState>) -> Result<Vec<Problem>, String> {
+    let Some(checker) = state.checker.read().unwrap().clone() else {
+        return Ok(Vec::new());
+    };
+    let Ok(dtb) = designtree_core::to_dtb(&design) else {
+        return Ok(Vec::new());
+    };
+    let problems = checker.check_dtb(&dtb.blob).map_err(|e| e.to_string())?;
+    Ok(problems
+        .into_iter()
+        .map(|p| {
+            let mut message = match &p.property {
+                Some(property) => format!("{property}: {}", p.message),
+                None => p.message,
+            };
+            if !p.schema.is_empty() {
+                message.push_str(&format!(" ({})", p.schema));
+            }
+            Problem {
+                severity: Severity::Error,
+                message,
+                line: None,
+                node: dtb.node_at(&p.node).cloned(),
+            }
+        })
+        .collect())
 }
 
 /// Which controller each device interrupts, and what is missing.
@@ -400,6 +438,7 @@ pub fn run() {
             search_dt_macros,
             resolve_dt_macros,
             validate_design,
+            check_schemas,
             interrupt_tree,
             auto_layout,
             export_dts,
