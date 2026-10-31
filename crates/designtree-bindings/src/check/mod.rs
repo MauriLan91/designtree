@@ -9,6 +9,9 @@
 //!
 //! The input is a devicetree blob, the same input `dt-validate` takes, so
 //! that this crate needs nothing from the design model.
+//!
+//! `fixups`, `types` and `decode` are ports of dt-schema 2026.9 (Copyright
+//! Linaro Ltd. and Arm Ltd., BSD-2-Clause; see `dtschema/LICENSE.txt`).
 
 mod decode;
 mod fdt;
