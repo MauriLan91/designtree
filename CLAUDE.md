@@ -33,7 +33,7 @@ DESIGNTREE_REQUIRE_DTC=1 cargo test --all        # needs dtc (device-tree-compil
 (cd app && npm install && npm run build)         # tsc + vite
 ```
 
-CI runs the same, plus the G1 corpus (`g1-corpus` job). Rust tests that need
+CI runs the same, plus the G1 and G3 corpora (`g1-corpus`, `g3-corpus` jobs). Rust tests that need
 `dtc` skip without it, unless `DESIGNTREE_REQUIRE_DTC` is set.
 
 - **Generated types**: `app/src/model.gen.ts` comes from the Rust types. After
@@ -42,6 +42,10 @@ CI runs the same, plus the G1 corpus (`g1-corpus` job). Rust tests that need
   the test fails when the file is stale.
 - **G1 corpus** (round trip of 50 kernel board files): `scripts/fetch-kernel-dts.sh ~/linux-g1`,
   then `DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture`.
+- **G3 corpus** (recall of 100 seeded errors against `make dtbs_check`): needs
+  `pip install dtschema==2026.9` and the same kernel checkout, then
+  `DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test --release -p designtree-cli --test g3_corpus -- --ignored --nocapture`
+  (about 3 minutes, mostly `dt-validate`).
 - **Cloud sessions**: `scripts/cloud-session-setup.sh` installs the system
   packages, npm packages and crates a fresh container needs (`docs/cloud-sessions.md`).
 - Tauri on Linux needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`;

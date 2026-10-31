@@ -116,6 +116,14 @@ with `to_dtb` and maps the problems back to nodes by path.
 `designtree check --linux <tree> <file>` runs the same check on a design,
 a `.dts` or a `.dtb`.
 
+`crates/designtree-cli/tests/g3_corpus.rs` measures goal G3: it appends
+each of 100 seeded mistakes (`tests/corpus/g3.txt`) to a kernel board
+file, runs dt-schema's `dt-validate` on what the kernel build compiles and
+DesignTree on the imported source, and reports which share of the problems
+`dt-validate` adds DesignTree adds too, matched by node and property. The
+corpus covers nine kinds of mistakes over twelve boards, and only keeps
+mistakes `dt-validate` reports.
+
 ## Boundary with the GUI
 
 The GUI only needs three operations, all JSON in and out:
