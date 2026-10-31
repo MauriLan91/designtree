@@ -44,6 +44,8 @@ export const backend = {
   searchBindings: (query: string, category: string | null, limit = 200) =>
     invoke<Binding[]>("search_bindings", { query, category, limit }),
   getBindings: (paths: string[]) => invoke<Binding[]>("get_bindings", { paths }),
+  bindingsForCompatibles: (compatibles: string[]) =>
+    invoke<(Binding | null)[]>("bindings_for_compatibles", { compatibles }),
   searchDtMacros: (query: string, limit = 12) => invoke<DtMacro[]>("search_dt_macros", { query, limit }),
   resolveDtMacros: (names: string[]) => invoke<(number | null)[]>("resolve_dt_macros", { names }),
   interruptTree: (design: Design) => invoke<InterruptTree>("interrupt_tree", { design }),

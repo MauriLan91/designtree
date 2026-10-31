@@ -362,41 +362,6 @@ export function formatProperties(props: Property[]): string {
 // ---------------------------------------------------------------------------
 // Helpers for new nodes and references
 
-/** Phandle property to use when referencing a provider, from its `#...-cells`. */
-const PROVIDER_PROPERTIES: [string, string][] = [
-  ["#clock-cells", "clocks"],
-  ["#reset-cells", "resets"],
-  ["#gpio-cells", "gpios"],
-  ["#pwm-cells", "pwms"],
-  ["#dma-cells", "dmas"],
-  ["#phy-cells", "phys"],
-  ["#power-domain-cells", "power-domains"],
-  ["#mbox-cells", "mboxes"],
-  ["#interrupt-cells", "interrupts-extended"],
-  ["#io-channel-cells", "io-channels"],
-  ["#thermal-sensor-cells", "thermal-sensors"],
-];
-
-/**
- * Number of specifier cells a provider expects for a consumer property
- * (`gpios`, `reset-gpios` and `cs-gpios` all use `#gpio-cells`), from the
- * provider's `#...-cells` property; undefined when it does not say.
- */
-export function expectedSpecifierCells(provider: DtNodeData, property: string): number | undefined {
-  const entry = PROVIDER_PROPERTIES.find(([, prop]) => property === prop || property.endsWith(`-${prop}`));
-  const cellsProperty = entry?.[0] ?? (property.endsWith("-gpios") ? "#gpio-cells" : undefined);
-  const found = provider.properties.find((p) => p.name === cellsProperty);
-  return found?.value.type === "cells" ? found.value.value[0] : undefined;
-}
-
-export function guessReferenceProperty(target: DtNodeData): string {
-  for (const [cells, prop] of PROVIDER_PROPERTIES) {
-    if (target.properties.some((p) => p.name === cells)) return prop;
-    if (target.binding?.properties?.some((p) => p.name === cells)) return prop;
-  }
-  return "phandle";
-}
-
 /** Generic node name for a binding category (devicetree spec 2.2.2). */
 export function genericNodeName(binding: Binding): string {
   const names: Record<string, string> = {
