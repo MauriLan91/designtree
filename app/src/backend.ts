@@ -1,6 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import type { Span } from "./components/DtsEditor";
 import type { Binding, Design, DtMacro, InterruptTree, Problem, SocDtsi } from "./model";
 
 export interface CatalogSummary {
@@ -29,6 +30,16 @@ export interface BuildResult {
 
 export const inTauri = isTauri();
 
+export interface MappedSource {
+  dts: string;
+  spans: Span[];
+}
+
+export interface EditedDesign {
+  design: Design;
+  spans: Span[];
+}
+
 export interface StartupArgs {
   design: Design | null;
   linux_src: string | null;
@@ -52,8 +63,10 @@ export const backend = {
   validateDesign: (design: Design) => invoke<string[]>("validate_design", { design }),
   checkSchemas: (design: Design) => invoke<Problem[] | null>("check_schemas", { design }),
   autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
-  exportDts: (design: Design) => invoke<string>("export_dts", { design }),
   exportDtsFlat: (design: Design) => invoke<string>("export_dts_flat", { design }),
+  exportDtsMapped: (design: Design) => invoke<MappedSource>("export_dts_mapped", { design }),
+  /** Rejects with a `SourceError` when the text does not import. */
+  applySource: (text: string, design: Design) => invoke<EditedDesign>("apply_source", { text, design }),
   newOverlay: (base: string) => invoke<Design>("new_overlay", { base }),
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),

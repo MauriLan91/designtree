@@ -105,17 +105,18 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .preview { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .preview-mode { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .preview-mode .hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview pre {
-  margin: 0;
-  flex: 1;
-  overflow: auto;
-  background: var(--code);
-  border-radius: 6px;
-  padding: 10px;
-  font-size: 12px;
-  tab-size: 4;
-}
 .errors { color: var(--danger); padding-left: 18px; margin: 0; }
+.dts-editor { flex: 1; min-height: 0; border-radius: 6px; overflow: hidden; background: var(--code); }
+.dts-editor .cm-editor { height: 100%; font-size: 12px; background: var(--code); color: var(--text); }
+.dts-editor .cm-scroller { font-family: ui-monospace, monospace; }
+.dts-editor .cm-gutters { background: var(--code); color: var(--muted); border-right: 1px solid var(--border); }
+.dts-editor .cm-activeLine { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dts-editor .cm-activeLineGutter { background: transparent; color: var(--text); }
+.dts-editor .cm-node-selected { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.dts-editor .cm-error-line { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.dts-editor .cm-focused { outline: none; }
+.dts-editor .cm-cursor { border-left-color: var(--text); }
+.source-error { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
 
 /* Canvas elements */
 .dt-node {

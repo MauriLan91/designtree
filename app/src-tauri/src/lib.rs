@@ -319,10 +319,79 @@ fn auto_layout(mut design: Graph) -> Graph {
     design
 }
 
+/// Lines of the source that define or change a node.
+#[derive(Serialize)]
+struct Span {
+    node: String,
+    first_line: u32,
+    last_line: u32,
+}
+
+fn spans(spans: impl IntoIterator<Item = designtree_core::NodeSpan>) -> Vec<Span> {
+    spans
+        .into_iter()
+        .map(|s| Span {
+            node: s.node.0,
+            first_line: s.first_line,
+            last_line: s.last_line,
+        })
+        .collect()
+}
+
+#[derive(Serialize)]
+struct MappedSource {
+    dts: String,
+    spans: Vec<Span>,
+}
+
+/// The design as DTS, with the lines of each node for the editor.
 #[tauri::command]
-fn export_dts(design: Graph) -> Result<String, Vec<String>> {
-    designtree_core::to_dts(&design)
-        .map_err(|errors| errors.iter().map(ToString::to_string).collect())
+fn export_dts_mapped(design: Graph) -> Result<MappedSource, Vec<String>> {
+    let (dts, map) = designtree_core::to_dts_mapped(&design)
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+    Ok(MappedSource {
+        dts,
+        spans: spans(map.spans),
+    })
+}
+
+#[derive(Serialize)]
+struct EditedDesign {
+    design: Graph,
+    spans: Vec<Span>,
+}
+
+/// Where the edited source fails to import.
+#[derive(Serialize)]
+struct SourceError {
+    /// The included file the error is in; `None` for the edited text.
+    file: Option<String>,
+    line: u32,
+    column: u32,
+    message: String,
+}
+
+/// The design the edited source `text` of `design` describes. Runs off the
+/// UI thread, since includes are read again.
+#[tauri::command(async)]
+fn apply_source(
+    text: String,
+    design: Graph,
+    state: State<AppState>,
+) -> Result<EditedDesign, SourceError> {
+    let kernel = state.linux_src.read().unwrap().clone();
+    match designtree_core::apply_source(&text, &design, kernel.as_deref()) {
+        Ok((design, map)) => Ok(EditedDesign {
+            design,
+            spans: spans(map),
+        }),
+        Err(e) => Err(SourceError {
+            file: (!e.file.is_empty()).then_some(e.file),
+            line: e.line,
+            column: e.column,
+            message: e.message,
+        }),
+    }
 }
 
 /// The whole tree; for an overlay, its base with the overlay applied.
@@ -472,11 +541,12 @@ pub fn run() {
             resolve_dt_macros,
             validate_design,
             export_dts_flat,
+            export_dts_mapped,
+            apply_source,
             new_overlay,
             check_schemas,
             interrupt_tree,
             auto_layout,
-            export_dts,
             save_design,
             open_design,
             import_dts,

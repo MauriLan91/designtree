@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::model::{Cell, EdgeKind, Graph, Node, NodeId, PropertyValue, ValueChunk};
-use crate::validate::{validate, ValidationError};
+use crate::parse::{parse, BodyItem, NodeBody, TopItem};
+use crate::validate::{node_paths, validate, ValidationError};
 
 /// Generates devicetree source from a design. Fails if the graph does not
 /// pass [`validate`].
@@ -74,6 +75,86 @@ fn primary_labels(graph: &Graph) -> HashMap<&str, &str> {
 /// Generates devicetree source for the whole tree, included nodes and all.
 pub fn to_dts_flat(graph: &Graph) -> Result<String, Vec<ValidationError>> {
     to_dts_flat_mapped(graph).map(|(dts, _)| dts)
+}
+
+/// Like [`to_dts`], also returning which lines of the source belong to
+/// which node. A node changed by overrides has a span per block.
+pub fn to_dts_mapped(graph: &Graph) -> Result<(String, SourceMap), Vec<ValidationError>> {
+    if graph.overlay.is_none() && graph.includes.is_empty() && graph.trailing_includes.is_empty() {
+        return to_dts_flat_mapped(graph);
+    }
+    let dts = to_dts(graph)?;
+    let map = map_overrides(&dts, graph);
+    Ok((dts, map))
+}
+
+/// The blocks of generated override source, found by parsing it: the
+/// writer builds bodies out of order, which makes counting lines as it
+/// goes awkward.
+fn map_overrides(dts: &str, graph: &Graph) -> SourceMap {
+    // Directives are for the preprocessor, which the parser does not run.
+    let mut plain = String::with_capacity(dts.len() + 1);
+    for line in dts.lines() {
+        if !(line.starts_with('#') || line.starts_with("/plugin/")) {
+            plain.push_str(line);
+        }
+        plain.push('\n');
+    }
+    let Ok(document) = parse(&plain, "generated.dts") else {
+        return SourceMap::default();
+    };
+    let paths = node_paths(graph);
+    let by_label: HashMap<&str, &str> = graph
+        .nodes
+        .iter()
+        .flat_map(|n| n.labels().map(move |l| (l.as_str(), n)))
+        .filter_map(|(l, n)| Some((l, paths.get(&n.id)?.as_str())))
+        .collect();
+    let ids: HashMap<&str, &NodeId> = paths.iter().map(|(id, p)| (p.as_str(), id)).collect();
+
+    let mut map = SourceMap::default();
+    fn visit(
+        path: String,
+        first_line: u32,
+        body: &NodeBody,
+        ids: &HashMap<&str, &NodeId>,
+        map: &mut SourceMap,
+    ) {
+        if let Some(id) = ids.get(path.as_str()) {
+            map.spans.push(NodeSpan {
+                node: (*id).clone(),
+                path: path.clone(),
+                first_line,
+                last_line: body.end.line,
+            });
+        }
+        for item in &body.items {
+            if let BodyItem::Node(def) = item {
+                let child = match path.as_str() {
+                    "/" => format!("/{}", def.name),
+                    _ => format!("{path}/{}", def.name),
+                };
+                visit(child, def.pos.line, &def.body, ids, map);
+            }
+        }
+    }
+    for item in &document.items {
+        match item {
+            TopItem::Root(body, pos) => visit("/".into(), pos.line, body, &ids, &mut map),
+            TopItem::Override { target, body, .. } => {
+                let path = if target.target.starts_with('/') {
+                    Some(target.target.as_str())
+                } else {
+                    by_label.get(target.target.as_str()).copied()
+                };
+                if let Some(path) = path {
+                    visit(path.to_owned(), target.pos.line, body, &ids, &mut map);
+                }
+            }
+            _ => {}
+        }
+    }
+    map
 }
 
 /// Like [`to_dts_flat`], also returning which lines of the source belong to

@@ -156,6 +156,19 @@ consumer and a provider of the matching `#*-cells` (dt-schema's naming
 rule: `clocks` → `#clock-cells`, `*-gpios` → `#gpio-cells`). The edge it
 creates is an ordinary reference edge writing that property.
 
+The DTS source panel is an editor (CodeMirror) on the same design. Canvas
+changes regenerate the text with `to_dts_mapped`, which also returns the
+lines of each node's blocks. Edits of the text, once typing pauses, go to
+`apply_source` (`text_edit.rs`): the text is imported again, with includes
+resolved from the directories of the design's included files, and nodes
+whose path did not change keep their id, position and group. The editor
+keeps the text as typed until the canvas changes the tree, and
+`app/src/textSync.ts` keeps the canvas objects of unchanged nodes and edges,
+so only what the edit touched re-renders. The node spans link the two
+views: the cursor selects its node on the canvas, and a selected node's
+blocks are highlighted in the text. Overlay source is read-only for now,
+since the importer does not read `/plugin/`.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed

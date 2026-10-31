@@ -57,7 +57,7 @@ impl ImportOptions {
 
 /// The kernel source tree that contains `file`, recognized by its
 /// `scripts/dtc/include-prefixes` directory.
-fn find_kernel_tree(file: &Path) -> Option<PathBuf> {
+pub(crate) fn find_kernel_tree(file: &Path) -> Option<PathBuf> {
     let file = std::path::absolute(file).ok()?;
     file.ancestors()
         .skip(1)
