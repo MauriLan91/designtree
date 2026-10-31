@@ -1,13 +1,16 @@
+import { useContext } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { NodeProblems } from "../nodeProblems";
 import { CHILD_HANDLE, PARENT_HANDLE, PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
 
 /** Canvas node for a devicetree node: hierarchy handles top/bottom, phandle handles left/right. */
-export function DtNode({ data, selected }: NodeProps<DtFlowNode>) {
+export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
+  const problems = useContext(NodeProblems).get(id) ?? [];
   const isRoot = data.name === "/";
   const fullName = data.unitAddress ? `${data.name}@${data.unitAddress}` : data.name;
   return (
     <div
-      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}`}
+      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}`}
       title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
     >
       {!isRoot && <Handle type="target" id={PARENT_HANDLE} position={Position.Top} className="h-tree" />}
@@ -25,6 +28,11 @@ export function DtNode({ data, selected }: NodeProps<DtFlowNode>) {
       )}
       {data.todo && data.todo.length > 0 && (
         <div className="dt-node-todo" title={`Fill in: ${data.todo.join(", ")}`}>to do: {data.todo.join(", ")}</div>
+      )}
+      {problems.length > 0 && (
+        <div className="dt-node-errors" title={problems.join("\n")}>
+          {problems.length} schema error{problems.length === 1 ? "" : "s"}
+        </div>
       )}
       <Handle type="source" id={REF_HANDLE} position={Position.Right} className="h-ref" title="References (phandle)" />
       <Handle type="source" id={CHILD_HANDLE} position={Position.Bottom} className="h-tree" title="Children" />

@@ -1,8 +1,10 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use designtree_bindings::Checker;
 use designtree_core::{Graph, ImportOptions};
 
 /// DesignTree: build Linux devicetrees as node graphs.
@@ -45,6 +47,22 @@ enum Command {
         #[arg(short = 'I', long = "include")]
         include_dirs: Vec<PathBuf>,
     },
+    /// Check a devicetree against the binding schemas of a kernel tree,
+    /// like `make dtbs_check`. Takes a design file (.json), devicetree
+    /// source (.dts, imported first) or a compiled blob (.dtb).
+    Check {
+        input: PathBuf,
+        /// Kernel source tree whose binding schemas to use.
+        #[arg(long)]
+        linux: PathBuf,
+        /// Keep the processed schemas here and reuse them while the
+        /// bindings do not change.
+        #[arg(long)]
+        cache: Option<PathBuf>,
+        /// Print the problems as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Check a design file for structural errors.
     Validate { design: PathBuf },
     /// Print the interrupt tree of a design file: each controller with the
@@ -80,7 +98,9 @@ fn main() -> Result<()> {
             output,
             stats,
         } => {
-            let catalog = designtree_bindings::index_kernel_tree(&linux_src)?;
+            let mut catalog = designtree_bindings::index_kernel_tree(&linux_src)?;
+            // The processed schemas are for `check`, not for readers of the index.
+            catalog.schemas = Default::default();
             eprintln!(
                 "indexed {} bindings ({} skipped)",
                 catalog.bindings.len(),
@@ -108,6 +128,12 @@ fn main() -> Result<()> {
             let graph = designtree_core::import_dts_file(&dts, &options)?;
             write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
+        Command::Check {
+            input,
+            linux,
+            cache,
+            json,
+        } => check(&input, &linux, cache.as_deref(), json),
         Command::Validate { design } => {
             let errors = designtree_core::validate(&load(&design)?);
             if errors.is_empty() {
@@ -179,7 +205,52 @@ fn main() -> Result<()> {
     }
 }
 
-fn load(path: &PathBuf) -> Result<Graph> {
+fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result<()> {
+    let started = Instant::now();
+    let catalog = match cache {
+        Some(cache) => designtree_bindings::index_kernel_tree_cached(linux, cache)?.0,
+        None => designtree_bindings::index_kernel_tree(linux)?,
+    };
+    let checker = Checker::new(catalog.schemas);
+    eprintln!("schemas loaded in {:.0?}", started.elapsed());
+
+    let blob = match input.extension().and_then(|e| e.to_str()) {
+        Some("dtb") => fs::read(input).with_context(|| format!("reading {}", input.display()))?,
+        other => {
+            let graph = match other {
+                Some("dts") => {
+                    designtree_core::import_dts_file(input, &ImportOptions::kernel(linux))?
+                }
+                _ => load(input)?,
+            };
+            match designtree_core::to_dtb(&graph) {
+                Ok(dtb) => dtb.blob,
+                Err(errors) => {
+                    for error in &errors {
+                        eprintln!("error: {error}");
+                    }
+                    bail!("cannot check: {} problem(s) found", errors.len())
+                }
+            }
+        }
+    };
+    let started = Instant::now();
+    let problems = checker.check_dtb(&blob)?;
+    eprintln!("checked in {:.0?}", started.elapsed());
+    if json {
+        println!("{}", serde_json::to_string_pretty(&problems)?);
+    } else {
+        for p in &problems {
+            println!("{}: {p}", p.node);
+        }
+    }
+    if !problems.is_empty() {
+        bail!("{} problem(s) found", problems.len());
+    }
+    Ok(())
+}
+
+fn load(path: &Path) -> Result<Graph> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))
 }

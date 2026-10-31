@@ -7,6 +7,7 @@
 
 pub mod dtc;
 pub mod dts;
+pub mod fdt;
 pub mod import;
 pub mod interrupts;
 pub mod layout;
@@ -18,6 +19,7 @@ pub mod soc;
 pub mod validate;
 
 pub use dts::{to_dts, to_dts_flat, to_dts_flat_mapped, NodeSpan, SourceMap};
+pub use fdt::{to_dtb, Dtb};
 pub use import::{import_dts, import_dts_file, ImportError};
 pub use interrupts::{interrupt_tree, InterruptController, InterruptProblem, InterruptTree};
 pub use layout::auto_layout;

@@ -5,10 +5,11 @@ replaceable layer.
 
 ```
  kernel source ──► designtree-bindings ──► Catalog (element library, JSON)
-                                                │
-                                                ▼
+                         ▲   Checker (schema validation)
+                         │ .dtb         │
+                         │              ▼
    Tauri app   ◄──── JSON ────►  designtree-core ◄──► .dts
- (React Flow)                 Graph · validate · to_dts · import_dts
+ (React Flow)                 Graph · validate · to_dts · to_dtb · import_dts
 ```
 
 ## designtree-core
@@ -49,6 +50,10 @@ replaceable layer.
   with what the kernel build compiles (needs a kernel tree, `cpp`, `dtc`).
   Both the board export (built next to the original) and the flat export
   are checked.
+- `to_dtb` writes the blob dtc would compile from `to_dts_flat`, without
+  dtc: phandles assigned to referenced nodes, path references expanded,
+  unreferenced `/omit-if-no-ref/` nodes dropped, with the path of each node.
+  It feeds schema validation; the G1 corpus checks it against dtc.
 - Canvas positions and groups are stored but never affect the output.
 
 ## designtree-bindings
@@ -82,12 +87,41 @@ Constraints come from steps 1, 2 and the generic core schemas, never from an
 unrelated binding. `designtree index --stats` reports the share of schemas
 indexed and of properties typed (backlog goal G2).
 
+### Schema validation
+
+`Checker` validates a devicetree blob the way `make dtbs_check` does, by
+porting dt-schema's pipeline rather than inventing one, so that both report
+the same errors (goal G3):
+
+1. every binding is rewritten with dt-schema's fixups (`check/fixups.rs`):
+   scalars become lists, cell values become matrices, `interrupts` implies
+   `interrupts-extended`, every node may carry `status`, `pinctrl-*` and so
+   on;
+2. a property type database is built from the processed schemas
+   (`check/types.rs`), with matrix dimensions;
+3. the blob is decoded with those types (`check/decode.rs`): integers
+   sized and signed, `reg` split by `#address-cells`/`#size-cells`, phandle
+   lists split by the provider's `#*-cells`;
+4. each node, with its subtree, is validated with a JSON Schema 2019-09
+   validator (the `jsonschema` crate) against the schema of its first
+   documented `compatible` and every schema whose `select` matches it.
+   dt-schema's `typeSize` keyword is implemented on the side, since JSON
+   numbers do not carry a width. Disabled nodes may miss or have extra
+   properties.
+
+The processed schemas are part of the catalog (and its cache), and a
+validator is compiled per schema on first use. The input is a blob, so
+bindings stay independent of the design model; the app compiles the design
+with `to_dtb` and maps the problems back to nodes by path.
+`designtree check --linux <tree> <file>` runs the same check on a design,
+a `.dts` or a `.dtb`.
+
 ## Boundary with the GUI
 
 The GUI only needs three operations, all JSON in and out:
 
 1. load the catalog (palette of elements, searchable by category/compatible);
-2. edit a `Graph` and ask for `validate` on change;
+2. edit a `Graph` and ask for `validate` and `check_schemas` on change;
 3. ask for `to_dts` to preview or save the output.
 
 These are `#[tauri::command]` functions in `app/src-tauri/src/lib.rs`. The
@@ -98,6 +132,5 @@ stale; regenerate it with `UPDATE_TS=1 cargo test -p designtree --test typegen`.
 
 ## Next steps
 
-- Property editor driven by the schema types (`$ref` to `/schemas/types.yaml`).
-- Schema validation of node properties against the catalog.
-- `dtc` integration to produce `.dtb` and catch compiler errors.
+- Incremental validation: only re-check the subtrees an edit changed
+  (US-11.2).

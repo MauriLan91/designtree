@@ -152,7 +152,7 @@ mod tests {
                     &["fsl,imx6q-fec"],
                 ),
             ],
-            skipped: Vec::new(),
+            ..Catalog::default()
         }
     }
 
@@ -232,7 +232,7 @@ mod tests {
             .collect();
         let c = Catalog {
             bindings,
-            skipped: Vec::new(),
+            ..Catalog::default()
         };
         let start = std::time::Instant::now();
         let found = c.search("vendor7 chip12 blk", None, 200);

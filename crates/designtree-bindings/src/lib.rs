@@ -10,6 +10,7 @@
 //! which are embedded because the kernel tree does not ship them.
 //! Files that fail to parse are reported, not fatal.
 
+mod check;
 mod kernel;
 mod macros;
 mod resolve;
@@ -19,6 +20,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use check::{parse_fdt, Checker, FdtError, FdtNode, SchemaProblem, SchemaSet};
 pub use kernel::{index_kernel_tree_cached, kernel_version, CacheStatus};
 pub use macros::{index_dt_macros, DtMacro};
 use serde::{Deserialize, Serialize};
@@ -175,6 +177,9 @@ pub struct Catalog {
     /// Files that could not be indexed, with the reason.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skipped: Vec<(String, String)>,
+    /// The schemas processed for validation; see [`Checker`].
+    #[serde(default, skip_serializing_if = "SchemaSet::is_empty")]
+    pub schemas: SchemaSet,
 }
 
 impl Catalog {
@@ -285,11 +290,18 @@ pub fn index_dir(root: &Path) -> Result<Catalog, IndexError> {
             Err(err) => catalog.skipped.push((rel, err.to_string())),
         }
     }
-    let schemas = resolve::Schemas::new(docs.iter().cloned());
+    let core = resolve::core_docs();
+    let schemas = resolve::Schemas::new(docs.iter().cloned(), core.iter().cloned());
     catalog.bindings = docs
         .iter()
         .filter_map(|(rel, doc)| binding(&schemas, doc, rel))
         .collect();
+    // Kernel schemas first: they win over core schemas with the same `$id`.
+    catalog.schemas = SchemaSet::new(
+        docs.iter()
+            .chain(&core)
+            .map(|(rel, doc)| (rel.as_str(), doc)),
+    );
     Ok(catalog)
 }
 

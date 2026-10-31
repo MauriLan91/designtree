@@ -1,4 +1,5 @@
 import type { Problem } from "../model";
+import { ProblemList } from "./ProblemList";
 
 export interface BuildState {
   running: boolean;
@@ -31,24 +32,7 @@ export function BuildPanel({ build, nodeName, onFocusNode }: Props) {
           <p className="hint">
             {errors} error{errors === 1 ? "" : "s"}, {warnings} warning{warnings === 1 ? "" : "s"}
           </p>
-          <ul className="problems">
-            {build.problems.map((p, i) => {
-              const name = p.node ? nodeName(p.node) : undefined;
-              return (
-                <li key={i} className={p.severity}>
-                  <button
-                    disabled={!p.node}
-                    onClick={() => p.node && onFocusNode(p.node)}
-                    title={p.node ? "Show the node on the canvas" : p.line ? `Line ${p.line} of the generated source` : undefined}
-                  >
-                    <b>{p.severity}</b>
-                    {name && <code>{name}</code>}
-                    <span>{p.message}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <ProblemList problems={build.problems} nodeName={nodeName} onFocusNode={onFocusNode} />
         </>
       )}
     </section>

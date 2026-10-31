@@ -23,6 +23,8 @@ import { InterruptPanel } from "./components/InterruptPanel";
 import { KernelSettings } from "./components/KernelSettings";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
+import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
+import { NodeProblems } from "./nodeProblems";
 import { Inspector } from "./components/Inspector";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
@@ -70,6 +72,8 @@ export default function App() {
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
   const [designPath, setDesignPath] = useState<string | null>(null);
   const [build, setBuild] = useState<BuildState | null>(null);
+  const [schema, setSchema] = useState<SchemaState>({ checking: false, problems: [] });
+  const schemaRun = useRef(0);
   const [showInterrupts, setShowInterrupts] = useState(false);
   const [pickingSoc, setPickingSoc] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
@@ -120,6 +124,47 @@ export default function App() {
     }, 250);
     return () => clearTimeout(t);
   }, [nodes, edges, extras]);
+
+  // What the schema check depends on: moving or selecting nodes changes
+  // `nodes` but not the devicetree, and must not start a check.
+  const schemaInput = useMemo(() => {
+    const design = toDesign(nodes, edges, extras);
+    const tree = {
+      ...design,
+      nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
+      groups: [],
+    };
+    return { design: tree, key: JSON.stringify(tree) };
+  }, [nodes, edges, extras]);
+  const schemaKey = schemaInput.key;
+
+  // Check the design against the binding schemas while editing; only the
+  // latest check's answer is kept.
+  useEffect(() => {
+    if (!inTauri || !kernel) return;
+    const design = schemaInput.design;
+    const t = setTimeout(async () => {
+      const run = ++schemaRun.current;
+      setSchema((s) => ({ ...s, checking: true }));
+      try {
+        const problems = await backend.checkSchemas(design);
+        if (run === schemaRun.current) setSchema({ checking: false, problems });
+      } catch (e) {
+        if (run === schemaRun.current) {
+          setSchema({ checking: false, problems: [{ severity: "error", message: String(e) }] });
+        }
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [schemaKey, kernel]);
+
+  const nodeProblems = useMemo(() => {
+    const byNode = new Map<string, string[]>();
+    for (const p of schema.problems ?? []) {
+      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
+    }
+    return byNode;
+  }, [schema.problems]);
 
   useEffect(() => {
     if (!showInterrupts || !inTauri) return;
@@ -448,6 +493,7 @@ export default function App() {
             Bindings may differ; pick another checkout under Kernels…
           </div>
         )}
+        <NodeProblems.Provider value={nodeProblems}>
         <ReactFlow
           nodes={view.nodes}
           edges={view.edges}
@@ -467,6 +513,7 @@ export default function App() {
           <Controls />
           <MiniMap pannable zoomable />
         </ReactFlow>
+        </NodeProblems.Provider>
       </main>
       <aside className="panel side">
         <Inspector
@@ -479,6 +526,7 @@ export default function App() {
           providerCells={providerCells}
         />
         {showInterrupts && interrupts && <InterruptPanel tree={interrupts} nodeName={nodeName} onFocusNode={focusNode} />}
+        {kernel && <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />}
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview dts={dts} errors={errors} />
       </aside>

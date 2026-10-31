@@ -41,10 +41,10 @@ pub fn kernel_version(linux: &Path) -> Option<String> {
 }
 
 /// Bumped when the cached catalog's shape changes.
-const CACHE_FORMAT: u32 = 1;
+const CACHE_FORMAT: u32 = 2;
 
-/// Bigger cache files are not read: a catalog of the whole kernel is a few
-/// megabytes.
+/// Bigger cache files are not read: a catalog of the whole kernel, with
+/// the processed schemas, is about 20 megabytes.
 const MAX_CACHE_BYTES: u64 = 256 * 1024 * 1024;
 
 /// How [`index_kernel_tree_cached`] got its catalog.
