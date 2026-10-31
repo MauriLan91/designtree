@@ -79,6 +79,9 @@ export default function App() {
   // Inherited nodes the user chose to override; the others stay read-only.
   const [overriding, setOverriding] = useState<Set<string>>(new Set());
   const [dts, setDts] = useState<string | null>(null);
+  /** For an overlay: its base with the overlay applied. */
+  const [appliedDts, setAppliedDts] = useState<string | null>(null);
+  const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
   const [designPath, setDesignPath] = useState<string | null>(null);
@@ -125,15 +128,26 @@ export default function App() {
       setErrors(["Backend not available: run the app with `npm run tauri dev`."]);
       return;
     }
+    let stale = false;
     const t = setTimeout(async () => {
       try {
-        setDts(await backend.exportDts(toDesign(nodes, edges, extras)));
+        const design = toDesign(nodes, edges, extras);
+        const [source, applied] = await Promise.all([
+          backend.exportDts(design),
+          design.overlay ? backend.exportDtsFlat(design) : null,
+        ]);
+        if (stale) return;
+        setDts(source);
+        setAppliedDts(applied);
         setErrors([]);
       } catch (e) {
-        setErrors(Array.isArray(e) ? e : [String(e)]);
+        if (!stale) setErrors(Array.isArray(e) ? e : [String(e)]);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
   }, [nodes, edges, extras]);
 
   // What the schema check depends on: moving or selecting nodes changes
@@ -491,6 +505,7 @@ export default function App() {
       setEdges(d.edges);
       setExtras(d.extras);
       setOverriding(new Set());
+      setShowApplied(false);
       setDesignPath(path);
       setBuild(null);
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
@@ -532,14 +547,22 @@ export default function App() {
     }
   };
 
+  const newOverlay = async () => {
+    const base = await dialogs.pickOverlayBase();
+    if (base) await loadDesign(() => backend.newOverlay(base));
+  };
+
   const exportDts = async () => {
     if (!dts) return;
-    const path = await dialogs.pickDtsToSave();
+    const path = await (extras.overlay ? dialogs.pickDtsoToSave() : dialogs.pickDtsToSave());
     if (path) await backend.writeText(path, dts);
   };
 
   const buildDtb = async () => {
-    const target = designPath ? designPath.replace(/\.[^./\\]*$/, "") + ".dtb" : await dialogs.pickDtbToSave();
+    const extension = extras.overlay ? ".dtbo" : ".dtb";
+    const target = designPath
+      ? designPath.replace(/\.[^./\\]*$/, "") + extension
+      : await (extras.overlay ? dialogs.pickDtboToSave() : dialogs.pickDtbToSave());
     if (!target) return;
     setBuild({ running: true, problems: [] });
     try {
@@ -594,6 +617,9 @@ export default function App() {
         <button onClick={newDesign}>New</button>
         <button onClick={() => setPickingSoc(true)} disabled={!inTauri} title="Start a board from a SoC .dtsi of the loaded kernel tree">
           New from SoC…
+        </button>
+        <button onClick={newOverlay} disabled={!inTauri} title="Start an overlay (.dtso) for a design or board file">
+          New overlay…
         </button>
         <button onClick={openDesign} disabled={!inTauri}>Open…</button>
         <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
@@ -657,7 +683,14 @@ export default function App() {
         {showInterrupts && interrupts && <InterruptPanel tree={interrupts} nodeName={nodeName} onFocusNode={focusNode} />}
         {kernel && <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />}
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
-        <DtsPreview dts={dts} errors={errors} />
+        <DtsPreview
+          dts={dts}
+          appliedDts={appliedDts}
+          overlayBase={extras.overlay?.base}
+          showApplied={showApplied}
+          onShowApplied={setShowApplied}
+          errors={errors}
+        />
       </aside>
       {showKernels && (
         <KernelSettings

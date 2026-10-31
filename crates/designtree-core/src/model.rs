@@ -258,11 +258,24 @@ pub struct Graph {
     /// or a path starting with `/`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted_nodes: Vec<String>,
+    /// Set when the design is an overlay (`.dtso`) for another design: its
+    /// nodes are then marked [`Node::inherited`] and export writes only
+    /// what the overlay adds or changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub overlay: Option<Overlay>,
     /// Version of the kernel whose binding schemas the design was edited
     /// against (`7.3`); the editor warns when it opens the design with
     /// another one. Not part of the exported devicetree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+}
+
+/// What an overlay design applies to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Overlay {
+    /// The base design or board file, as it was opened.
+    pub base: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

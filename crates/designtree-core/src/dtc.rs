@@ -39,12 +39,13 @@ pub struct DtcOutput {
 }
 
 /// Compiles `dts` to a `.dtb` at `output`, using `dtc` from `PATH` or the
-/// program at `dtc` when given.
+/// program at `dtc` when given. The blob carries `__symbols__` (`-@`), so
+/// overlays can be applied to it.
 pub fn compile_dtb(dts: &str, output: &Path, dtc: Option<&Path>) -> Result<DtcOutput, DtcError> {
     let program: OsString = dtc.map_or_else(|| DEFAULT_DTC.into(), |p| p.as_os_str().to_owned());
     let name = program.to_string_lossy().into_owned();
     let mut child = Command::new(&program)
-        .args(["-I", "dts", "-O", "dtb", "-"])
+        .args(["-@", "-I", "dts", "-O", "dtb", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

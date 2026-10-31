@@ -12,6 +12,9 @@ use crate::validate::{validate, ValidationError};
 /// on top of the included files, as `&label { ... };` overrides. Use
 /// [`to_dts_flat`] for one self-contained tree.
 pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
+    if graph.overlay.is_some() {
+        return to_overlay_dts(graph);
+    }
     if graph.includes.is_empty() && graph.trailing_includes.is_empty() {
         return to_dts_flat(graph);
     }
@@ -32,13 +35,8 @@ pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
     }
     // Phandles in inherited values name a node by any of its labels; edges
     // use its main label.
-    let primary_labels: HashMap<&str, &str> = graph
-        .nodes
-        .iter()
-        .filter_map(|n| n.label.as_deref().map(|primary| (n, primary)))
-        .flat_map(|(n, primary)| n.labels().map(move |l| (l.as_str(), primary)))
-        .collect();
-    write_overrides(graph, root, &primary_labels, &mut out);
+    let primary_labels = primary_labels(graph);
+    write_overrides(graph, root, &primary_labels, false, &mut out);
     // `/omit-if-no-ref/` the board adds to inherited nodes.
     for node in &graph.nodes {
         if node.omit_if_no_ref && node.inherited.as_ref().is_some_and(|b| !b.omit_if_no_ref) {
@@ -50,6 +48,27 @@ pub fn to_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
         let _ = writeln!(out, "{include}");
     }
     Ok(out)
+}
+
+/// An overlay design as a `.dtso`: what it adds to or changes on its base,
+/// as `&label { ... };` fragments that dtc turns into fixups.
+fn to_overlay_dts(graph: &Graph) -> Result<String, Vec<ValidationError>> {
+    check(graph)?;
+    let root = graph.root().expect("validated graph has a root");
+    let mut out = String::from("/dts-v1/;\n/plugin/;\n\n");
+    let primary_labels = primary_labels(graph);
+    write_overrides(graph, root, &primary_labels, true, &mut out);
+    Ok(out)
+}
+
+/// Every label of a node, mapped to the node's main label.
+fn primary_labels(graph: &Graph) -> HashMap<&str, &str> {
+    graph
+        .nodes
+        .iter()
+        .filter_map(|n| n.label.as_deref().map(|primary| (n, primary)))
+        .flat_map(|(n, primary)| n.labels().map(move |l| (l.as_str(), primary)))
+        .collect()
 }
 
 /// Generates devicetree source for the whole tree, included nodes and all.
@@ -182,11 +201,13 @@ impl Item {
 
 /// Writes what the board changes on the inherited `node` as an override
 /// (`&label { ... };`, `/ { ... };` for the root), then the overrides of
-/// its labeled inherited descendants.
+/// its labeled inherited descendants. In an overlay, `/ { }` would be the
+/// overlay's own root, so the base root is `&{/}`.
 fn write_overrides(
     graph: &Graph,
     node: &Node,
     primary_labels: &HashMap<&str, &str>,
+    overlay: bool,
     out: &mut String,
 ) {
     let mut deferred = Vec::new();
@@ -198,7 +219,7 @@ fn write_overrides(
         }
         // dtc takes no label before `/ {`, so a new root label needs `&{/}`.
         match (node.is_root(), base_label(node)) {
-            (true, _) if new_labels.is_empty() => out.push_str("/ {\n"),
+            (true, _) if new_labels.is_empty() && !overlay => out.push_str("/ {\n"),
             (true, _) => out.push_str("&{/} {\n"),
             (false, Some(target)) => {
                 let _ = writeln!(out, "{} {{", format_reference(target));
@@ -209,7 +230,7 @@ fn write_overrides(
         out.push_str("};\n\n");
     }
     for node in deferred {
-        write_overrides(graph, node, primary_labels, out);
+        write_overrides(graph, node, primary_labels, overlay, out);
     }
 }
 

@@ -53,6 +53,8 @@ export const backend = {
   checkSchemas: (design: Design) => invoke<Problem[] | null>("check_schemas", { design }),
   autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
   exportDts: (design: Design) => invoke<string>("export_dts", { design }),
+  exportDtsFlat: (design: Design) => invoke<string>("export_dts_flat", { design }),
+  newOverlay: (base: string) => invoke<Design>("new_overlay", { base }),
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),
   importDts: (path: string) => invoke<Design>("import_dts", { path }),
@@ -66,6 +68,9 @@ export const backend = {
 const DESIGN_FILTER = [{ name: "DesignTree design", extensions: ["json"] }];
 const DTB_FILTER = [{ name: "Device tree blob", extensions: ["dtb"] }];
 const DTS_FILTER = [{ name: "Devicetree source", extensions: ["dts", "dtsi"] }];
+const DTSO_FILTER = [{ name: "Devicetree overlay source", extensions: ["dtso"] }];
+const DTBO_FILTER = [{ name: "Devicetree overlay blob", extensions: ["dtbo"] }];
+const BASE_FILTER = [{ name: "Design or devicetree source", extensions: ["json", "dts"] }];
 
 export const dialogs = {
   pickKernelTree: () =>
@@ -76,4 +81,7 @@ export const dialogs = {
   pickDtbToSave: () => save({ filters: DTB_FILTER, defaultPath: "board.dtb" }),
   pickDtc: () => open({ title: "Select the dtc program" }) as Promise<string | null>,
   pickDtsToSave: () => save({ filters: DTS_FILTER, defaultPath: "board.dts" }),
+  pickOverlayBase: () => open({ filters: BASE_FILTER, title: "Select the base the overlay applies to" }) as Promise<string | null>,
+  pickDtsoToSave: () => save({ filters: DTSO_FILTER, defaultPath: "overlay.dtso" }),
+  pickDtboToSave: () => save({ filters: DTBO_FILTER, defaultPath: "overlay.dtbo" }),
 };

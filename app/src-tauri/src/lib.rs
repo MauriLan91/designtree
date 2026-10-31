@@ -325,6 +325,22 @@ fn export_dts(design: Graph) -> Result<String, Vec<String>> {
         .map_err(|errors| errors.iter().map(ToString::to_string).collect())
 }
 
+/// The whole tree; for an overlay, its base with the overlay applied.
+#[tauri::command]
+fn export_dts_flat(design: Graph) -> Result<String, Vec<String>> {
+    designtree_core::to_dts_flat(&design)
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect())
+}
+
+/// A new overlay for the design file (.json) or devicetree source at
+/// `base`.
+#[tauri::command(async)]
+fn new_overlay(base: PathBuf, state: State<AppState>) -> Result<Graph, String> {
+    let fallback = state.linux_src.read().unwrap().clone();
+    let options = ImportOptions::detect_or(&base, fallback.as_deref());
+    designtree_core::new_overlay(&base, &options).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn save_design(path: PathBuf, design: Graph) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&design).map_err(|e| e.to_string())?;
@@ -390,7 +406,7 @@ fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) {
 }
 
 /// Compiles the whole tree (includes flattened, so no preprocessor is
-/// needed) to a `.dtb` at `output`. A failed build is not an `Err`: dtc's
+/// needed) to a `.dtb` at `output`, or an overlay to a `.dtbo`. A failed build is not an `Err`: dtc's
 /// errors come back as problems so the UI can show them on the nodes.
 /// Runs off the UI thread.
 #[tauri::command(async)]
@@ -399,13 +415,21 @@ fn build_dtb(
     output: PathBuf,
     state: State<AppState>,
 ) -> Result<BuildResult, String> {
-    let (dts, map) = designtree_core::to_dts_flat_mapped(&design).map_err(|errors| {
+    let joined = |errors: Vec<designtree_core::ValidationError>| {
         errors
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
-    })?;
+    };
+    let (dts, map) = if design.overlay.is_some() {
+        // Lines of the overlay are not mapped to nodes; dtc's messages
+        // still show in the build log.
+        let dts = designtree_core::to_dts(&design).map_err(joined)?;
+        (dts, designtree_core::SourceMap::default())
+    } else {
+        designtree_core::to_dts_flat_mapped(&design).map_err(joined)?
+    };
     let dtc = state.dtc_path.read().unwrap().clone().or_else(|| {
         std::env::var_os("DESIGNTREE_DTC")
             .filter(|p| !p.is_empty())
@@ -447,6 +471,8 @@ pub fn run() {
             search_dt_macros,
             resolve_dt_macros,
             validate_design,
+            export_dts_flat,
+            new_overlay,
             check_schemas,
             interrupt_tree,
             auto_layout,
