@@ -1,9 +1,16 @@
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
 import { consumerHandle, providerHandle } from "../ports";
 import { CHILD_HANDLE, PARENT_HANDLE, PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
+
+const pending = new Set<string>();
+function flush(update: (ids: string[]) => void) {
+  const ids = [...pending];
+  pending.clear();
+  update(ids);
+}
 
 /**
  * Canvas node for a devicetree node: hierarchy handles top/bottom, phandle
@@ -21,7 +28,16 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   // registered, or its edges disappear.
   const updateNodeInternals = useUpdateNodeInternals();
   const handleKey = [...consumers.map((c) => c.property), "|", ...(ports?.providers.map((p) => p.cells) ?? [])].join(" ");
-  useEffect(() => updateNodeInternals(id), [id, handleKey, updateNodeInternals]);
+  // Not on mount, since React Flow measures new nodes itself. Nodes whose
+  // ports change together (bindings arriving for a whole board) are
+  // registered in one batch: one update per node is quadratic.
+  const registered = useRef(handleKey);
+  useEffect(() => {
+    if (registered.current === handleKey) return;
+    registered.current = handleKey;
+    if (pending.size === 0) queueMicrotask(() => flush(updateNodeInternals));
+    pending.add(id);
+  }, [id, handleKey, updateNodeInternals]);
   const isRoot = data.name === "/";
   const fullName = data.unitAddress ? `${data.name}@${data.unitAddress}` : data.name;
   return (
