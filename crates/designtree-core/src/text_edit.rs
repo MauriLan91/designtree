@@ -247,6 +247,7 @@ mod tests {
         previous.nodes[serial_at].board_position = Some(Position { x: 3.0, y: 4.0 });
         previous.board = Some(crate::model::Board {
             background: Some("board.png".into()),
+            ..Default::default()
         });
         let (text, _) = to_dts_mapped(&previous).unwrap();
         assert!(
