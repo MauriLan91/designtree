@@ -5,6 +5,7 @@
 //! become phandle properties (`clocks = <&osc 0>;`). Groups are a purely
 //! visual concept and never affect the generated source.
 
+pub mod address_map;
 pub mod dtc;
 pub mod dts;
 pub mod fdt;
@@ -18,6 +19,7 @@ pub mod problems;
 pub mod soc;
 pub mod validate;
 
+pub use address_map::{address_map, AddressMap, AddressProblem, Bus, Region};
 pub use dts::{to_dts, to_dts_flat, to_dts_flat_mapped, NodeSpan, SourceMap};
 pub use fdt::{to_dtb, Dtb};
 pub use import::{import_dts, import_dts_file, ImportError};
