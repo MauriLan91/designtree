@@ -28,6 +28,9 @@ pub enum ValidationError {
         property: String,
         target: String,
     },
+    /// Overlays are applied to a compiled base, so they can only add.
+    #[error("`{node}`: an overlay cannot {what}")]
+    OverlayCannot { node: String, what: String },
 }
 
 /// Checks structural rules that must hold before DTS can be generated.
@@ -98,7 +101,85 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
     }
 
     check_value_references(graph, &labels, &mut errors);
+    if graph.overlay.is_some() {
+        check_overlay(graph, &mut errors);
+    }
     errors
+}
+
+/// What an overlay cannot express: deleting from its base, labeling base
+/// nodes or referencing them by path (only labels reach the base, through
+/// its `__symbols__`), adding `/memreserve/`s and changing
+/// `/omit-if-no-ref/`.
+fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
+    let referenced: HashSet<(&NodeId, &str)> = graph
+        .edges
+        .iter()
+        .filter_map(|e| match &e.kind {
+            EdgeKind::Reference { property, .. } => Some((&e.from, property.as_str())),
+            EdgeKind::Child => None,
+        })
+        .collect();
+    let mut cannot = |node: &str, what: String| {
+        errors.push(ValidationError::OverlayCannot {
+            node: node.to_owned(),
+            what,
+        })
+    };
+    for target in &graph.deleted_nodes {
+        cannot(target, "delete a node of its base".into());
+    }
+    if graph.memreserves.iter().any(|r| !r.inherited) {
+        cannot("/", "add /memreserve/ entries".into());
+    }
+    for node in &graph.nodes {
+        let Some(base) = &node.inherited else {
+            continue;
+        };
+        let id = node.id.0.as_str();
+        for label in node.labels().filter(|l| !base.labels.contains(l)) {
+            cannot(id, format!("add the label `{label}` to a node of its base"));
+        }
+        let present = |name: &str| {
+            (name == "compatible" && !node.compatible.is_empty())
+                || node.properties.iter().any(|p| p.name == name)
+                || referenced.contains(&(&node.id, name))
+        };
+        for property in base.properties.iter().filter(|p| !present(&p.name)) {
+            cannot(id, format!("delete the property `{}`", property.name));
+        }
+        if node.omit_if_no_ref != base.omit_if_no_ref {
+            cannot(id, "change /omit-if-no-ref/ on a node of its base".into());
+        }
+    }
+    // Values the overlay writes: those of its own nodes and changed ones.
+    for node in &graph.nodes {
+        let base = node.inherited.as_ref().map(|b| b.properties.as_slice());
+        for property in &node.properties {
+            if base.is_some_and(|b| b.contains(property)) {
+                continue;
+            }
+            let PropertyValue::Mixed(chunks) = &property.value else {
+                continue;
+            };
+            let by_path = chunks.iter().any(|chunk| match chunk {
+                ValueChunk::Path { .. } => true,
+                ValueChunk::Cells { cells, .. } => cells
+                    .iter()
+                    .any(|c| matches!(c, Cell::Phandle { phandle } if phandle.starts_with('/'))),
+                _ => false,
+            });
+            if by_path {
+                cannot(
+                    &node.id.0,
+                    format!(
+                        "reference a node by path (`{}`); use its label",
+                        property.name
+                    ),
+                );
+            }
+        }
+    }
 }
 
 /// References inside `Mixed` values must name an existing label or path.

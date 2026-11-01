@@ -47,6 +47,21 @@ enum Command {
         #[arg(short = 'I', long = "include")]
         include_dirs: Vec<PathBuf>,
     },
+    /// Start an overlay (.dtso) for a base design file (.json) or board
+    /// source (.dts). Export the result to get the overlay source.
+    Overlay {
+        base: PathBuf,
+        /// Output design file (JSON). Prints to stdout when omitted.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Kernel source tree whose include directories to use for a .dts
+        /// base.
+        #[arg(long)]
+        linux: Option<PathBuf>,
+        /// Additional include directory for a .dts base (repeatable).
+        #[arg(short = 'I', long = "include")]
+        include_dirs: Vec<PathBuf>,
+    },
     /// Check a devicetree against the binding schemas of a kernel tree,
     /// like `make dtbs_check`. Takes a design file (.json), devicetree
     /// source (.dts, imported first) or a compiled blob (.dtb).
@@ -130,6 +145,20 @@ fn main() -> Result<()> {
             options.include_dirs.extend(include_dirs);
             let graph = designtree_core::import_dts_file(&dts, &options)?;
             write_output(output, &serde_json::to_string_pretty(&graph)?)
+        }
+        Command::Overlay {
+            base,
+            output,
+            linux,
+            include_dirs,
+        } => {
+            let mut options = match linux {
+                Some(linux) => ImportOptions::kernel(&linux),
+                None => ImportOptions::detect(&base),
+            };
+            options.include_dirs.extend(include_dirs);
+            let overlay = designtree_core::new_overlay(&base, &options)?;
+            write_output(output, &serde_json::to_string_pretty(&overlay)?)
         }
         Command::Check {
             input,

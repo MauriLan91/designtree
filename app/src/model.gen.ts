@@ -80,6 +80,12 @@ export type MemReserve = { address: number | string, size: number | string,
  */
 inherited?: boolean, };
 
+export type Overlay = { 
+/**
+ * The base design or board file, as it was opened.
+ */
+base: string, };
+
 export type Graph = { nodes: Array<Node>, edges: Array<Edge>, groups: Array<Group>, 
 /**
  * `/memreserve/` entries: memory regions the OS must not use.
@@ -103,6 +109,12 @@ trailing_includes?: Array<string>,
  * or a path starting with `/`).
  */
 deleted_nodes?: Array<string>, 
+/**
+ * Set when the design is an overlay (`.dtso`) for another design: its
+ * nodes are then marked [`Node::inherited`] and export writes only
+ * what the overlay adds or changes.
+ */
+overlay?: Overlay, 
 /**
  * Version of the kernel whose binding schemas the design was edited
  * against (`7.3`); the editor warns when it opens the design with

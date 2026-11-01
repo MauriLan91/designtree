@@ -27,6 +27,17 @@ replaceable layer.
   deleted inherited nodes, then only the differences from the included
   definitions as `&label { }` overrides (`/ { }` for the root, nested blocks
   for unlabeled nodes). `to_dts_flat` always writes the whole tree.
+- An overlay design (`Graph::overlay`) is its base with every node marked
+  inherited (`overlay_on`), so the same override writer produces the
+  `.dtso`: `/plugin/;`, then `&label { }` fragments (`&{/}` for the root)
+  that dtc turns into fixups against the base's `__symbols__`. Validation
+  refuses what an overlay cannot express, because it is applied to a
+  compiled base: deleting nodes or properties, new labels on base nodes,
+  references by path (only labels reach the base), new `/memreserve/`s and
+  changes to `/omit-if-no-ref/`. Builds pass `-@` to dtc so that a base
+  built here carries the `__symbols__` overlays need. `to_dts_flat` of an overlay is the
+  base with the overlay applied; `tests/overlay.rs` checks it against
+  `fdtoverlay`.
 - `import_dts` turns devicetree source into a graph in three stages:
   `preprocess` does what the kernel's `cpp` run does (`#include`, macros,
   `#if`, dtc's `/include/`) in-process, writing line markers so positions
