@@ -36,6 +36,7 @@ fn new_node(id: &str, name: &str, unit: Option<&str>, label: Option<&str>) -> No
         properties: vec![],
         inherited: None,
         position: Position::default(),
+        board_position: None,
     }
 }
 

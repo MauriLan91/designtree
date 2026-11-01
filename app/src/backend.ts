@@ -42,6 +42,7 @@ export interface EditedDesign {
 
 export interface StartupArgs {
   design: Design | null;
+  design_path: string | null;
   linux_src: string | null;
 }
 
@@ -69,6 +70,8 @@ export const backend = {
   /** Rejects with a `SourceError` when the text does not import. */
   applySource: (text: string, design: Design) => invoke<EditedDesign>("apply_source", { text, design }),
   newOverlay: (base: string) => invoke<Design>("new_overlay", { base }),
+  readBoardImage: (path: string, designPath: string | null) =>
+    invoke<string>("read_board_image", { path, designPath }),
   saveDesign: (path: string, design: Design) => invoke<void>("save_design", { path, design }),
   openDesign: (path: string) => invoke<Design>("open_design", { path }),
   importDts: (path: string) => invoke<Design>("import_dts", { path }),
@@ -98,4 +101,9 @@ export const dialogs = {
   pickOverlayBase: () => open({ filters: BASE_FILTER, title: "Select the base the overlay applies to" }) as Promise<string | null>,
   pickDtsoToSave: () => save({ filters: DTSO_FILTER, defaultPath: "overlay.dtso" }),
   pickDtboToSave: () => save({ filters: DTBO_FILTER, defaultPath: "overlay.dtbo" }),
+  pickBoardImage: () =>
+    open({
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg"] }],
+      title: "Select a board photo or schematic",
+    }) as Promise<string | null>,
 };

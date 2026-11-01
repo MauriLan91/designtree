@@ -12,6 +12,7 @@ import {
   type Edge,
   type IsValidConnection,
   type OnBeforeDelete,
+  type XYPosition,
 } from "@xyflow/react";
 import { backend, dialogs, inTauri } from "./backend";
 import { DtNode } from "./components/DtNode";
@@ -42,6 +43,7 @@ import {
   type NodePortSet,
 } from "./ports";
 import { Inspector } from "./components/Inspector";
+import { BoardView } from "./components/BoardView";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
 import {
@@ -71,13 +73,14 @@ const nodeTypes = { dt: DtNode, group: GroupNode };
 const edgeTypes = { ref: RefEdge };
 const GROUP_PADDING = 40;
 
-/** The design without what does not reach the devicetree (positions, groups), and its key. */
+/** The design without what does not reach the devicetree (positions, groups, the board view), and its key. */
 function treeOf(nodes: FlowNode[], edges: Edge[], extras: DesignExtras) {
   const design = toDesign(nodes, edges, extras);
   const tree = {
     ...design,
-    nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
+    nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 }, board_position: undefined })),
     groups: [],
+    board: undefined,
   };
   return { design: tree, key: JSON.stringify(tree) };
 }
@@ -122,6 +125,7 @@ export default function App() {
   const [pickingSoc, setPickingSoc] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const [showAddressMap, setShowAddressMap] = useState(false);
+  const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
@@ -139,6 +143,7 @@ export default function App() {
         setNodes(d.nodes);
         setEdges(d.edges);
         setExtras(d.extras);
+        setDesignPath(args.design_path);
       }
       setRequestedKernel(args.linux_src);
     }, (e) => setErrors([String(e)]));
@@ -703,6 +708,20 @@ export default function App() {
     if (path) await backend.setDtcPath(path);
   };
 
+  const placeOnBoard = (positions: Map<string, XYPosition | null>) =>
+    setNodes((ns) =>
+      ns.map((n) =>
+        isDtNode(n) && positions.has(n.id)
+          ? ({ ...n, data: { ...n.data, boardPosition: positions.get(n.id) ?? undefined } } as FlowNode)
+          : n,
+      ),
+    );
+  const selectOnly = (ids: string[]) => {
+    const wanted = new Set(ids);
+    setNodes((ns) => ns.map((n) => (!!n.selected === wanted.has(n.id) ? n : ({ ...n, selected: wanted.has(n.id) } as FlowNode))));
+    setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
+  };
+
   const updateNodeData = (id: string, data: object) =>
     setNodes((ns) => ns.map((n) => (n.id === id ? ({ ...n, data: { ...n.data, ...data } } as FlowNode) : n)));
   const updateEdgeData = (id: string, data: RefData) =>
@@ -741,7 +760,10 @@ export default function App() {
         <button onClick={() => setShowAddressMap((v) => !v)} disabled={!inTauri} aria-pressed={showAddressMap}>
           Address map
         </button>
-        <button onClick={autoLayout} disabled={!inTauri}>Auto layout</button>
+        <button onClick={() => setBoardView((v) => !v)} aria-pressed={boardView} title="Place devices where they sit on the board">
+          Board view
+        </button>
+        <button onClick={autoLayout} disabled={!inTauri || boardView}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
       </header>
@@ -753,29 +775,40 @@ export default function App() {
             Bindings may differ; pick another checkout under Kernels…
           </div>
         )}
-        <NodeProblems.Provider value={nodeProblems}>
-        <NodePorts.Provider value={stablePorts}>
-        <ReactFlow
-          nodes={view.nodes}
-          edges={view.edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          isValidConnection={isValidConnection}
-          onBeforeDelete={onBeforeDelete}
-          fitView
-          fitViewOptions={{ maxZoom: 1 }}
-          minZoom={0.1}
-          deleteKeyCode={["Backspace", "Delete"]}
-        >
-          <Background />
-          <Controls />
-          <MiniMap pannable zoomable />
-        </ReactFlow>
-        </NodePorts.Provider>
-        </NodeProblems.Provider>
+        {boardView ? (
+          <BoardView
+            nodes={nodes}
+            board={extras.board}
+            designPath={designPath}
+            onPlace={placeOnBoard}
+            onSelect={selectOnly}
+            onBoardChange={(board) => setExtras((x) => ({ ...x, board: board?.background ? board : undefined }))}
+          />
+        ) : (
+          <NodeProblems.Provider value={nodeProblems}>
+          <NodePorts.Provider value={stablePorts}>
+          <ReactFlow
+            nodes={view.nodes}
+            edges={view.edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            isValidConnection={isValidConnection}
+            onBeforeDelete={onBeforeDelete}
+            fitView
+            fitViewOptions={{ maxZoom: 1 }}
+            minZoom={0.1}
+            deleteKeyCode={["Backspace", "Delete"]}
+          >
+            <Background />
+            <Controls />
+            <MiniMap pannable zoomable />
+          </ReactFlow>
+          </NodePorts.Provider>
+          </NodeProblems.Provider>
+        )}
       </main>
       <aside className="panel side">
         <Inspector

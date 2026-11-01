@@ -700,6 +700,7 @@ mod tests {
             properties: vec![],
             inherited: None,
             position: Position::default(),
+            board_position: None,
         }
     }
 

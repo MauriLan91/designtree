@@ -151,6 +151,11 @@ pub struct Node {
     pub inherited: Option<Inherited>,
     #[serde(default)]
     pub position: Position,
+    /// Where the device sits in the board view (US-14.1). Only the nodes
+    /// placed there have one. Like `position`, not part of the devicetree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub board_position: Option<Position>,
 }
 
 /// The definition of a node in the included files, before the board file
@@ -269,6 +274,20 @@ pub struct Graph {
     /// another one. Not part of the exported devicetree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+    /// The board view: devices placed over a picture of the board.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub board: Option<Board>,
+}
+
+/// Settings of the board view (US-14.1). Not part of the devicetree.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+pub struct Board {
+    /// Image drawn under the devices, such as a board photo or a schematic
+    /// export, as a path; a relative path is relative to the design file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub background: Option<String>,
 }
 
 /// What an overlay design applies to.

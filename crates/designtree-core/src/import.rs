@@ -595,6 +595,7 @@ impl Tree {
             properties: Vec::new(),
             inherited: None,
             position: Position::default(),
+            board_position: None,
         });
 
         for child in self.live_children(node) {

@@ -2,7 +2,7 @@
 //! JSON-serializable values; the front end never sees Rust types directly.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
@@ -256,18 +256,22 @@ fn resolve_dt_macros(names: Vec<String>, state: State<AppState>) -> Vec<Option<u
 struct StartupArgs {
     /// Design file given on the command line (`designtree-app board.json`).
     design: Option<Graph>,
+    /// Its path.
+    design_path: Option<PathBuf>,
     /// Kernel tree to index at startup, from `DESIGNTREE_LINUX_SRC`.
     linux_src: Option<PathBuf>,
 }
 
 #[tauri::command]
 fn startup_args() -> Result<StartupArgs, String> {
-    let design = match std::env::args_os().nth(1) {
-        Some(path) => Some(open_design(PathBuf::from(path))?),
+    let design_path = std::env::args_os().nth(1).map(PathBuf::from);
+    let design = match &design_path {
+        Some(path) => Some(open_design(path.clone())?),
         None => None,
     };
     Ok(StartupArgs {
         design,
+        design_path,
         linux_src: std::env::var_os("DESIGNTREE_LINUX_SRC").map(PathBuf::from),
     })
 }
@@ -417,6 +421,56 @@ fn new_overlay(base: PathBuf, state: State<AppState>) -> Result<Graph, String> {
     designtree_core::new_overlay(&base, &options).map_err(|e| e.to_string())
 }
 
+/// The board view's background image (US-14.1) as a `data:` URL. A
+/// relative path is relative to the design file. Only images are read: the
+/// path comes from the design file, which may come from someone else.
+#[tauri::command(async)]
+fn read_board_image(path: PathBuf, design_path: Option<PathBuf>) -> Result<String, String> {
+    let mime = match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("svg") => "image/svg+xml",
+        _ => {
+            return Err(format!(
+                "{} is not a PNG, JPEG, WebP, GIF or SVG image",
+                path.display()
+            ))
+        }
+    };
+    let path = match design_path.as_deref().and_then(Path::parent) {
+        Some(dir) if path.is_relative() => dir.join(&path),
+        _ => path,
+    };
+    let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(format!("data:{mime};base64,{}", base64(&bytes)))
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, &b)| n | u32::from(b) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 #[tauri::command]
 fn save_design(path: PathBuf, design: Graph) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&design).map_err(|e| e.to_string())?;
@@ -557,6 +611,7 @@ pub fn run() {
             auto_layout,
             save_design,
             open_design,
+            read_board_image,
             import_dts,
             list_socs,
             new_board,
@@ -566,4 +621,22 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running DesignTree");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn base64_matches_rfc_4648() {
+        for (input, expected) in [
+            ("", ""),
+            ("f", "Zg=="),
+            ("fo", "Zm8="),
+            ("foo", "Zm9v"),
+            ("foob", "Zm9vYg=="),
+            ("fooba", "Zm9vYmE="),
+            ("foobar", "Zm9vYmFy"),
+        ] {
+            assert_eq!(super::base64(input.as_bytes()), expected);
+        }
+    }
 }
