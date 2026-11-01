@@ -83,6 +83,9 @@ enum Command {
     /// Print the interrupt tree of a design file: each controller with the
     /// devices wired to it, and the devices that have no usable parent.
     Interrupts { design: PathBuf },
+    /// Print the connector pins of a design file with the devices that
+    /// claim each one; exits with an error when a pin is claimed twice.
+    Pins { design: PathBuf },
     /// Print the address map of a design file: the regions of each bus with
     /// their CPU addresses, then overlaps and unmapped regions.
     AddressMap { design: PathBuf },
@@ -276,6 +279,46 @@ fn main() -> Result<()> {
             print(&tree, &name, None, 0);
             for problem in &tree.problems {
                 eprintln!("warning: {}: {}", name(&problem.node), problem.message);
+            }
+            Ok(())
+        }
+        Command::Pins { design } => {
+            let graph = load(&design)?;
+            let check = designtree_core::pin_check(&graph);
+            let name = |id: &designtree_core::NodeId| {
+                graph
+                    .node(id)
+                    .map_or_else(|| id.0.clone(), |n| n.full_name())
+            };
+            let connectors = graph.board.iter().flat_map(|b| &b.connectors);
+            for connector in connectors {
+                println!("{}", connector.title);
+                for pin in &connector.pins {
+                    let claimed: Vec<String> = check
+                        .pins
+                        .iter()
+                        .find(|p| p.connector == connector.id && p.number == pin.number)
+                        .map(|p| p.claimed_by.iter().map(name).collect())
+                        .unwrap_or_default();
+                    println!(
+                        "  {:>3}  {:<12} {}",
+                        pin.number,
+                        pin.name,
+                        claimed.join(", ")
+                    );
+                }
+            }
+            for problem in &check.problems {
+                let title = graph
+                    .board
+                    .iter()
+                    .flat_map(|b| &b.connectors)
+                    .find(|c| c.id == problem.connector)
+                    .map_or(problem.connector.as_str(), |c| c.title.as_str());
+                eprintln!("{title} pin {}: {}", problem.number, problem.message);
+            }
+            if !check.problems.is_empty() {
+                bail!("{} pin problem(s)", check.problems.len());
             }
             Ok(())
         }

@@ -92,7 +92,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .binding-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .binding-compat { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.canvas { grid-area: canvas; position: relative; }
+.canvas { grid-area: canvas; position: relative; min-height: 0; }
 
 .side { grid-area: side; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
 .inspector { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
@@ -233,10 +233,10 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .group-port.out { right: 0; justify-content: flex-end; }
 
 .board-view { display: flex; height: 100%; min-height: 0; }
-.board-devices { width: 220px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+.board-devices { width: 260px; overflow: auto; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
 .board-devices h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 6px 0 0; }
 .board-devices .hint { margin: 0; }
-.board-devices ul { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; min-height: 0; }
+.board-devices ul { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; min-height: 80px; }
 .board-devices li { padding: 4px 6px; border-radius: 4px; cursor: grab; font-family: ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-devices li:hover { background: var(--code); }
 .board-actions { display: flex; gap: 6px; }
@@ -245,4 +245,33 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .board-device { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; max-width: 220px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 .board-device.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
 .board-device-title { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+.board-connector { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
+.board-connector.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.board-connector .board-device-title { margin: 0 2px 4px; }
+.pin-grid { display: flex; flex-direction: column; gap: 2px; }
+.pin-row { display: flex; gap: 2px; }
+.pin-empty { width: 108px; }
+.pin { width: 108px; display: flex; align-items: center; gap: 4px; padding: 1px 4px; font: 10px/14px ui-monospace, monospace; border-radius: 3px; border: 1px solid transparent; background: var(--code); color: var(--text); text-align: left; cursor: pointer; }
+.pin-right { flex-direction: row-reverse; text-align: right; }
+.pin-number { color: var(--muted); min-width: 16px; }
+.pin-right .pin-number { text-align: right; }
+.pin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pin.selected { border-color: var(--accent); }
+.pin-power { background: color-mix(in srgb, #dc2626 22%, var(--panel)); }
+.pin-ground { background: color-mix(in srgb, #6b7280 40%, var(--panel)); }
+.pin-free { background: color-mix(in srgb, var(--accent) 18%, var(--panel)); }
+.pin-claimed { background: color-mix(in srgb, #16a34a 30%, var(--panel)); }
+.pin-conflict { background: color-mix(in srgb, var(--danger) 45%, var(--panel)); border-color: var(--danger); }
+.pin-count { width: 56px; }
+.board-actions select { min-width: 0; flex: 1; }
+.board-actions input { min-width: 0; flex: 1; }
+.board-devices ul.pin-problems { flex: none; min-height: 0; }
+.board-devices .pin-problems li { cursor: pointer; white-space: normal; font-family: inherit; }
+.connector-editor { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.connector-editor h3 { margin: 4px 0 0; font-size: 12px; }
+.connector-editor label { display: flex; flex-direction: column; gap: 2px; }
+.connector-editor input[aria-invalid="true"] { border-color: var(--danger); }
+.connector-editor ul { flex: none; min-height: 0; }
+.connector-editor li { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.connector-editor li button { padding: 0 6px; }
 .board-device-compatible { font-size: 11px; color: var(--muted); }

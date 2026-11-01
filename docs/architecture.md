@@ -186,6 +186,17 @@ tree key the editor uses to detect devicetree changes leaves them out, and a
 text edit keeps them like canvas positions. Selection is the graph's, so the
 inspector edits the device selected on the board.
 
+Connectors on the board (`Graph.board.connectors`, US-14.3) come from
+templates in `app/src/connectorTemplates.ts` (the 40-pin header, mikroBUS,
+generic headers). Each pin can name the SoC pad behind it: a GPIO line
+(controller and specifier cells without the flags) and the `pinctrl` groups
+that mux the pad to a function. `designtree_core::pin_check` finds the
+enabled devices that claim each pin, through `*-gpios` properties, GPIO
+hogs and `pinctrl-N` states, and flags a pin claimed by two devices (a
+device and its subnodes count as one), a line wired to two pins, and
+targets missing from the design. The pads a group muxes are not read from
+the group, whose format is SoC specific; the pin lists them instead.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed

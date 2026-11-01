@@ -288,6 +288,63 @@ pub struct Board {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub background: Option<String>,
+    /// Connectors on the board, with the SoC pin behind each of their pins
+    /// (US-14.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub connectors: Vec<Connector>,
+}
+
+/// A header or socket on the board, such as a 40-pin expansion header.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct Connector {
+    pub id: String,
+    /// Name printed on the board, e.g. `J8`.
+    pub title: String,
+    /// The template the pins came from (`rpi-40`), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub template: Option<String>,
+    /// Where the connector sits in the board view.
+    #[serde(default)]
+    pub position: Position,
+    pub pins: Vec<ConnectorPin>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ConnectorPin {
+    /// Pin number printed on the connector.
+    pub number: u32,
+    /// Signal name, e.g. `GPIO17` or `I2C1_SDA`.
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub kind: PinKind,
+    /// The GPIO line of the SoC pad wired to this pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub gpio: Option<GpioLine>,
+    /// `pinctrl` groups that mux the pad to a function (an I2C, UART or
+    /// SPI signal). A device that selects one of them claims the pin.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinctrl: Vec<NodeId>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum PinKind {
+    #[default]
+    Signal,
+    Power,
+    Ground,
+}
+
+/// A line of a GPIO controller, as a `*-gpios` property names it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+pub struct GpioLine {
+    pub controller: NodeId,
+    /// The specifier cells without the trailing flags cell: `[5]` for
+    /// `<&gpio1 5 GPIO_ACTIVE_HIGH>`, `[1, 2]` for `<&pio 1 2 0>`.
+    pub cells: Vec<u32>,
 }
 
 /// What an overlay design applies to.

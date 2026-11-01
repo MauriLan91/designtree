@@ -91,12 +91,59 @@ export type Overlay = {
  */
 base: string, };
 
+export type PinKind = "signal" | "power" | "ground";
+
+export type GpioLine = { controller: NodeId, 
+/**
+ * The specifier cells without the trailing flags cell: `[5]` for
+ * `<&gpio1 5 GPIO_ACTIVE_HIGH>`, `[1, 2]` for `<&pio 1 2 0>`.
+ */
+cells: Array<number>, };
+
+export type ConnectorPin = { 
+/**
+ * Pin number printed on the connector.
+ */
+number: number, 
+/**
+ * Signal name, e.g. `GPIO17` or `I2C1_SDA`.
+ */
+name: string, kind: PinKind, 
+/**
+ * The GPIO line of the SoC pad wired to this pin.
+ */
+gpio?: GpioLine, 
+/**
+ * `pinctrl` groups that mux the pad to a function (an I2C, UART or
+ * SPI signal). A device that selects one of them claims the pin.
+ */
+pinctrl?: Array<NodeId>, };
+
+export type Connector = { id: string, 
+/**
+ * Name printed on the board, e.g. `J8`.
+ */
+title: string, 
+/**
+ * The template the pins came from (`rpi-40`), if any.
+ */
+template?: string, 
+/**
+ * Where the connector sits in the board view.
+ */
+position: Position, pins: Array<ConnectorPin>, };
+
 export type Board = { 
 /**
  * Image drawn under the devices, such as a board photo or a schematic
  * export, as a path; a relative path is relative to the design file.
  */
-background?: string, };
+background?: string, 
+/**
+ * Connectors on the board, with the SoC pin behind each of their pins
+ * (US-14.3).
+ */
+connectors?: Array<Connector>, };
 
 export type Graph = { nodes: Array<Node>, edges: Array<Edge>, groups: Array<Group>, 
 /**
@@ -157,6 +204,20 @@ export type InterruptTree = { controllers: Array<InterruptController>,
  * specifiers.
  */
 problems: Array<InterruptProblem>, };
+
+export type PinState = { connector: string, number: number, 
+/**
+ * Enabled devices that claim the pad, in design order.
+ */
+claimed_by: Array<NodeId>, };
+
+export type PinProblem = { connector: string, number: number, message: string, 
+/**
+ * The devices involved, to select on the canvas.
+ */
+nodes: Array<NodeId>, };
+
+export type PinCheck = { pins: Array<PinState>, problems: Array<PinProblem>, };
 
 export type Region = { node: NodeId, 
 /**

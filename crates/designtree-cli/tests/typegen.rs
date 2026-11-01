@@ -10,9 +10,10 @@ use std::path::PathBuf;
 
 use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
 use designtree_core::{
-    AddressMap, AddressProblem, Board, Bus, Cell, Edge, EdgeKind, Graph, Group, Inherited,
-    InterruptController, InterruptProblem, InterruptTree, MemReserve, Node, NodeId, Overlay,
-    Position, Problem, Property, PropertyValue, Region, Severity, Size, SocDtsi, ValueChunk,
+    AddressMap, AddressProblem, Board, Bus, Cell, Connector, ConnectorPin, Edge, EdgeKind,
+    GpioLine, Graph, Group, Inherited, InterruptController, InterruptProblem, InterruptTree,
+    MemReserve, Node, NodeId, Overlay, PinCheck, PinKind, PinProblem, PinState, Position, Problem,
+    Property, PropertyValue, Region, Severity, Size, SocDtsi, ValueChunk,
 };
 use ts_rs::{Config, TS};
 
@@ -39,11 +40,18 @@ fn generate() -> String {
         Group::decl(&cfg),
         MemReserve::decl(&cfg),
         Overlay::decl(&cfg),
+        PinKind::decl(&cfg),
+        GpioLine::decl(&cfg),
+        ConnectorPin::decl(&cfg),
+        Connector::decl(&cfg),
         Board::decl(&cfg),
         Graph::decl(&cfg),
         InterruptController::decl(&cfg),
         InterruptProblem::decl(&cfg),
         InterruptTree::decl(&cfg),
+        PinState::decl(&cfg),
+        PinProblem::decl(&cfg),
+        PinCheck::decl(&cfg),
         Region::decl(&cfg),
         Bus::decl(&cfg),
         AddressProblem::decl(&cfg),
