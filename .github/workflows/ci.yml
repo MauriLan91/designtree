@@ -134,3 +134,52 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # G5: time the backend and the canvas on a generated 1,000-node board and
+  # compare with the last run on main. Reports only: shared runners are too
+  # noisy for a threshold, and have no GPU for the canvas.
+  g5-bench:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PLAYWRIGHT_VERSION: "1.63.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Time the backend
+        run: |
+          cargo build --release -p designtree-cli
+          target/release/designtree bench --nodes 1000 --runs 9 --json --design g5-design.json > g5-backend.json
+      - name: Build the front end
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+          npm install --no-save "playwright@$PLAYWRIGHT_VERSION"
+          npx playwright install --with-deps chromium
+      - name: Time the canvas
+        working-directory: app
+        run: node bench/g5.mjs ../g5-design.json --out ../g5-canvas.json
+      - name: Fetch the last report from main
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          branch: main
+          name: g5
+          path: previous
+          if_no_artifact_found: warn
+      - name: Report
+        run: node app/bench/g5-report.mjs g5-backend.json g5-canvas.json g5.json previous/g5.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g5
+          path: g5.json
+          retention-days: 90
