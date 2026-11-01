@@ -283,14 +283,23 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showInterrupts, nodes, edges, extras]);
 
-  // The pin check reads the devicetree and the connectors, nothing else.
-  const connectors = extras.board?.connectors;
+  // The pin check reads the devicetree and the pin mapping; connector
+  // titles, positions and pin names do not change it.
+  const pinMapping = useMemo(() => {
+    const connectors = (extras.board?.connectors ?? []).map((c) => ({
+      ...c,
+      title: "",
+      position: { x: 0, y: 0 },
+      pins: c.pins.map((p) => ({ ...p, name: "" })),
+    }));
+    return { connectors, key: JSON.stringify(connectors) };
+  }, [extras.board?.connectors]);
   useEffect(() => {
-    if (!boardView || !inTauri || !connectors?.length) {
+    if (!boardView || !inTauri || !pinMapping.connectors.length) {
       setPinCheck(null);
       return;
     }
-    const design = { ...schemaInput.design, board: { connectors } };
+    const design = { ...schemaInput.design, board: { connectors: pinMapping.connectors } };
     let stale = false;
     const t = setTimeout(async () => {
       try {
@@ -298,13 +307,14 @@ export default function App() {
         if (!stale) setPinCheck(check);
       } catch {
         // The DTS preview already shows why the design is invalid.
+        if (!stale) setPinCheck(null);
       }
     }, 250);
     return () => {
       stale = true;
       clearTimeout(t);
     };
-  }, [boardView, schemaKey, connectors]);
+  }, [boardView, schemaKey, pinMapping.key]);
 
   useEffect(() => {
     if (!showAddressMap || !inTauri) {

@@ -110,6 +110,8 @@ const title = (n: DtFlowNode) => {
 const hasProperty = (n: DtFlowNode, name: string) => n.data.properties.some((p) => p.name === name);
 const isPinctrlState = (e: Edge) =>
   e.sourceHandle === REF_HANDLE && /^pinctrl-\d+$/.test((e.data as RefData).property);
+/** What the group field takes: labels are unique, names are not. */
+const groupKey = (n: DtFlowNode) => n.data.label ?? n.id;
 const pinKey = (connector: string, number: number) => `${connector}#${number}`;
 const NO_CONNECTORS: Connector[] = [];
 
@@ -437,10 +439,27 @@ function ConnectorEditor({ connector, pin: number, devices, edges, pinCheck, onC
   const controllers = useMemo(() => devices.filter((n) => hasProperty(n, "gpio-controller")), [devices]);
   // Groups some device selects, and every node under a pin controller:
   // the groups no device selects yet are the ones a new device would use.
+  // A pin controller is named or made one (`pinctrl`, `iomuxc`), or holds a
+  // selected group, directly or under a function node without
+  // `compatible` (Rockchip's `pinctrl { i2c1 { i2c1m2-xfer } }`).
   const groups = useMemo(() => {
+    const byId = new Map(devices.map((n) => [n.id, n]));
     const ids = new Set(edges.filter(isPinctrlState).map((e) => e.target));
     const parent = new Map(edges.filter((e) => e.sourceHandle !== REF_HANDLE).map((e) => [e.target, e.source]));
-    const muxes = new Set(devices.filter((n) => n.data.name === "pinctrl").map((n) => n.id));
+    const muxLike = /pinctrl|pinmux|iomux/;
+    const muxes = new Set(
+      devices
+        .filter((n) => muxLike.test(n.data.name) || n.data.compatible.some((c) => muxLike.test(c)))
+        .map((n) => n.id),
+    );
+    for (const id of ids) {
+      const up = parent.get(id);
+      if (!up) continue;
+      const above = parent.get(up);
+      const mux = byId.get(up)?.data.compatible.length || !above ? up : above;
+      // Groups at the top level would make every node a group.
+      if (byId.get(mux)?.data.name !== "/") muxes.add(mux);
+    }
     for (const n of devices) {
       for (let at = parent.get(n.id), depth = 0; at && depth < 64; at = parent.get(at), depth++) {
         if (muxes.has(at)) {
@@ -465,7 +484,7 @@ function ConnectorEditor({ connector, pin: number, devices, edges, pinCheck, onC
   };
 
   const addGroup = () => {
-    const found = groups.find((n) => title(n) === group.trim());
+    const found = groups.find((n) => groupKey(n) === group.trim());
     if (!pin || !found || pin.pinctrl.includes(found.id)) return;
     onPin(pin.number, { pinctrl: [...pin.pinctrl, found.id] });
     setGroup("");
@@ -554,7 +573,9 @@ function ConnectorEditor({ connector, pin: number, devices, edges, pinCheck, onC
                 </div>
                 <datalist id="pinctrl-groups">
                   {groups.map((n) => (
-                    <option key={n.id} value={title(n)} />
+                    <option key={n.id} value={groupKey(n)}>
+                      {title(n)}
+                    </option>
                   ))}
                 </datalist>
               </div>

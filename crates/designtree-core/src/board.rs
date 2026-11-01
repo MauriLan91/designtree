@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::model::{
-    Connector, ConnectorPin, EdgeKind, GpioLine, Graph, Node, NodeId, PropertyValue,
+    Connector, ConnectorPin, EdgeKind, GpioLine, Graph, Node, NodeId, PinKind, PropertyValue,
 };
 
 /// What claims one connector pin.
@@ -49,80 +49,100 @@ pub fn pin_check(graph: &Graph) -> PinCheck {
     let pinctrl_users = pinctrl_users(graph, &tree);
 
     let mut check = PinCheck::default();
-    let mut wired: HashMap<&GpioLine, (&Connector, &ConnectorPin)> = HashMap::new();
-    for connector in &board.connectors {
-        for pin in &connector.pins {
-            let mut problem = |message: String, nodes: Vec<NodeId>| {
-                check.problems.push(PinProblem {
-                    connector: connector.id.clone(),
-                    number: pin.number,
-                    message,
-                    nodes,
-                })
-            };
-            let mut claimed_by: Vec<&NodeId> = Vec::new();
-
-            if let Some(line) = &pin.gpio {
-                match graph.node(&line.controller) {
-                    None => problem(
-                        format!(
-                            "the GPIO controller `{}` is not in the design",
-                            line.controller.0
-                        ),
-                        Vec::new(),
-                    ),
-                    Some(controller) => {
-                        if let Some((other, other_pin)) = wired.insert(line, (connector, pin)) {
-                            problem(
-                                format!(
-                                    "{} pin {} is wired to the same GPIO line ({})",
-                                    other.title,
-                                    other_pin.number,
-                                    line_name(controller, &line.cells)
-                                ),
-                                Vec::new(),
-                            );
-                        }
-                        claimed_by.extend(gpio_users.get(line).into_iter().flatten());
-                    }
-                }
-            }
-            for group in &pin.pinctrl {
-                if graph.node(group).is_none() {
-                    problem(
-                        format!("the pinctrl group `{}` is not in the design", group.0),
-                        Vec::new(),
-                    );
-                }
-                claimed_by.extend(pinctrl_users.get(group).into_iter().flatten());
-            }
-
-            // A device and its subnodes are one claimant: `gpio-keys` selects
-            // the pinctrl group of the GPIOs its buttons use.
-            let mut claimants: Vec<&NodeId> = Vec::new();
-            for id in tree.in_design_order(claimed_by) {
-                if !claimants.iter().any(|c| tree.is_ancestor(c, id)) {
-                    claimants.push(id);
-                }
-            }
-            if claimants.len() > 1 {
-                let names: Vec<String> = claimants
-                    .iter()
-                    .filter_map(|id| graph.node(id))
-                    .map(|n| format!("`{}`", n.label.clone().unwrap_or_else(|| n.full_name())))
-                    .collect();
-                problem(
-                    format!("claimed by {}", names.join(" and ")),
-                    claimants.iter().map(|&id| id.clone()).collect(),
-                );
-            }
-            check.pins.push(PinState {
+    let mut problem =
+        |connector: &Connector, pin: &ConnectorPin, message: String, nodes: Vec<NodeId>| {
+            check.problems.push(PinProblem {
                 connector: connector.id.clone(),
                 number: pin.number,
-                claimed_by: claimants.into_iter().cloned().collect(),
-            });
+                message,
+                nodes,
+            })
+        };
+    // Power and ground pins have no pad, whatever they were mapped to before.
+    let signals = || {
+        board.connectors.iter().flat_map(|c| {
+            c.pins
+                .iter()
+                .filter(|p| p.kind == PinKind::Signal)
+                .map(move |p| (c, p))
+        })
+    };
+    let mut wired: HashMap<&GpioLine, Vec<(&Connector, &ConnectorPin)>> = HashMap::new();
+    for (connector, pin) in signals() {
+        if let Some(line) = &pin.gpio {
+            wired.entry(line).or_default().push((connector, pin));
         }
     }
+
+    let mut pins = Vec::new();
+    for (connector, pin) in signals() {
+        let mut claimed_by: Vec<&NodeId> = Vec::new();
+        if let Some(line) = &pin.gpio {
+            match tree.node(&line.controller) {
+                None => problem(
+                    connector,
+                    pin,
+                    format!(
+                        "the GPIO controller `{}` is not in the design",
+                        line.controller.0
+                    ),
+                    Vec::new(),
+                ),
+                Some(controller) => {
+                    // Reported on every pin of the pair, so both show.
+                    for (other, other_pin) in &wired[line] {
+                        if !std::ptr::eq(*other_pin, pin) {
+                            let message = format!(
+                                "{} pin {} is wired to the same GPIO line ({})",
+                                other.title,
+                                other_pin.number,
+                                line_name(controller, &line.cells)
+                            );
+                            problem(connector, pin, message, Vec::new());
+                        }
+                    }
+                    claimed_by.extend(gpio_users.get(line).into_iter().flatten());
+                }
+            }
+        }
+        for group in &pin.pinctrl {
+            if tree.node(group).is_none() {
+                problem(
+                    connector,
+                    pin,
+                    format!("the pinctrl group `{}` is not in the design", group.0),
+                    Vec::new(),
+                );
+            }
+            claimed_by.extend(pinctrl_users.get(group).into_iter().flatten());
+        }
+
+        let claimed_by = tree.in_design_order(claimed_by);
+        let claimants: Vec<&NodeId> = claimed_by
+            .iter()
+            .copied()
+            .filter(|id| !claimed_by.iter().any(|c| tree.is_part_of(id, c)))
+            .collect();
+        if claimants.len() > 1 {
+            let names: Vec<String> = claimants
+                .iter()
+                .filter_map(|id| tree.node(id))
+                .map(|n| format!("`{}`", n.label.clone().unwrap_or_else(|| n.full_name())))
+                .collect();
+            problem(
+                connector,
+                pin,
+                format!("claimed by {}", names.join(" and ")),
+                claimants.iter().map(|&id| id.clone()).collect(),
+            );
+        }
+        pins.push(PinState {
+            connector: connector.id.clone(),
+            number: pin.number,
+            claimed_by: claimants.into_iter().cloned().collect(),
+        });
+    }
+    check.pins = pins;
     check
 }
 
@@ -146,7 +166,7 @@ fn gpio_users<'a>(graph: &'a Graph, tree: &Tree<'a>) -> HashMap<GpioLine, Vec<&'
         if !is_gpio_property(property) || tree.is_disabled(&edge.from) {
             continue;
         }
-        let Some(controller) = graph.node(&edge.to) else {
+        let Some(controller) = tree.node(&edge.to) else {
             continue;
         };
         let line = GpioLine {
@@ -158,7 +178,7 @@ fn gpio_users<'a>(graph: &'a Graph, tree: &Tree<'a>) -> HashMap<GpioLine, Vec<&'
     // A hog is a child of its controller with the specifiers in `gpios`,
     // and no phandle.
     for hog in graph.nodes.iter().filter(|n| has_property(n, "gpio-hog")) {
-        let Some(controller) = tree.parent(&hog.id).and_then(|p| graph.node(p)) else {
+        let Some(controller) = tree.parent(&hog.id).and_then(|p| tree.node(p)) else {
             continue;
         };
         if tree.is_disabled(&hog.id) {
@@ -233,7 +253,7 @@ fn cells_of<'n>(node: &'n Node, name: &str) -> Option<&'n [u32]> {
 
 /// The node hierarchy, for status and ancestry lookups.
 struct Tree<'a> {
-    graph: &'a Graph,
+    nodes: HashMap<&'a NodeId, &'a Node>,
     parent: HashMap<&'a NodeId, &'a NodeId>,
     order: HashMap<&'a NodeId, usize>,
 }
@@ -252,8 +272,9 @@ impl<'a> Tree<'a> {
             .enumerate()
             .map(|(i, n)| (&n.id, i))
             .collect();
+        let nodes = graph.nodes.iter().map(|n| (&n.id, n)).collect();
         Tree {
-            graph,
+            nodes,
             parent,
             order,
         }
@@ -274,21 +295,35 @@ impl<'a> Tree<'a> {
         .take(self.parent.len() + 1)
     }
 
-    fn is_ancestor(&self, ancestor: &NodeId, id: &'a NodeId) -> bool {
-        self.ancestry(id).skip(1).any(|a| a == ancestor)
+    fn node(&self, id: &NodeId) -> Option<&'a Node> {
+        self.nodes.get(id).copied()
+    }
+
+    /// `id` is a part of the device `device`, not a device of its own: a
+    /// subnode with no `reg` on the way up, such as a `gpio-keys` button.
+    /// A device on a bus has a `reg`, so an I2C sensor is not part of its
+    /// controller.
+    fn is_part_of(&self, id: &'a NodeId, device: &NodeId) -> bool {
+        for at in self.ancestry(id) {
+            if at == device {
+                return at != id;
+            }
+            if self.node(at).is_some_and(|n| has_property(n, "reg")) {
+                return false;
+            }
+        }
+        false
     }
 
     /// A node, or one of its ancestors, has a `status` other than `okay`.
     fn is_disabled(&self, id: &'a NodeId) -> bool {
-        self.ancestry(id)
-            .filter_map(|id| self.graph.node(id))
-            .any(|n| {
-                n.properties.iter().any(|p| {
-                    p.name == "status"
-                        && matches!(&p.value, PropertyValue::Strings(s)
+        self.ancestry(id).filter_map(|id| self.node(id)).any(|n| {
+            n.properties.iter().any(|p| {
+                p.name == "status"
+                    && matches!(&p.value, PropertyValue::Strings(s)
                             if s.first().is_some_and(|s| s != "okay" && s != "ok"))
-                })
             })
+        })
     }
 
     /// The ids sorted in design order, without duplicates.
@@ -304,7 +339,7 @@ impl<'a> Tree<'a> {
 mod tests {
     use super::*;
     use crate::import::import_dts;
-    use crate::model::{Board, PinKind};
+    use crate::model::Board;
     use crate::preprocess::ImportOptions;
 
     fn import(dts: &str) -> Graph {
@@ -335,6 +370,9 @@ mod tests {
 		i2c1: i2c@3000 {
 			pinctrl-names = \"default\";
 			pinctrl-0 = <&i2c1_pins>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			codec@1a { reg = <0x1a>; reset-gpios = <&gpio1 3 0>; };
 		};
 		uart2: serial@4000 {
 			pinctrl-names = \"default\";
@@ -438,6 +476,53 @@ mod tests {
     }
 
     #[test]
+    fn a_device_on_a_bus_is_not_part_of_its_controller() {
+        let g = graph(Vec::new());
+        let gpio1 = id(&g, "gpio@1000");
+        let i2c = id(&g, "i2c1-pins");
+        let g = graph(vec![pin(5, Some((&gpio1, 3)), vec![i2c])]);
+        let check = pin_check(&g);
+
+        // The codec's reset line on the pad the controller muxes to I2C.
+        assert_eq!(claimed(&check, 5, &g), ["i2c@3000", "codec@1a"]);
+        assert_eq!(check.problems.len(), 1);
+    }
+
+    #[test]
+    fn subnodes_merge_into_their_device_in_any_order() {
+        let g = graph(Vec::new());
+        let gpio1 = id(&g, "gpio@1000");
+        let led_pins = id(&g, "led-pins");
+        let mut g = graph(vec![pin(11, Some((&gpio1, 4)), vec![led_pins])]);
+        let leds = g.nodes.iter().position(|n| n.name == "leds").unwrap();
+        let led = g
+            .nodes
+            .remove(g.nodes.iter().position(|n| n.name == "led").unwrap());
+        g.nodes.insert(leds, led);
+
+        assert_eq!(claimed(&pin_check(&g), 11, &g), ["leds", "reset"]);
+    }
+
+    #[test]
+    fn power_and_ground_pins_have_no_pad() {
+        let g = graph(Vec::new());
+        let gpio1 = id(&g, "gpio@1000");
+        let mut power = pin(1, Some((&gpio1, 4)), vec![NodeId::from("gone")]);
+        power.kind = PinKind::Power;
+        let g = graph(vec![power, pin(2, Some((&gpio1, 4)), Vec::new())]);
+        let check = pin_check(&g);
+
+        assert_eq!(check.pins.len(), 1);
+        assert_eq!(check.pins[0].number, 2);
+        assert_eq!(
+            check.problems.len(),
+            1,
+            "only the claim on pin 2: {:?}",
+            check.problems
+        );
+    }
+
+    #[test]
     fn missing_targets_and_doubly_wired_lines_are_flagged() {
         let g = graph(Vec::new());
         let gpio1 = id(&g, "gpio@1000");
@@ -462,6 +547,10 @@ mod tests {
                 (
                     1,
                     "the pinctrl group `gone-pins` is not in the design".to_string()
+                ),
+                (
+                    2,
+                    "J8 pin 4 is wired to the same GPIO line (gpio1 30)".to_string()
                 ),
                 (
                     4,
