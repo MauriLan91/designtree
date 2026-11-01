@@ -33,7 +33,7 @@ DESIGNTREE_REQUIRE_DTC=1 cargo test --all        # needs dtc (device-tree-compil
 (cd app && npm install && npm run build)         # tsc + vite
 ```
 
-CI runs the same, plus the G1 and G3 corpora (`g1-corpus`, `g3-corpus` jobs). Rust tests that need
+CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, `g3-corpus`, `g5-bench` jobs). Rust tests that need
 `dtc` skip without it, unless `DESIGNTREE_REQUIRE_DTC` is set.
 
 - **Generated types**: `app/src/model.gen.ts` comes from the Rust types. After
@@ -46,6 +46,10 @@ CI runs the same, plus the G1 and G3 corpora (`g1-corpus`, `g3-corpus` jobs). Ru
   `pip install dtschema==2026.9` and the same kernel checkout, then
   `DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test --release -p designtree-cli --test g3_corpus -- --ignored --nocapture`
   (about 3 minutes, mostly `dt-validate`).
+- **G5 benchmark** (1,000-node generated board): `designtree bench` times the
+  backend; for the canvas, `npm run build` in `app`, then
+  `node bench/g5.mjs <design.json>` (needs the `playwright` package; write the
+  design with `designtree bench --design`). CI reports both next to the last run on main.
 - **Cloud sessions**: `scripts/cloud-session-setup.sh` installs the system
   packages, npm packages and crates a fresh container needs (`docs/cloud-sessions.md`).
 - Tauri on Linux needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`;

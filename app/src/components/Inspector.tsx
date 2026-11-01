@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Edge } from "@xyflow/react";
 import { backend, inTauri } from "../backend";
 import { SpecifierEditor } from "./SpecifierEditor";
+import { TextInput } from "./TextInput";
 import {
   checkValue,
   clearEditedTodo,
@@ -55,7 +56,7 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCell
         <h2>Group</h2>
         <label>
           Title
-          <input value={node.data.title} onChange={(e) => onNodeChange(node.id, { title: e.target.value })} />
+          <TextInput key={node.id} value={node.data.title} onCommit={(title) => onNodeChange(node.id, { title })} />
         </label>
       </section>
     );
@@ -67,7 +68,7 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCell
         <h2>Reference</h2>
         <label>
           Property
-          <input value={data.property} onChange={(e) => onEdgeChange(edge.id, { ...data, property: e.target.value })} />
+          <TextInput key={edge.id} value={data.property} onCommit={(property) => onEdgeChange(edge.id, { ...data, property })} />
         </label>
         <SpecifierEditor
           args={data.args}
@@ -147,37 +148,39 @@ function NodeInspector({
       <div className="row">
         <label>
           Name
-          <input
+          <TextInput
+            key={node.id}
             value={data.name}
             disabled={isRoot || data.inherited !== undefined}
-            onChange={(e) => onChange(node.id, { name: e.target.value })}
+            onCommit={(name) => onChange(node.id, { name })}
           />
         </label>
         <label>
           Unit address
-          <input
+          <TextInput
+            key={node.id}
             value={data.unitAddress ?? ""}
             disabled={isRoot || data.inherited !== undefined}
-            onChange={(e) => onChange(node.id, { unitAddress: e.target.value })}
+            onCommit={(unitAddress) => onChange(node.id, { unitAddress })}
           />
         </label>
       </div>
       <label>
         Label
-        <input
+        <TextInput
+          key={node.id}
           value={data.label ?? ""}
           disabled={data.inherited?.labels?.includes(data.label ?? "") || locked}
-          onChange={(e) => onChange(node.id, { label: e.target.value })}
+          onCommit={(label) => onChange(node.id, { label })}
         />
       </label>
       <label>
         Compatible (comma separated)
-        <input
+        <TextInput
+          key={node.id}
           value={data.compatible.join(", ")}
           disabled={locked}
-          onChange={(e) =>
-            onChange(node.id, { compatible: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-          }
+          onCommit={(text) => onChange(node.id, { compatible: text.split(",").map((s) => s.trim()).filter(Boolean) })}
         />
       </label>
       {typed.length > 0 && (

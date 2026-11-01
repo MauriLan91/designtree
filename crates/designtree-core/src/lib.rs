@@ -19,6 +19,7 @@ pub mod parse;
 mod preprocess;
 pub mod problems;
 pub mod soc;
+pub mod synthetic;
 pub mod text_edit;
 pub mod validate;
 
@@ -34,5 +35,6 @@ pub use overlay::{new_overlay, overlay_on, OverlayError};
 pub use preprocess::ImportOptions;
 pub use problems::{parse_problems, Problem, Severity};
 pub use soc::{list_soc_dtsi, new_board, SocDtsi};
+pub use synthetic::synthetic_board_dts;
 pub use text_edit::apply_source;
 pub use validate::{validate, ValidationError};

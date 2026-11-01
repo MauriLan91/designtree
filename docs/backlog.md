@@ -188,7 +188,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
 | US-11.1 | As a user, I want large SoC designs to stay fluid so that the tool works on real hardware. | G5 benchmark in CI with a generated 1,000-node design; report trend. | 5 | Sonnet 5.5 | dataviz, run |
-| US-11.2 | As a user, I want validation and export to be incremental so that typing never lags. | Only changed subtrees re-validated; measured < 50 ms per edit on the benchmark. | 8 | Opus 5.5 | code-review |
+| US-11.2 | As a user, I want validation and export to be incremental so that typing never lags. | Each stage of an edit measured on the G5 benchmark (generated board and a real SoC board); < 50 ms per edit, optimising the stages that miss it (incremental work only where measurements show it is needed). | 8 | Opus 5.5 | code-review |
 
 ## M4 · v1.0 Public release
 
