@@ -132,7 +132,13 @@ export default function App() {
   const [showKernels, setShowKernels] = useState(false);
 
   useEffect(() => {
-    if (!inTauri) return;
+    if (!inTauri) {
+      // In a plain browser, `?design=<url>` opens a design file: this is how
+      // the G5 benchmark loads its board (US-11.1).
+      const url = new URLSearchParams(window.location.search).get("design");
+      if (url) loadDesign(() => fetch(url).then((r) => r.json()));
+      return;
+    }
     backend.startupArgs().then((args) => {
       if (args.design) {
         const d = fromDesign(args.design);

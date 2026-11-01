@@ -107,6 +107,22 @@ enum Command {
         #[arg(long)]
         flatten: bool,
     },
+    /// Time the backend on a generated board (the G5 benchmark): import,
+    /// layout, validation and export, each the median of several runs.
+    Bench {
+        /// Size of the generated board.
+        #[arg(long, default_value_t = 1000)]
+        nodes: usize,
+        /// Runs per stage.
+        #[arg(long, default_value_t = 5)]
+        runs: usize,
+        /// Also write the generated, laid out design file here.
+        #[arg(long)]
+        design: Option<PathBuf>,
+        /// Print the timings as JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -166,6 +182,12 @@ fn main() -> Result<()> {
             cache,
             json,
         } => check(&input, &linux, cache.as_deref(), json),
+        Command::Bench {
+            nodes,
+            runs,
+            design,
+            json,
+        } => bench(nodes, runs, design, json),
         Command::Validate { design } => {
             let errors = designtree_core::validate(&load(&design)?);
             if errors.is_empty() {
@@ -296,6 +318,74 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
     }
     if !problems.is_empty() {
         bail!("{} problem(s) found", problems.len());
+    }
+    Ok(())
+}
+
+/// Median time of `runs` calls of `f`, in milliseconds.
+fn time<T>(runs: usize, mut f: impl FnMut() -> T) -> f64 {
+    let mut times: Vec<f64> = (0..runs.max(1))
+        .map(|_| {
+            let start = Instant::now();
+            std::hint::black_box(f());
+            start.elapsed().as_secs_f64() * 1000.0
+        })
+        .collect();
+    times.sort_by(f64::total_cmp);
+    times[times.len() / 2]
+}
+
+fn bench(nodes: usize, runs: usize, design: Option<PathBuf>, json: bool) -> Result<()> {
+    let dts = designtree_core::synthetic_board_dts(nodes);
+    let file = Path::new("g5.dts");
+    let options = ImportOptions::default();
+    let import = || designtree_core::import_dts(&dts, file, &options);
+    let mut graph = import()?;
+    designtree_core::auto_layout(&mut graph);
+    let source = designtree_core::to_dts(&graph)
+        .map_err(|e| anyhow::anyhow!("the generated board does not export: {e:?}"))?;
+    let stages = [
+        ("import", time(runs, import)),
+        (
+            "layout",
+            time(runs, || designtree_core::auto_layout(&mut graph.clone())),
+        ),
+        ("validate", time(runs, || designtree_core::validate(&graph))),
+        ("export", time(runs, || designtree_core::to_dts(&graph))),
+        (
+            "export_mapped",
+            time(runs, || designtree_core::to_dts_mapped(&graph)),
+        ),
+        (
+            "apply_source",
+            time(runs, || {
+                designtree_core::apply_source(&source, &graph, None)
+            }),
+        ),
+        ("dtb", time(runs, || designtree_core::to_dtb(&graph))),
+        ("save", time(runs, || serde_json::to_string(&graph))),
+    ];
+    if let Some(path) = design {
+        fs::write(&path, serde_json::to_string(&graph)?)
+            .with_context(|| format!("writing {}", path.display()))?;
+    }
+    if json {
+        let stages: serde_json::Map<_, _> = stages
+            .iter()
+            .map(|(name, ms)| {
+                (
+                    name.to_string(),
+                    serde_json::json!((ms * 100.0).round() / 100.0),
+                )
+            })
+            .collect();
+        let report = serde_json::json!({ "nodes": graph.nodes.len(), "runs": runs, "ms": stages });
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("{} nodes, median of {runs} runs", graph.nodes.len());
+        for (name, ms) in stages {
+            println!("  {name:<14} {ms:>9.2} ms");
+        }
     }
     Ok(())
 }
