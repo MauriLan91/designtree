@@ -121,6 +121,42 @@ try {
   const pan = median(pans);
   const zoom = median(zooms);
 
+  // Typing in the inspector: the time from a keystroke in a node's name
+  // until the next frame, median of 15 keystrokes (US-11.2). The fields
+  // commit once typing pauses, so this is what typing feels like.
+  await page.locator(".react-flow__node-dt").nth(Math.floor(nodeCount / 2)).evaluate((e) => e.click());
+  const nameField = page.locator(".inspector input").first();
+  await nameField.click();
+  await page.keyboard.press("End");
+  const keystrokes = [];
+  for (const key of "abcdefghijklmno") {
+    const start = Date.now();
+    await page.keyboard.type(key);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve))));
+    keystrokes.push(Date.now() - start);
+  }
+  keystrokes.sort((a, b) => a - b);
+  const typeMs = keystrokes[Math.floor(keystrokes.length / 2)];
+
+  // The edit itself, once typing pauses: the longest main-thread task in
+  // the second after one keystroke (0 when none reaches Chromium's 50 ms
+  // long-task floor), median of three edits.
+  await page.evaluate(() => {
+    window.__longTasks = [];
+    new PerformanceObserver((list) => window.__longTasks.push(...list.getEntries().map((e) => e.duration))).observe({
+      type: "longtask",
+    });
+  });
+  const commits = [];
+  for (const key of "xyz") {
+    await page.evaluate(() => (window.__longTasks = []));
+    await page.keyboard.type(key);
+    await page.waitForTimeout(1000);
+    commits.push(await page.evaluate(() => Math.max(0, ...window.__longTasks)));
+  }
+  commits.sort((a, b) => a - b);
+  const commitMs = Math.round(commits[1]);
+
   const round = (x) => Math.round(x * 10) / 10;
   const report = {
     nodes: nodeCount,
@@ -131,6 +167,8 @@ try {
     zoom_fps: round(zoom.fps),
     zoom_worst_frame_ms: round(zoom.worstFrameMs),
     zoom_main_thread_pct: { script: zoom.scriptPct, style: zoom.stylePct, layout: zoom.layoutPct },
+    type_ms: typeMs,
+    edit_commit_ms: commitMs,
   };
   console.log(JSON.stringify(report, null, 2));
   if (out) await writeFile(out, JSON.stringify(report, null, 2) + "\n");

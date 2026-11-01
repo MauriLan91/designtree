@@ -108,11 +108,18 @@ enum Command {
         flatten: bool,
     },
     /// Time the backend on a generated board (the G5 benchmark): import,
-    /// layout, validation and export, each the median of several runs.
+    /// layout, validation, export, and one edit made on the canvas and one
+    /// in the text, each the median of several runs.
     Bench {
         /// Size of the generated board.
-        #[arg(long, default_value_t = 1000)]
+        #[arg(long, default_value_t = 1000, conflicts_with = "board")]
         nodes: usize,
+        /// Time this board file instead of a generated one.
+        #[arg(long)]
+        board: Option<PathBuf>,
+        /// Kernel source tree for the board's includes.
+        #[arg(long)]
+        linux: Option<PathBuf>,
         /// Runs per stage.
         #[arg(long, default_value_t = 5)]
         runs: usize,
@@ -184,10 +191,30 @@ fn main() -> Result<()> {
         } => check(&input, &linux, cache.as_deref(), json),
         Command::Bench {
             nodes,
+            board,
+            linux,
             runs,
             design,
             json,
-        } => bench(nodes, runs, design, json),
+        } => {
+            let (dts, file, options) = match board {
+                Some(board) => {
+                    let dts = fs::read_to_string(&board)
+                        .with_context(|| format!("reading {}", board.display()))?;
+                    let options = match &linux {
+                        Some(linux) => ImportOptions::kernel(linux),
+                        None => ImportOptions::detect(&board),
+                    };
+                    (dts, board, options)
+                }
+                None => (
+                    designtree_core::synthetic_board_dts(nodes),
+                    PathBuf::from("g5.dts"),
+                    ImportOptions::default(),
+                ),
+            };
+            bench(&dts, &file, &options, linux.as_deref(), runs, design, json)
+        }
         Command::Validate { design } => {
             let errors = designtree_core::validate(&load(&design)?);
             if errors.is_empty() {
@@ -335,15 +362,43 @@ fn time<T>(runs: usize, mut f: impl FnMut() -> T) -> f64 {
     times[times.len() / 2]
 }
 
-fn bench(nodes: usize, runs: usize, design: Option<PathBuf>, json: bool) -> Result<()> {
-    let dts = designtree_core::synthetic_board_dts(nodes);
-    let file = Path::new("g5.dts");
-    let options = ImportOptions::default();
-    let import = || designtree_core::import_dts(&dts, file, &options);
+fn bench(
+    dts: &str,
+    file: &Path,
+    options: &ImportOptions,
+    kernel: Option<&Path>,
+    runs: usize,
+    design: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let import = || designtree_core::import_dts(dts, file, options);
     let mut graph = import()?;
     designtree_core::auto_layout(&mut graph);
-    let source = designtree_core::to_dts(&graph)
-        .map_err(|e| anyhow::anyhow!("the generated board does not export: {e:?}"))?;
+    let (source, _) = designtree_core::to_dts_mapped(&graph)
+        .map_err(|e| anyhow::anyhow!("the board does not export: {e:?}"))?;
+    // An edit is what the app does after a change: a canvas edit exports
+    // the design again (which validates it), a text edit imports the text.
+    // The design arrives from the front end as a copy, hence the clone.
+    let edited_text = format!("{source}\n/ {{\n\tdesigntree-bench;\n}};\n");
+    let root = graph
+        .nodes
+        .iter()
+        .position(|n| n.is_root())
+        .context("the board has no root node")?;
+    let edit_canvas = || {
+        let mut edited = graph.clone();
+        edited.nodes[root]
+            .properties
+            .push(designtree_core::Property {
+                name: "designtree-bench".into(),
+                value: designtree_core::PropertyValue::Empty,
+            });
+        designtree_core::to_dts_mapped(&edited)
+    };
+    let edit_text = || designtree_core::apply_source(&edited_text, &graph, kernel);
+    // A failing edit returns early, and would time as fast as no work.
+    edit_canvas().map_err(|e| anyhow::anyhow!("the canvas edit does not export: {e:?}"))?;
+    edit_text().map_err(|e| anyhow::anyhow!("the text edit does not import: {e}"))?;
     let stages = [
         ("import", time(runs, import)),
         (
@@ -356,14 +411,10 @@ fn bench(nodes: usize, runs: usize, design: Option<PathBuf>, json: bool) -> Resu
             "export_mapped",
             time(runs, || designtree_core::to_dts_mapped(&graph)),
         ),
-        (
-            "apply_source",
-            time(runs, || {
-                designtree_core::apply_source(&source, &graph, None)
-            }),
-        ),
         ("dtb", time(runs, || designtree_core::to_dtb(&graph))),
         ("save", time(runs, || serde_json::to_string(&graph))),
+        ("edit_canvas", time(runs, edit_canvas)),
+        ("edit_text", time(runs, edit_text)),
     ];
     if let Some(path) = design {
         fs::write(&path, serde_json::to_string(&graph)?)

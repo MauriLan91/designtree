@@ -24,6 +24,8 @@ const rows = [
   ["canvas: open", canvas.open_ms, previous?.canvas?.open_ms, "ms", false],
   ["canvas: pan", canvas.pan_fps, previous?.canvas?.pan_fps, "fps", true],
   ["canvas: zoom", canvas.zoom_fps, previous?.canvas?.zoom_fps, "fps", true],
+  ["canvas: keystroke in the inspector", canvas.type_ms, previous?.canvas?.type_ms, "ms", false],
+  ["canvas: applying the edit (longest task)", canvas.edit_commit_ms, previous?.canvas?.edit_commit_ms, "ms", false],
 ];
 
 const change = (value, before, higherIsBetter) => {
@@ -43,7 +45,7 @@ const lines = [
   ...rows.map(([label, value, before, unit, higher]) =>
     `| ${label} | ${value} ${unit} | ${typeof before === "number" ? `${before} ${unit}` : "–"} | ${change(value, before, higher)} |`),
   "",
-  "G5 targets on a mid-range laptop: open < 2000 ms, pan and zoom ≥ 50 fps.",
+  "G5 targets on a mid-range laptop: open < 2000 ms, pan and zoom ≥ 50 fps; an edit under 50 ms (US-11.2).",
   "CI runners have no GPU, so the canvas numbers are for the trend, not the target.",
 ];
 console.log(lines.join("\n"));

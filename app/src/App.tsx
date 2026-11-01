@@ -351,7 +351,7 @@ export default function App() {
 
   // Ports only depend on node data, bindings and references: moving or
   // selecting nodes reuses the previous sets, so nodes do not re-render.
-  const portCache = useRef(new Map<string, { key: unknown[]; ports: NodePortSet }>());
+  const portCache = useRef(new Map<string, { key: unknown[]; ports: NodePortSet; json: string }>());
   const ports = useMemo(() => {
     const referenced = new Map<string, string[]>();
     for (const e of edges) {
@@ -370,9 +370,13 @@ export default function App() {
       if (cached && cached.key.every((k, i) => k === key[i])) {
         out.set(n.id, cached.ports);
       } else {
-        out.set(n.id, nodePorts(n.data, binding, refs, known));
+        // Most edits (a name, a value) leave the ports as they were: keeping
+        // the same set keeps the context, so the other nodes do not re-render.
+        const fresh = nodePorts(n.data, binding, refs, known);
+        const json = JSON.stringify(fresh);
+        out.set(n.id, cached?.json === json ? cached.ports : fresh);
+        portCache.current.set(n.id, { key, ports: out.get(n.id)!, json });
       }
-      portCache.current.set(n.id, { key, ports: out.get(n.id)! });
     }
     for (const id of portCache.current.keys()) if (!out.has(id)) portCache.current.delete(id);
     return out;
