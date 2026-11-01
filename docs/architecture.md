@@ -197,6 +197,13 @@ device and its subnodes count as one), a line wired to two pins, and
 targets missing from the design. The pads a group muxes are not read from
 the group, whose format is SoC specific; the pin lists them instead.
 
+Undo and redo (`app/src/history.ts`, US-9.1) keep snapshots of the canvas
+state (nodes, edges and the design extras). Edits replace objects rather
+than mutate them, so a snapshot shares everything an edit left alone. A
+step is recorded once the state has been still for 300 ms and its design
+file content changed, so a drag or a burst of typing is one step and
+selection is never one. Opening or creating a design starts a new history.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed

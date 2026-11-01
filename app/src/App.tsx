@@ -46,6 +46,7 @@ import { Inspector } from "./components/Inspector";
 import { BoardView } from "./components/BoardView";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
+import { useHistory } from "./history";
 import {
   CHILD_HANDLE,
   PARENT_HANDLE,
@@ -115,6 +116,35 @@ export default function App() {
   edgesRef.current = edges;
   const extrasRef = useRef(extras);
   extrasRef.current = extras;
+
+  // Undo and redo over everything saved in the design file (US-9.1).
+  const editorState = useMemo(() => ({ nodes, edges, extras }), [nodes, edges, extras]);
+  const history = useHistory(editorState, {
+    key: (s) => JSON.stringify(toDesign(s.nodes, s.edges, s.extras)),
+    restore: (s) => {
+      setNodes(s.nodes);
+      setEdges(s.edges);
+      setExtras(s.extras);
+    },
+    settled: (s) => !s.nodes.some((n) => n.dragging),
+    limit: 500,
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      const redo = (key === "z" && e.shiftKey) || (key === "y" && !e.shiftKey);
+      if (!redo && !(key === "z" && !e.shiftKey)) return;
+      // Text fields and the source editor have their own undo.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable], .cm-editor")) return;
+      e.preventDefault();
+      if (redo) history.redo();
+      else history.undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [history.undo, history.redo]);
   const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
@@ -148,6 +178,7 @@ export default function App() {
     backend.startupArgs().then((args) => {
       if (args.design) {
         const d = fromDesign(args.design);
+        history.reset();
         setNodes(d.nodes);
         setEdges(d.edges);
         setExtras(d.extras);
@@ -636,6 +667,7 @@ export default function App() {
 
   const newDesign = () => {
     const d = fromDesign(emptyDesign());
+    history.reset();
     setNodes(d.nodes);
     setEdges(d.edges);
     setExtras(d.extras);
@@ -647,6 +679,7 @@ export default function App() {
   const loadDesign = async (load: () => Promise<Design>, path: string | null = null) => {
     try {
       const d = fromDesign(await load());
+      history.reset();
       setNodes(d.nodes);
       setEdges(d.edges);
       setExtras(d.extras);
@@ -808,6 +841,8 @@ export default function App() {
         <button onClick={() => setBoardView((v) => !v)} aria-pressed={boardView} title="Place devices where they sit on the board">
           Board view
         </button>
+        <button onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">Undo</button>
+        <button onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button onClick={autoLayout} disabled={!inTauri || boardView}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
