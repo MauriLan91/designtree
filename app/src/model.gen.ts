@@ -142,6 +142,46 @@ export type InterruptTree = { controllers: Array<InterruptController>,
  */
 problems: Array<InterruptProblem>, };
 
+export type Region = { node: NodeId, 
+/**
+ * Which entry of `reg` this is.
+ */
+index: number, 
+/**
+ * Address and size on the bus, as hex (`0x1c28000`).
+ */
+address: string, size: string, 
+/**
+ * The CPU address range, as hex; `None` when the bus is not memory
+ * mapped (I2C, SPI) or the region is outside the bus's `ranges`.
+ */
+cpu_start?: string, cpu_end?: string, 
+/**
+ * Enabled nodes whose regions overlap this one.
+ */
+overlaps?: Array<NodeId>, 
+/**
+ * The region is not (or not entirely) inside a window of the bus's
+ * `ranges`, so the CPU cannot reach (all of) it.
+ */
+out_of_range?: boolean, };
+
+export type Bus = { node: NodeId, address_cells: number, size_cells: number, 
+/**
+ * Bus addresses are CPU addresses after translation; false for buses
+ * without `ranges` (I2C, SPI, MDIO), whose addresses are local.
+ */
+memory_mapped: boolean, regions: Array<Region>, };
+
+export type AddressProblem = { node: NodeId, message: string, };
+
+export type AddressMap = { buses: Array<Bus>, 
+/**
+ * Overlaps, regions outside their bus's windows and malformed `reg` or
+ * `ranges`.
+ */
+problems: Array<AddressProblem>, };
+
 export type Problem = { severity: Severity, message: string, 
 /**
  * Line in the generated source, when dtc gave one.

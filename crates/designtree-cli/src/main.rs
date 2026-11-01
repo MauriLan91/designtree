@@ -83,6 +83,9 @@ enum Command {
     /// Print the interrupt tree of a design file: each controller with the
     /// devices wired to it, and the devices that have no usable parent.
     Interrupts { design: PathBuf },
+    /// Print the address map of a design file: the regions of each bus with
+    /// their CPU addresses, then overlaps and unmapped regions.
+    AddressMap { design: PathBuf },
     /// Arrange the nodes of a design file automatically.
     Layout {
         design: PathBuf,
@@ -173,6 +176,24 @@ fn main() -> Result<()> {
                 eprintln!("error: {error}");
             }
             bail!("{} problem(s) found", errors.len())
+        }
+        Command::AddressMap { design } => {
+            let graph = load(&design)?;
+            let map = designtree_core::address_map(&graph);
+            for bus in &map.buses {
+                println!("{}", bus.node.0);
+                for r in &bus.regions {
+                    let cpu = match (&r.cpu_start, &r.cpu_end) {
+                        (Some(start), Some(end)) => format!("{start}-{end}"),
+                        _ => "-".into(),
+                    };
+                    println!("  {:>22}  {} + {}  {}", cpu, r.address, r.size, r.node.0);
+                }
+            }
+            for p in &map.problems {
+                println!("{}: {}", p.node.0, p.message);
+            }
+            Ok(())
         }
         Command::Interrupts { design } => {
             let graph = load(&design)?;

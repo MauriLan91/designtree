@@ -22,6 +22,7 @@ import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
+import { AddressMapPanel } from "./components/AddressMapPanel";
 import { KernelSettings } from "./components/KernelSettings";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
@@ -61,6 +62,7 @@ import {
   type FlowNode,
   type GroupFlowNode,
   type DesignExtras,
+  type AddressMap,
   type InterruptTree,
   type RefData,
 } from "./model";
@@ -119,6 +121,8 @@ export default function App() {
   const [showInterrupts, setShowInterrupts] = useState(false);
   const [pickingSoc, setPickingSoc] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
+  const [showAddressMap, setShowAddressMap] = useState(false);
+  const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
@@ -271,6 +275,29 @@ export default function App() {
     }, 250);
     return () => clearTimeout(t);
   }, [showInterrupts, nodes, edges, extras]);
+
+  useEffect(() => {
+    if (!showAddressMap || !inTauri) {
+      setAddressMap(null);
+      return;
+    }
+    const design = schemaInput.design;
+    let stale = false;
+    const t = setTimeout(async () => {
+      try {
+        const map = await backend.addressMap(design);
+        if (!stale) setAddressMap(map);
+      } catch {
+        // The DTS preview already shows why the design is invalid.
+        if (!stale) setAddressMap(null);
+      }
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+    // Keyed on the tree, not on positions.
+  }, [showAddressMap, schemaKey]);
 
   // Bindings of nodes that were not created from the library, by compatible
   // (null: undocumented). A failed lookup is retried.
@@ -711,6 +738,9 @@ export default function App() {
         <button onClick={() => setShowInterrupts((v) => !v)} disabled={!inTauri} aria-pressed={showInterrupts}>
           Interrupts
         </button>
+        <button onClick={() => setShowAddressMap((v) => !v)} disabled={!inTauri} aria-pressed={showAddressMap}>
+          Address map
+        </button>
         <button onClick={autoLayout} disabled={!inTauri}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
@@ -758,6 +788,7 @@ export default function App() {
           providerCells={providerCells}
         />
         {showInterrupts && interrupts && <InterruptPanel tree={interrupts} nodeName={nodeName} onFocusNode={focusNode} />}
+        {showAddressMap && addressMap && <AddressMapPanel map={addressMap} nodeName={nodeName} onFocusNode={focusNode} />}
         {kernel && <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />}
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview

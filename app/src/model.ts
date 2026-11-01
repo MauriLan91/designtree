@@ -3,6 +3,7 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import type {
+  AddressMap,
   Binding,
   Cell,
   DtMacro,
@@ -17,6 +18,7 @@ import type {
   Problem,
   Property,
   PropertySpec,
+  Region,
   PropertyType,
   PropertyValue,
   SocDtsi,
@@ -24,8 +26,10 @@ import type {
 } from "./model.gen";
 
 export type {
+  AddressMap,
   Binding,
   InterruptTree,
+  Region,
   Cell,
   DtMacro,
   Inherited,
