@@ -5,6 +5,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type {
   AddressMap,
   Binding,
+  Board,
   Cell,
   DtMacro,
   Graph,
@@ -28,6 +29,7 @@ import type {
 export type {
   AddressMap,
   Binding,
+  Board,
   InterruptTree,
   Region,
   Cell,
@@ -66,6 +68,8 @@ export interface DtNodeData extends Record<string, unknown> {
   compatible: string[];
   properties: Property[];
   inherited?: Inherited;
+  /** Where the device sits in the board view; unset when it is not placed there. */
+  boardPosition?: Position;
   /** Binding the node was created from; editor-only, not saved. */
   binding?: Binding;
   /** Pre-filled placeholder properties the user has not reviewed yet; editor-only. */
@@ -152,6 +156,7 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
     properties: n.data.properties,
     inherited: n.data.inherited,
     position: absolutePosition(n, byId),
+    board_position: n.data.boardPosition,
   }));
 
   const designEdges: DesignEdge[] = edges.map((e) =>
@@ -226,6 +231,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
         compatible: n.compatible ?? [],
         properties: n.properties ?? [],
         inherited: n.inherited ?? undefined,
+        boardPosition: n.board_position,
       },
     };
   });

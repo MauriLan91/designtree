@@ -62,7 +62,12 @@ omit_if_no_ref?: boolean, compatible?: Array<string>, properties?: Array<Propert
  * Export then writes only what differs from that definition, as an
  * override (`&label { ... };`).
  */
-inherited?: Inherited | null, position: Position, };
+inherited?: Inherited | null, position: Position, 
+/**
+ * Where the device sits in the board view (US-14.1). Only the nodes
+ * placed there have one. Like `position`, not part of the devicetree.
+ */
+board_position?: Position, };
 
 export type EdgeKind = { "kind": "child" } | { "kind": "reference", property: string, args?: Array<number>, };
 
@@ -85,6 +90,13 @@ export type Overlay = {
  * The base design or board file, as it was opened.
  */
 base: string, };
+
+export type Board = { 
+/**
+ * Image drawn under the devices, such as a board photo or a schematic
+ * export, as a path; a relative path is relative to the design file.
+ */
+background?: string, };
 
 export type Graph = { nodes: Array<Node>, edges: Array<Edge>, groups: Array<Group>, 
 /**
@@ -120,7 +132,11 @@ overlay?: Overlay,
  * against (`7.3`); the editor warns when it opens the design with
  * another one. Not part of the exported devicetree.
  */
-kernel?: string | null, };
+kernel?: string | null, 
+/**
+ * The board view: devices placed over a picture of the board.
+ */
+board?: Board, };
 
 export type InterruptController = { node: NodeId, 
 /**

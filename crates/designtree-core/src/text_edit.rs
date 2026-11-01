@@ -79,11 +79,13 @@ pub fn apply_source(
     keep_identity(previous, &mut graph, &mut spans);
     graph.groups = kept_groups(&previous.groups, &graph);
     graph.kernel.clone_from(&previous.kernel);
+    graph.board.clone_from(&previous.board);
     Ok((graph, spans))
 }
 
-/// Gives the nodes of `graph` (whose ids are paths) the ids and positions
-/// of the nodes at the same path in `previous`.
+/// Gives the nodes of `graph` (whose ids are paths) the ids and positions,
+/// on the canvas and on the board, of the nodes at the same path in
+/// `previous`.
 fn keep_identity(previous: &Graph, graph: &mut Graph, spans: &mut [NodeSpan]) {
     let old_paths = node_paths(previous);
     let by_path: HashMap<&str, &NodeId> = old_paths
@@ -92,6 +94,11 @@ fn keep_identity(previous: &Graph, graph: &mut Graph, spans: &mut [NodeSpan]) {
         .collect();
     let old: HashMap<&NodeId, Position> =
         previous.nodes.iter().map(|n| (&n.id, n.position)).collect();
+    let on_board: HashMap<&NodeId, Position> = previous
+        .nodes
+        .iter()
+        .filter_map(|n| Some((&n.id, n.board_position?)))
+        .collect();
 
     // New paths to ids: a node that existed keeps its id.
     let mut ids: HashMap<NodeId, NodeId> = HashMap::new();
@@ -155,6 +162,7 @@ fn keep_identity(previous: &Graph, graph: &mut Graph, spans: &mut [NodeSpan]) {
     for node in &mut graph.nodes {
         node.position = positions[&node.id];
         rename(&mut node.id);
+        node.board_position = on_board.get(&node.id).copied();
     }
     for edge in &mut graph.edges {
         rename(&mut edge.from);
@@ -230,8 +238,21 @@ mod tests {
 
     #[test]
     fn edited_text_keeps_ids_positions_and_groups() {
-        let previous = design();
+        let mut previous = design();
+        let serial_at = previous
+            .nodes
+            .iter()
+            .position(|n| n.name == "serial")
+            .unwrap();
+        previous.nodes[serial_at].board_position = Some(Position { x: 3.0, y: 4.0 });
+        previous.board = Some(crate::model::Board {
+            background: Some("board.png".into()),
+        });
         let (text, _) = to_dts_mapped(&previous).unwrap();
+        assert!(
+            !text.contains("board"),
+            "the board view is not exported: {text}"
+        );
         let edited = text.replace(
             "reg = <0x1000 0x100>;",
             "reg = <0x1000 0x100>;\n\t\t\tstatus = \"okay\";\n\n\t\t\tdevice@1 {\n\t\t\t\treg = <1>;\n\t\t\t};",
@@ -241,10 +262,13 @@ mod tests {
         let serial = graph.nodes.iter().find(|n| n.name == "serial").unwrap();
         assert_eq!(serial.id, NodeId("n2".into()));
         assert_eq!(serial.position, Position { x: 7.0, y: 9.0 });
+        assert_eq!(serial.board_position, Some(Position { x: 3.0, y: 4.0 }));
+        assert_eq!(graph.board, previous.board);
         assert!(serial.properties.iter().any(|p| p.name == "status"));
         let device = graph.nodes.iter().find(|n| n.name == "device").unwrap();
         assert_eq!(device.id.0, "/soc/serial@1000/device@1");
         assert_eq!(device.position, Position { x: 7.0, y: 169.0 });
+        assert_eq!(device.board_position, None);
         assert_eq!(graph.groups[0].members.len(), 2);
 
         // The serial block spans its lines in the edited text.

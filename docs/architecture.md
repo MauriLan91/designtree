@@ -178,6 +178,14 @@ views: the cursor selects its node on the canvas, and a selected node's
 blocks are highlighted in the text. Overlay source is read-only for now,
 since the importer does not read `/plugin/`.
 
+The board view (`app/src/components/BoardView.tsx`) is a second canvas over
+the same nodes: a device placed there keeps its place in
+`Node.board_position`, and the background picture's path in
+`Graph.board`. Neither reaches the devicetree; the export ignores them, the
+tree key the editor uses to detect devicetree changes leaves them out, and a
+text edit keeps them like canvas positions. Selection is the graph's, so the
+inspector edits the device selected on the board.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed

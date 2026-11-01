@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
 use designtree_core::{
-    AddressMap, AddressProblem, Bus, Cell, Edge, EdgeKind, Graph, Group, Inherited,
+    AddressMap, AddressProblem, Board, Bus, Cell, Edge, EdgeKind, Graph, Group, Inherited,
     InterruptController, InterruptProblem, InterruptTree, MemReserve, Node, NodeId, Overlay,
     Position, Problem, Property, PropertyValue, Region, Severity, Size, SocDtsi, ValueChunk,
 };
@@ -39,6 +39,7 @@ fn generate() -> String {
         Group::decl(&cfg),
         MemReserve::decl(&cfg),
         Overlay::decl(&cfg),
+        Board::decl(&cfg),
         Graph::decl(&cfg),
         InterruptController::decl(&cfg),
         InterruptProblem::decl(&cfg),
