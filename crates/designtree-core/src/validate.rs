@@ -208,7 +208,7 @@ fn check_value_references(
             for target in targets {
                 let known = if target.starts_with('/') {
                     paths
-                        .get_or_insert_with(|| node_paths(graph))
+                        .get_or_insert_with(|| node_paths(graph).into_values().collect())
                         .contains(target)
                 } else {
                     labels.contains(target)
@@ -225,16 +225,16 @@ fn check_value_references(
     }
 }
 
-/// Full paths of the nodes attached to the root, such as `/soc/serial@1000`.
-fn node_paths(graph: &Graph) -> HashSet<String> {
+/// Full path of each node attached to the root, such as
+/// `/soc/serial@1000`.
+pub(crate) fn node_paths(graph: &Graph) -> HashMap<NodeId, String> {
     let mut children: HashMap<&NodeId, Vec<&NodeId>> = HashMap::new();
     for edge in graph.edges.iter().filter(|e| e.kind == EdgeKind::Child) {
         children.entry(&edge.from).or_default().push(&edge.to);
     }
     let nodes: HashMap<&NodeId, &Node> = graph.nodes.iter().map(|n| (&n.id, n)).collect();
 
-    let mut paths = HashSet::new();
-    let mut visited = HashSet::new();
+    let mut paths = HashMap::new();
     let mut stack: Vec<(&NodeId, String)> = graph
         .root()
         .map(|root| (&root.id, String::new()))
@@ -242,7 +242,7 @@ fn node_paths(graph: &Graph) -> HashSet<String> {
         .collect();
     while let Some((id, path)) = stack.pop() {
         // Nodes with several parents or in cycles are reported elsewhere.
-        if !visited.insert(id) {
+        if paths.contains_key(id) {
             continue;
         }
         for child in children.get(id).into_iter().flatten() {
@@ -250,7 +250,7 @@ fn node_paths(graph: &Graph) -> HashSet<String> {
                 stack.push((child, format!("{path}/{}", node.full_name())));
             }
         }
-        paths.insert(if path.is_empty() { "/".into() } else { path });
+        paths.insert(id.clone(), if path.is_empty() { "/".into() } else { path });
     }
     paths
 }

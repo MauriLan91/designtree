@@ -16,6 +16,8 @@ import {
 import { backend, dialogs, inTauri } from "./backend";
 import { DtNode } from "./components/DtNode";
 import { DtsPreview } from "./components/DtsPreview";
+import type { SourceError, Span } from "./components/DtsEditor";
+import { reconcileEdges, reconcileNodes } from "./textSync";
 import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "./collapse";
 import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
@@ -69,6 +71,20 @@ const nodeTypes = { dt: DtNode, group: GroupNode };
 const edgeTypes = { ref: RefEdge };
 const GROUP_PADDING = 40;
 
+/** The design without what does not reach the devicetree (positions, groups), and its key. */
+function treeOf(nodes: FlowNode[], edges: Edge[], extras: DesignExtras) {
+  const design = toDesign(nodes, edges, extras);
+  const tree = {
+    ...design,
+    nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
+    groups: [],
+  };
+  return { design: tree, key: JSON.stringify(tree) };
+}
+
+const isSourceError = (e: unknown): e is SourceError =>
+  typeof e === "object" && e !== null && "line" in e && "message" in e;
+
 let nextId = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(nextId++).toString(36)}`;
 
@@ -83,6 +99,18 @@ export default function App() {
   const [dts, setDts] = useState<string | null>(null);
   /** For an overlay: its base with the overlay applied. */
   const [appliedDts, setAppliedDts] = useState<string | null>(null);
+  /** What the source editor shows, and the lines of each node in it. */
+  const [editorText, setEditorText] = useState({ text: "", version: 0 });
+  const [spans, setSpans] = useState<Span[]>([]);
+  const [sourceError, setSourceError] = useState<SourceError | null>(null);
+  /** The text as typed, and the tree key of the design imported from it. */
+  const edited = useRef<{ key: string; text: string } | null>(null);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+  const extrasRef = useRef(extras);
+  extrasRef.current = extras;
   const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
@@ -126,24 +154,37 @@ export default function App() {
       ? specifierCount(providerNode.data, (selectedEdge.data as RefData).property)
       : undefined;
 
-  // Regenerate the preview whenever the design changes.
+  // What the schema check depends on: moving or selecting nodes changes
+  // `nodes` but not the devicetree, and must not start a check.
+  const schemaInput = useMemo(() => treeOf(nodes, edges, extras), [nodes, edges, extras]);
+  const schemaKey = schemaInput.key;
+
+  // Regenerate the source whenever the devicetree changes. After an edit
+  // of the text, the editor keeps the text as typed: only canvas changes
+  // replace it.
   useEffect(() => {
     if (!inTauri) {
       setErrors(["Backend not available: run the app with `npm run tauri dev`."]);
       return;
     }
     let stale = false;
+    const design = schemaInput.design;
     const t = setTimeout(async () => {
       try {
-        const design = toDesign(nodes, edges, extras);
-        const [source, applied] = await Promise.all([
-          backend.exportDts(design),
+        const [mapped, applied] = await Promise.all([
+          backend.exportDtsMapped(design),
           design.overlay ? backend.exportDtsFlat(design) : null,
         ]);
         if (stale) return;
-        setDts(source);
+        setDts(mapped.dts);
         setAppliedDts(applied);
         setErrors([]);
+        if (edited.current?.key !== schemaKey) {
+          edited.current = null;
+          setEditorText((t) => ({ text: mapped.dts, version: t.version + 1 }));
+          setSpans(mapped.spans);
+          setSourceError(null);
+        }
       } catch (e) {
         if (!stale) setErrors(Array.isArray(e) ? e : [String(e)]);
       }
@@ -152,20 +193,48 @@ export default function App() {
       stale = true;
       clearTimeout(t);
     };
-  }, [nodes, edges, extras]);
+  }, [schemaKey]);
 
-  // What the schema check depends on: moving or selecting nodes changes
-  // `nodes` but not the devicetree, and must not start a check.
-  const schemaInput = useMemo(() => {
-    const design = toDesign(nodes, edges, extras);
-    const tree = {
-      ...design,
-      nodes: design.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
-      groups: [],
-    };
-    return { design: tree, key: JSON.stringify(tree) };
-  }, [nodes, edges, extras]);
-  const schemaKey = schemaInput.key;
+  // Edits of the source are imported into the design once typing pauses.
+  // A change of the tree on the canvas wins over an edit not applied yet.
+  const editRun = useRef(0);
+  const editTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (schemaKey === edited.current?.key) return;
+    clearTimeout(editTimer.current);
+    editRun.current++;
+  }, [schemaKey]);
+  const onSourceEdit = (text: string) => {
+    clearTimeout(editTimer.current);
+    editTimer.current = setTimeout(async () => {
+      const run = ++editRun.current;
+      try {
+        const result = await backend.applySource(text, toDesign(nodesRef.current, edgesRef.current, extrasRef.current));
+        if (run !== editRun.current) return;
+        const d = fromDesign(result.design);
+        const nextNodes = reconcileNodes(nodesRef.current, d.nodes);
+        const nextEdges = reconcileEdges(edgesRef.current, d.edges, () => newId("e"));
+        edited.current = { key: treeOf(nextNodes, nextEdges, d.extras).key, text };
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        setExtras(d.extras);
+        setSpans(result.spans);
+        setSourceError(null);
+      } catch (e) {
+        if (run !== editRun.current) return;
+        setSourceError(isSourceError(e) ? e : { line: 0, column: 0, message: String(e) });
+      }
+    }, 400);
+  };
+
+  const onCursorNode = (id: string | null) => {
+    if (!id) return;
+    setNodes((ns) =>
+      ns.map((n) => (n.selected === (n.id === id) ? n : ({ ...n, selected: n.id === id } as FlowNode))),
+    );
+    setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
+  };
+
 
   // Check the design against the binding schemas while editing; only the
   // latest check's answer is kept.
@@ -582,7 +651,9 @@ export default function App() {
   const exportDts = async () => {
     if (!dts) return;
     const path = await (extras.overlay ? dialogs.pickDtsoToSave() : dialogs.pickDtsToSave());
-    if (path) await backend.writeText(path, dts);
+    // What the editor shows, comments and all, when the design came from it.
+    const text = edited.current?.key === schemaKey ? edited.current.text : dts;
+    if (path) await backend.writeText(path, text);
   };
 
   const buildDtb = async () => {
@@ -651,7 +722,13 @@ export default function App() {
         <button onClick={openDesign} disabled={!inTauri}>Open…</button>
         <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
         <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
-        <button onClick={exportDts} disabled={!inTauri || !dts || errors.length > 0}>Export .dts…</button>
+        <button
+          onClick={exportDts}
+          disabled={!inTauri || !dts || errors.length > 0 || sourceError !== null}
+          title={sourceError ? "Fix the error in the DTS source first" : undefined}
+        >
+          Export .dts…
+        </button>
         <button onClick={buildDtb} disabled={!inTauri || errors.length > 0}>Build .dtb</button>
         <button onClick={() => setShowKernels(true)} disabled={!inTauri} title="Kernel checkouts the library can be built from">
           Kernels…
@@ -715,7 +792,13 @@ export default function App() {
         {kernel && <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />}
         {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
         <DtsPreview
-          dts={dts}
+          text={editorText.text}
+          textVersion={editorText.version}
+          spans={spans}
+          selected={selectedNodes.map((n) => n.id)}
+          sourceError={sourceError}
+          onEdit={onSourceEdit}
+          onCursorNode={onCursorNode}
           appliedDts={appliedDts}
           overlayBase={extras.overlay?.base}
           showApplied={showApplied}

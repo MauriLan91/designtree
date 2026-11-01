@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::dts::NodeSpan;
 use crate::layout::auto_layout;
 use crate::model::{
     Cell, Edge, EdgeKind, Graph, Inherited, MemReserve, Node, NodeId, Position, Property,
@@ -46,6 +47,16 @@ pub fn import_dts(
     file: &Path,
     options: &ImportOptions,
 ) -> Result<Graph, ImportError> {
+    import_dts_mapped(source, file, options).map(|(graph, _)| graph)
+}
+
+/// Like [`import_dts`], also returning the lines of `source` that define
+/// or change each node (a node has a block per override).
+pub fn import_dts_mapped(
+    source: &str,
+    file: &Path,
+    options: &ImportOptions,
+) -> Result<(Graph, Vec<NodeSpan>), ImportError> {
     let preprocessed = preprocess(source, file, options, &confined_reader(file, options))?;
     import_preprocessed(
         &preprocessed.text,
@@ -60,7 +71,7 @@ fn import_preprocessed(
     text: &str,
     file: &str,
     directives: Vec<(u32, String)>,
-) -> Result<Graph, ImportError> {
+) -> Result<(Graph, Vec<NodeSpan>), ImportError> {
     let document = parse(text, file)?;
     let files = document.files;
     let located = |e: ParseError| e.located(&files);
@@ -94,7 +105,10 @@ fn import_preprocessed(
     let mut tree = Tree::new(flat);
     for item in document.items {
         match item {
-            TopItem::Root(body, _) => tree.merge(ROOT, body),
+            TopItem::Root(body, pos) => {
+                tree.add_span(ROOT, pos, &body);
+                tree.merge(ROOT, body)
+            }
             TopItem::Override {
                 labels,
                 target,
@@ -103,6 +117,7 @@ fn import_preprocessed(
                 for label in &labels {
                     tree.add_label(node, label, target.pos);
                 }
+                tree.add_span(node, target.pos, &body);
                 tree.merge(node, body)
             }),
             TopItem::DeleteNode(target) => tree.resolve(&target).and_then(|node| {
@@ -137,12 +152,12 @@ fn import_preprocessed(
         }
         .map_err(located)?;
     }
-    let mut graph = tree.into_graph(&files).map_err(located)?;
+    let (mut graph, spans) = tree.into_graph(&files).map_err(located)?;
     if graph.nodes.iter().any(|n| n.inherited.is_some()) || !graph.deleted_nodes.is_empty() {
         graph.includes = includes.into_iter().map(|(_, d)| d).collect();
         graph.trailing_includes = trailing.into_iter().map(|(_, d)| d).collect();
     }
-    Ok(graph)
+    Ok((graph, spans))
 }
 
 /// Index of the imported file in [`Pos::file`]; others are included.
@@ -202,6 +217,9 @@ struct TreeNode {
     base_labels: Vec<String>,
     base_properties: Vec<PropertyDef>,
     base_omit_if_no_ref: bool,
+    /// First and last line of each block of the imported file that
+    /// defines or changes the node.
+    spans: Vec<(u32, u32)>,
 }
 
 impl TreeNode {
@@ -218,6 +236,7 @@ impl TreeNode {
             base_labels: Vec::new(),
             base_properties: Vec::new(),
             base_omit_if_no_ref: false,
+            spans: Vec::new(),
         }
     }
 }
@@ -302,6 +321,7 @@ impl Tree {
                     for label in &def.labels {
                         self.add_label(child, label, def.pos);
                     }
+                    self.add_span(child, def.pos, &def.body);
                     self.nodes[child].omit_if_no_ref |= def.omit_if_no_ref;
                     self.nodes[child].base_omit_if_no_ref |=
                         def.omit_if_no_ref && self.included(def.pos);
@@ -315,6 +335,13 @@ impl Tree {
             }
         }
         Ok(())
+    }
+
+    /// Records the lines of a block of `node` in the imported file.
+    fn add_span(&mut self, node: usize, start: Pos, body: &NodeBody) {
+        if start.file == MAIN && body.end.file == MAIN {
+            self.nodes[node].spans.push((start.line, body.end.line));
+        }
     }
 
     /// Labels may repeat until the end, see [`Tree::check_labels`].
@@ -417,7 +444,8 @@ impl Tree {
             })
     }
 
-    fn into_graph(mut self, files: &[String]) -> Result<Graph, ParseError> {
+    /// The graph, with the lines of the imported file that define each node.
+    fn into_graph(mut self, files: &[String]) -> Result<(Graph, Vec<NodeSpan>), ParseError> {
         self.check_labels()?;
         let mut graph = Graph {
             memreserves: std::mem::take(&mut self.memreserves),
@@ -508,7 +536,25 @@ impl Tree {
             });
         }
         auto_layout(&mut graph);
-        Ok(graph)
+        let mut spans: Vec<NodeSpan> = index
+            .iter()
+            .enumerate()
+            .filter_map(|(node, row)| Some((node, (*row)?)))
+            .flat_map(|(node, row)| {
+                let id = &graph.nodes[row].id;
+                self.nodes[node]
+                    .spans
+                    .iter()
+                    .map(move |&(first_line, last_line)| NodeSpan {
+                        node: id.clone(),
+                        path: id.0.clone(),
+                        first_line,
+                        last_line,
+                    })
+            })
+            .collect();
+        spans.sort_by_key(|s| (s.first_line, std::cmp::Reverse(s.last_line)));
+        Ok((graph, spans))
     }
 
     /// Path references are looked up like dtc does (`/soc/serial` finds

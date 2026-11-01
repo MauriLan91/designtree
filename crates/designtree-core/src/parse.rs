@@ -12,7 +12,7 @@ use std::fmt;
 use crate::model::{Cell, ValueChunk};
 
 /// 1-based line and column (in characters) in a source file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Pos {
     /// Index into [`Document::files`].
     pub file: u32,
@@ -110,6 +110,8 @@ pub struct Reference {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct NodeBody {
     pub items: Vec<BodyItem>,
+    /// Where the closing `}` is.
+    pub end: Pos,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -535,6 +537,7 @@ impl Parser {
             let pos = self.pos;
             match self.peek() {
                 Some('}') => {
+                    body.end = pos;
                     self.bump();
                     self.expect(';')?;
                     return Ok(body);
