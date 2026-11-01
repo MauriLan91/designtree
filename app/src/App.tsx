@@ -46,6 +46,7 @@ import { Inspector } from "./components/Inspector";
 import { BoardView } from "./components/BoardView";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
+import { useHistory } from "./history";
 import {
   CHILD_HANDLE,
   PARENT_HANDLE,
@@ -89,6 +90,31 @@ function treeOf(nodes: FlowNode[], edges: Edge[], extras: DesignExtras) {
 const isSourceError = (e: unknown): e is SourceError =>
   typeof e === "object" && e !== null && "line" in e && "message" in e;
 
+/** Inputs that keep their own undo; a checkbox has none. */
+const TEXT_INPUTS = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"])';
+
+/** Same design content, cheaply: what selecting or measuring leaves alone. */
+const sameNodes = (a: FlowNode[], b: FlowNode[]) =>
+  a.length === b.length &&
+  a.every((n, i) => {
+    const m = b[i];
+    return (
+      n.id === m.id &&
+      n.data === m.data &&
+      n.position === m.position &&
+      n.parentId === m.parentId &&
+      n.style === m.style &&
+      n.measured?.width === m.measured?.width &&
+      n.measured?.height === m.measured?.height
+    );
+  });
+const sameEdges = (a: Edge[], b: Edge[]) =>
+  a.length === b.length &&
+  a.every((e, i) => {
+    const f = b[i];
+    return e.id === f.id && e.data === f.data && e.source === f.source && e.target === f.target;
+  });
+
 let nextId = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(nextId++).toString(36)}`;
 
@@ -115,6 +141,47 @@ export default function App() {
   edgesRef.current = edges;
   const extrasRef = useRef(extras);
   extrasRef.current = extras;
+
+  // Undo and redo over everything saved in the design file (US-9.1).
+  // Overrides ride along so that undoing past one locks the node again;
+  // the kernel stamp is written by saving, which is not an edit.
+  const editorState = useMemo(
+    () => ({ nodes, edges, extras, overriding }),
+    [nodes, edges, extras, overriding],
+  );
+  const history = useHistory(editorState, {
+    key: (s) => JSON.stringify(toDesign(s.nodes, s.edges, { ...s.extras, kernel: undefined })),
+    same: (a, b) => a.extras === b.extras && sameNodes(a.nodes, b.nodes) && sameEdges(a.edges, b.edges),
+    restore: (s) => {
+      // The selection is not part of the history: keep the current one.
+      const selectedNodes = new Set(nodesRef.current.filter((n) => n.selected).map((n) => n.id));
+      const selectedEdges = new Set(edgesRef.current.filter((e) => e.selected).map((e) => e.id));
+      setNodes(s.nodes.map((n) => (!!n.selected === selectedNodes.has(n.id) ? n : ({ ...n, selected: !n.selected } as FlowNode))));
+      setEdges(s.edges.map((e) => (!!e.selected === selectedEdges.has(e.id) ? e : { ...e, selected: !e.selected })));
+      setExtras({ ...s.extras, kernel: extrasRef.current.kernel });
+      setOverriding(s.overriding);
+    },
+    settled: (s) => !s.nodes.some((n) => n.dragging || n.resizing),
+    limit: 500,
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
+      const key = e.key.toLowerCase();
+      const redo = (key === "z" && e.shiftKey) || (key === "y" && !e.shiftKey);
+      if (!redo && !(key === "z" && !e.shiftKey)) return;
+      // Text fields and the source editor have their own undo; a dialog
+      // hides the canvas the step would change.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(`${TEXT_INPUTS}, textarea, select, [contenteditable], .cm-editor, [role="dialog"]`)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      if (redo) history.redo();
+      else history.undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [history.undo, history.redo]);
   const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
@@ -148,6 +215,7 @@ export default function App() {
     backend.startupArgs().then((args) => {
       if (args.design) {
         const d = fromDesign(args.design);
+        history.reset();
         setNodes(d.nodes);
         setEdges(d.edges);
         setExtras(d.extras);
@@ -636,6 +704,7 @@ export default function App() {
 
   const newDesign = () => {
     const d = fromDesign(emptyDesign());
+    history.reset();
     setNodes(d.nodes);
     setEdges(d.edges);
     setExtras(d.extras);
@@ -647,6 +716,7 @@ export default function App() {
   const loadDesign = async (load: () => Promise<Design>, path: string | null = null) => {
     try {
       const d = fromDesign(await load());
+      history.reset();
       setNodes(d.nodes);
       setEdges(d.edges);
       setExtras(d.extras);
@@ -808,6 +878,8 @@ export default function App() {
         <button onClick={() => setBoardView((v) => !v)} aria-pressed={boardView} title="Place devices where they sit on the board">
           Board view
         </button>
+        <button onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">Undo</button>
+        <button onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button onClick={autoLayout} disabled={!inTauri || boardView}>Auto layout</button>
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
