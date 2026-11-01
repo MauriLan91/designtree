@@ -197,6 +197,13 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .interrupts { padding: 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .irq-tree, .irq-tree ul { list-style: none; margin: 2px 0 0; padding-left: 14px; }
 .irq-tree { padding-left: 0; max-height: 220px; overflow: auto; }
+.address-map { padding: 12px; border-bottom: 1px solid var(--border); font-size: 12px; max-height: 420px; overflow: auto; }
+.address-map details { margin-top: 6px; }
+.address-map table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+.address-map th { text-align: left; font-weight: 600; color: var(--muted); padding: 2px 4px; }
+.address-map td { padding: 2px 4px; white-space: nowrap; border-top: 1px solid var(--border); vertical-align: top; }
+.address-map tr.overlap td { background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.address-map tr.out-of-range td { background: color-mix(in srgb, var(--ref) 18%, transparent); }
 .link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
 button[aria-pressed="true"] { background: var(--accent); color: white; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; z-index: 10; }

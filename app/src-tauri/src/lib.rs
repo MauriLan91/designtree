@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 
 use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
 use designtree_core::dtc::DtcError;
-use designtree_core::{Graph, ImportOptions, InterruptTree, Problem, Severity};
+use designtree_core::{AddressMap, Graph, ImportOptions, InterruptTree, Problem, Severity};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -312,6 +312,13 @@ fn interrupt_tree(design: Graph) -> InterruptTree {
     designtree_core::interrupt_tree(&design)
 }
 
+/// The regions of every bus with their CPU addresses, overlaps and
+/// unreachable regions.
+#[tauri::command]
+fn address_map(design: Graph) -> AddressMap {
+    designtree_core::address_map(&design)
+}
+
 /// Arranges nodes and bus groups; the caller keeps its own copy for undo.
 #[tauri::command]
 fn auto_layout(mut design: Graph) -> Graph {
@@ -475,6 +482,7 @@ pub fn run() {
             new_overlay,
             check_schemas,
             interrupt_tree,
+            address_map,
             auto_layout,
             export_dts,
             save_design,

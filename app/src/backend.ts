@@ -1,7 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Binding, Design, DtMacro, InterruptTree, Problem, SocDtsi } from "./model";
+import type { AddressMap, Binding, Design, DtMacro, InterruptTree, Problem, SocDtsi } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -49,6 +49,7 @@ export const backend = {
   searchDtMacros: (query: string, limit = 12) => invoke<DtMacro[]>("search_dt_macros", { query, limit }),
   resolveDtMacros: (names: string[]) => invoke<(number | null)[]>("resolve_dt_macros", { names }),
   interruptTree: (design: Design) => invoke<InterruptTree>("interrupt_tree", { design }),
+  addressMap: (design: Design) => invoke<AddressMap>("address_map", { design }),
   validateDesign: (design: Design) => invoke<string[]>("validate_design", { design }),
   checkSchemas: (design: Design) => invoke<Problem[] | null>("check_schemas", { design }),
   autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
