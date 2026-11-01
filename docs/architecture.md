@@ -138,6 +138,13 @@ TypeScript types of the wire format are generated from the Rust types with
 adds the canvas conversion. `cargo test` fails when the generated file is
 stale; regenerate it with `UPDATE_TS=1 cargo test -p designtree --test typegen`.
 
+Typed wiring (`app/src/ports.ts`) is a canvas concern: a node's phandle
+properties from its binding become consumer ports, its `#*-cells`
+properties provider ports, and a connection is only allowed between a
+consumer and a provider of the matching `#*-cells` (dt-schema's naming
+rule: `clocks` → `#clock-cells`, `*-gpios` → `#gpio-cells`). The edge it
+creates is an ordinary reference edge writing that property.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed

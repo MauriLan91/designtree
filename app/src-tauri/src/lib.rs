@@ -198,6 +198,20 @@ fn get_bindings(paths: Vec<String>, state: State<AppState>) -> Vec<Binding> {
     catalog.by_paths(&paths).into_iter().cloned().collect()
 }
 
+/// The binding documenting each compatible string, in that order (`None`
+/// for an undocumented one).
+#[tauri::command]
+fn bindings_for_compatibles(
+    compatibles: Vec<String>,
+    state: State<AppState>,
+) -> Vec<Option<Binding>> {
+    let catalog = state.catalog.read().unwrap();
+    compatibles
+        .iter()
+        .map(|c| catalog.find_compatible(c).cloned())
+        .collect()
+}
+
 /// Constants of the loaded kernel tree whose name contains `query`
 /// (case-insensitive), names that start with it first.
 #[tauri::command]
@@ -429,6 +443,7 @@ pub fn run() {
             remove_kernel,
             search_bindings,
             get_bindings,
+            bindings_for_compatibles,
             search_dt_macros,
             resolve_dt_macros,
             validate_design,

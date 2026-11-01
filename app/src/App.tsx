@@ -25,6 +25,19 @@ import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
 import { NodeProblems } from "./nodeProblems";
+import { NodePorts } from "./nodePorts";
+import {
+  accepts,
+  consumerHandle,
+  guessReferenceProperty,
+  handleCells,
+  handleProperty,
+  nodePorts,
+  providedCells,
+  providerHandle,
+  specifierCount,
+  type NodePortSet,
+} from "./ports";
 import { Inspector } from "./components/Inspector";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
@@ -36,8 +49,6 @@ import {
   emptyDesign,
   fromDesign,
   genericNodeName,
-  expectedSpecifierCells,
-  guessReferenceProperty,
   isDtNode,
   deletionTarget,
   toDesign,
@@ -105,7 +116,7 @@ export default function App() {
   const providerNode = selectedEdge && nodes.find((n) => n.id === selectedEdge.target);
   const providerCells =
     selectedEdge?.data && providerNode && isDtNode(providerNode)
-      ? expectedSpecifierCells(providerNode.data, (selectedEdge.data as RefData).property)
+      ? specifierCount(providerNode.data, (selectedEdge.data as RefData).property)
       : undefined;
 
   // Regenerate the preview whenever the design changes.
@@ -178,18 +189,126 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showInterrupts, nodes, edges, extras]);
 
+  // Bindings of nodes that were not created from the library, by compatible
+  // (null: undocumented). A failed lookup is retried.
+  const [bindingsByCompatible, setBindingsByCompatible] = useState<Map<string, Binding | null>>(new Map());
+  const [lookupRetry, setLookupRetry] = useState(0);
+  useEffect(() => setBindingsByCompatible(new Map()), [kernel]);
+  const missingCompatibles = useMemo(() => {
+    const missing = new Set<string>();
+    for (const n of nodes) {
+      if (!isDtNode(n) || n.data.binding) continue;
+      n.data.compatible.filter((c) => !bindingsByCompatible.has(c)).forEach((c) => missing.add(c));
+    }
+    return [...missing].sort().join("\n");
+  }, [nodes, bindingsByCompatible]);
+  useEffect(() => {
+    if (!inTauri || !kernel || !missingCompatibles) return;
+    const compatibles = missingCompatibles.split("\n");
+    let stale = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    backend.bindingsForCompatibles(compatibles).then(
+      (found) => {
+        if (stale) return;
+        setBindingsByCompatible((m) => {
+          const next = new Map(m);
+          compatibles.forEach((c, i) => next.set(c, found[i]));
+          return next;
+        });
+      },
+      () => {
+        if (!stale) retry = setTimeout(() => setLookupRetry((n) => n + 1), 2000);
+      },
+    );
+    return () => {
+      stale = true;
+      clearTimeout(retry);
+    };
+  }, [missingCompatibles, kernel, lookupRetry]);
+
+  /** A node's binding: the one it was created from, else that of its first documented compatible. */
+  const bindingOf = useCallback(
+    (data: DtFlowNode["data"]) =>
+      data.binding ?? data.compatible.map((c) => bindingsByCompatible.get(c)).find((b) => b) ?? undefined,
+    [bindingsByCompatible],
+  );
+
+  // Ports only depend on node data, bindings and references: moving or
+  // selecting nodes reuses the previous sets, so nodes do not re-render.
+  const portCache = useRef(new Map<string, { key: unknown[]; ports: NodePortSet }>());
+  const ports = useMemo(() => {
+    const referenced = new Map<string, string[]>();
+    for (const e of edges) {
+      if (e.type !== "ref") continue;
+      referenced.set(e.source, [...(referenced.get(e.source) ?? []), (e.data as RefData).property]);
+    }
+    const dtNodes = nodes.filter(isDtNode);
+    const known = new Set(dtNodes.flatMap((n) => providedCells(n.data, bindingOf(n.data))));
+    const knownKey = [...known].sort().join();
+    const out = new Map<string, NodePortSet>();
+    for (const n of dtNodes) {
+      const binding = bindingOf(n.data);
+      const refs = referenced.get(n.id) ?? [];
+      const key = [n.data, binding, refs.join("\n"), knownKey];
+      const cached = portCache.current.get(n.id);
+      if (cached && cached.key.every((k, i) => k === key[i])) {
+        out.set(n.id, cached.ports);
+      } else {
+        out.set(n.id, nodePorts(n.data, binding, refs, known));
+      }
+      portCache.current.set(n.id, { key, ports: out.get(n.id)! });
+    }
+    for (const id of portCache.current.keys()) if (!out.has(id)) portCache.current.delete(id);
+    return out;
+  }, [nodes, edges, bindingOf]);
+  // A new map only when some node's ports changed, so the context stays put.
+  const portsRef = useRef(ports);
+  const stablePorts = useMemo(() => {
+    const prev = portsRef.current;
+    const same = prev.size === ports.size && [...ports].every(([id, p]) => prev.get(id) === p);
+    if (!same) portsRef.current = ports;
+    return portsRef.current;
+  }, [ports]);
+
+  // References are drawn from the consumer port of their property to the
+  // provider port of the target, or its generic phandle handle.
+  const edgeCache = useRef(new Map<string, { edge: Edge; drawn: Edge }>());
+  const portEdges = useMemo(
+    () =>
+      edges.map((e) => {
+        if (e.type !== "ref") return e;
+        const property = (e.data as RefData).property;
+        const port = stablePorts.get(e.source)?.consumers.find((c) => c.property === property);
+        const cells = port?.cells ?? null;
+        const provided = cells !== null && stablePorts.get(e.target)?.providers.some((p) => p.cells === cells);
+        const sourceHandle = consumerHandle(property);
+        const targetHandle = provided ? providerHandle(cells) : PHANDLE_HANDLE;
+        const cached = edgeCache.current.get(e.id);
+        if (cached && cached.edge === e && cached.drawn.sourceHandle === sourceHandle && cached.drawn.targetHandle === targetHandle) {
+          return cached.drawn;
+        }
+        const drawn = { ...e, sourceHandle, targetHandle };
+        edgeCache.current.set(e.id, { edge: e, drawn });
+        return drawn;
+      }),
+    [edges, stablePorts],
+  );
+
   const isValidConnection: IsValidConnection = useCallback(
     (c) => {
+      if (c.source === c.target) return false;
       // Inherited nodes keep their place in the tree; only overrides can change them.
       const target = nodes.find((n) => n.id === c.target);
       const inherited = target !== undefined && isDtNode(target) && target.data.inherited !== undefined;
-      return (
-        c.source !== c.target &&
-        ((c.sourceHandle === CHILD_HANDLE && c.targetHandle === PARENT_HANDLE && !inherited) ||
-          (c.sourceHandle === REF_HANDLE && c.targetHandle === PHANDLE_HANDLE))
-      );
+      if (c.sourceHandle === CHILD_HANDLE) return c.targetHandle === PARENT_HANDLE && !inherited;
+      const toProvider = c.targetHandle === PHANDLE_HANDLE || handleCells(c.targetHandle) !== undefined;
+      if (c.sourceHandle === REF_HANDLE) return toProvider;
+      // A typed port only joins a provider of its kind.
+      const property = handleProperty(c.sourceHandle);
+      const port = stablePorts.get(c.source)?.consumers.find((p) => p.property === property);
+      return port !== undefined && toProvider && accepts(port, handleCells(c.targetHandle));
     },
-    [nodes],
+    [nodes, stablePorts],
   );
 
   const onConnect = useCallback(
@@ -210,10 +329,18 @@ export default function App() {
         const label = uniqueLabel(target.data.name, nodes);
         setNodes((ns) => ns.map((n) => (n.id === target.id ? ({ ...n, data: { ...n.data, label } } as FlowNode) : n)));
       }
-      const data: RefData = { property: guessReferenceProperty(target.data), args: [] };
-      setEdges((es) => addEdge({ ...c, id: newId("e"), type: "ref", data }, es));
+      const property =
+        handleProperty(c.sourceHandle) ?? guessReferenceProperty(target.data, bindingOf(target.data), handleCells(c.targetHandle));
+      // Placeholder specifier cells, as many as the provider asks for.
+      const args = new Array<number>(specifierCount(target.data, property) ?? 0).fill(0);
+      const data: RefData = { property, args };
+      // Stored edges use the generic handles; the view maps them to ports.
+      // Not addEdge: it would drop a second reference between the same two
+      // nodes (`clocks` and `resets` to one controller).
+      const edge = { ...c, sourceHandle: REF_HANDLE, targetHandle: PHANDLE_HANDLE, id: newId("e"), type: "ref", data };
+      setEdges((es) => [...es, edge]);
     },
-    [nodes, setNodes, setEdges],
+    [nodes, setNodes, setEdges, bindingOf],
   );
 
   const addNode = useCallback(
@@ -448,7 +575,7 @@ export default function App() {
     return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
 
-  const view = useMemo(() => collapseView(nodes, edges, (id) => nodeName(id) ?? id), [nodes, edges]);
+  const view = useMemo(() => collapseView(nodes, portEdges, (id) => nodeName(id) ?? id), [nodes, portEdges]);
 
   const chooseDtc = async () => {
     const path = await dialogs.pickDtc();
@@ -494,6 +621,7 @@ export default function App() {
           </div>
         )}
         <NodeProblems.Provider value={nodeProblems}>
+        <NodePorts.Provider value={stablePorts}>
         <ReactFlow
           nodes={view.nodes}
           edges={view.edges}
@@ -513,6 +641,7 @@ export default function App() {
           <Controls />
           <MiniMap pannable zoomable />
         </ReactFlow>
+        </NodePorts.Provider>
         </NodeProblems.Provider>
       </main>
       <aside className="panel side">

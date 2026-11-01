@@ -12,9 +12,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::model::{EdgeKind, Graph, Group, Node, NodeId, Position, Size};
 
-/// Space reserved for one node; actual cards are a bit smaller.
+/// Space reserved for one node; actual cards are a bit smaller, unless they
+/// list many wired ports.
 const NODE_WIDTH: f32 = 220.0;
-const NODE_HEIGHT: f32 = 100.0;
+const NODE_HEIGHT: f32 = 130.0;
 /// Horizontal gap between neighbouring leaves.
 const SIBLING_GAP: f32 = 40.0;
 /// Vertical gap between a parent and its children.
