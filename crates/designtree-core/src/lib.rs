@@ -6,6 +6,7 @@
 //! visual concept and never affect the generated source.
 
 pub mod address_map;
+pub mod board;
 pub mod dtc;
 pub mod dts;
 pub mod fdt;
@@ -22,6 +23,7 @@ pub mod text_edit;
 pub mod validate;
 
 pub use address_map::{address_map, AddressMap, AddressProblem, Bus, Region};
+pub use board::{pin_check, PinCheck, PinProblem, PinState};
 pub use dts::{to_dts, to_dts_flat, to_dts_flat_mapped, to_dts_mapped, NodeSpan, SourceMap};
 pub use fdt::{to_dtb, Dtb};
 pub use import::{import_dts, import_dts_file, import_dts_mapped, ImportError};

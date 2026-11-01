@@ -7,7 +7,9 @@ use std::sync::{Arc, RwLock};
 
 use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
 use designtree_core::dtc::DtcError;
-use designtree_core::{AddressMap, Graph, ImportOptions, InterruptTree, Problem, Severity};
+use designtree_core::{
+    AddressMap, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Severity,
+};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -316,6 +318,13 @@ fn interrupt_tree(design: Graph) -> InterruptTree {
     designtree_core::interrupt_tree(&design)
 }
 
+/// What claims each connector pin of the board view, and the pins claimed
+/// twice.
+#[tauri::command]
+fn pin_check(design: Graph) -> PinCheck {
+    designtree_core::pin_check(&design)
+}
+
 /// The regions of every bus with their CPU addresses, overlaps and
 /// unreachable regions.
 #[tauri::command]
@@ -607,6 +616,7 @@ pub fn run() {
             new_overlay,
             check_schemas,
             interrupt_tree,
+            pin_check,
             address_map,
             auto_layout,
             save_design,

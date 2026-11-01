@@ -66,6 +66,7 @@ import {
   type DesignExtras,
   type AddressMap,
   type InterruptTree,
+  type PinCheck,
   type RefData,
 } from "./model";
 
@@ -127,6 +128,7 @@ export default function App() {
   const [showAddressMap, setShowAddressMap] = useState(false);
   const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
+  const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
@@ -280,6 +282,29 @@ export default function App() {
     }, 250);
     return () => clearTimeout(t);
   }, [showInterrupts, nodes, edges, extras]);
+
+  // The pin check reads the devicetree and the connectors, nothing else.
+  const connectors = extras.board?.connectors;
+  useEffect(() => {
+    if (!boardView || !inTauri || !connectors?.length) {
+      setPinCheck(null);
+      return;
+    }
+    const design = { ...schemaInput.design, board: { connectors } };
+    let stale = false;
+    const t = setTimeout(async () => {
+      try {
+        const check = await backend.pinCheck(design);
+        if (!stale) setPinCheck(check);
+      } catch {
+        // The DTS preview already shows why the design is invalid.
+      }
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [boardView, schemaKey, connectors]);
 
   useEffect(() => {
     if (!showAddressMap || !inTauri) {
@@ -782,7 +807,11 @@ export default function App() {
             designPath={designPath}
             onPlace={placeOnBoard}
             onSelect={selectOnly}
-            onBoardChange={(board) => setExtras((x) => ({ ...x, board: board?.background ? board : undefined }))}
+            edges={edges}
+            pinCheck={pinCheck}
+            onBoardChange={(board) =>
+              setExtras((x) => ({ ...x, board: board.background || board.connectors?.length ? board : undefined }))
+            }
           />
         ) : (
           <NodeProblems.Provider value={nodeProblems}>
