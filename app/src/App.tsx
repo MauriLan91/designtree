@@ -47,6 +47,7 @@ import { BoardView } from "./components/BoardView";
 import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
+import { CommandPalette, ShortcutSheet, type Command, type NodePick } from "./components/CommandPalette";
 import {
   CHILD_HANDLE,
   PARENT_HANDLE,
@@ -191,6 +192,8 @@ export default function App() {
   const schemaRun = useRef(0);
   const [showInterrupts, setShowInterrupts] = useState(false);
   const [pickingSoc, setPickingSoc] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const [showAddressMap, setShowAddressMap] = useState(false);
   const [boardView, setBoardView] = useState(false);
@@ -837,6 +840,125 @@ export default function App() {
     setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
   };
 
+  // Every toolbar action as a command (US-9.3), with its shortcut.
+  const dtTitle = (n: DtFlowNode) => {
+    const name = n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name;
+    return n.data.label ? `${n.data.label}: ${name}` : name;
+  };
+  const selectedDt = selectedNodes.filter(isDtNode);
+  const pickNode = (title: string, onPick: (id: string) => void, exclude = new Set<string>()): NodePick => ({
+    title,
+    nodes: nodes
+      .filter(isDtNode)
+      .filter((n) => n.id !== selectedDt[0]?.id && !exclude.has(n.id))
+      .map((n) => ({ id: n.id, title: dtTitle(n) })),
+    onPick,
+  });
+  /** `id`'s subtree, which cannot become its parent. */
+  const subtreeOf = (id: string) => {
+    const found = new Set([id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const e of edges) {
+        if (e.sourceHandle === CHILD_HANDLE && found.has(e.source) && !found.has(e.target)) {
+          found.add(e.target);
+          grew = true;
+        }
+      }
+    }
+    return found;
+  };
+  const commands: Command[] = [
+    { id: "new", title: "New design", shortcut: "Ctrl+N", run: newDesign },
+    { id: "open", title: "Open design…", shortcut: "Ctrl+O", disabled: !inTauri, run: openDesign },
+    { id: "import", title: "Import .dts…", disabled: !inTauri, run: importDts },
+    { id: "soc", title: "New board from SoC…", disabled: !inTauri, run: () => setPickingSoc(true) },
+    { id: "overlay", title: "New overlay…", disabled: !inTauri, run: newOverlay },
+    { id: "save", title: "Save design…", shortcut: "Ctrl+S", disabled: !inTauri, run: saveDesign },
+    {
+      id: "export",
+      title: "Export .dts…",
+      shortcut: "Ctrl+E",
+      disabled: !inTauri || !dts || errors.length > 0 || sourceError !== null,
+      run: exportDts,
+    },
+    { id: "build", title: "Build .dtb", shortcut: "Ctrl+B", disabled: !inTauri || errors.length > 0, run: buildDtb },
+    { id: "undo", title: "Undo", shortcut: "Ctrl+Z", disabled: !history.canUndo, run: history.undo },
+    { id: "redo", title: "Redo", shortcut: "Ctrl+Shift+Z", disabled: !history.canRedo, run: history.redo },
+    { id: "add", title: "Add empty node", run: () => addNode(null) },
+    {
+      id: "connect",
+      title: "Connect selected node to…",
+      disabled: selectedDt.length !== 1,
+      run: () =>
+        pickNode("Node to reference", (target) =>
+          onConnect({ source: selectedDt[0].id, sourceHandle: REF_HANDLE, target, targetHandle: PHANDLE_HANDLE }),
+        ),
+    },
+    {
+      id: "move",
+      title: "Move selected node under…",
+      disabled: selectedDt.length !== 1 || selectedDt[0].data.name === "/",
+      run: () =>
+        pickNode(
+          "New parent",
+          (parent) =>
+            onConnect({ source: parent, sourceHandle: CHILD_HANDLE, target: selectedDt[0].id, targetHandle: PARENT_HANDLE }),
+          subtreeOf(selectedDt[0].id),
+        ),
+    },
+    { id: "group", title: "Group selection", shortcut: "Ctrl+G", disabled: !selectedNodes.some((n) => !n.parentId), run: groupSelection },
+    {
+      id: "ungroup",
+      title: "Ungroup",
+      shortcut: "Ctrl+Shift+G",
+      disabled: !selectedNodes.some((n) => n.type === "group"),
+      run: ungroupSelection,
+    },
+    { id: "layout", title: "Auto layout", shortcut: "Ctrl+L", disabled: !inTauri || boardView, run: autoLayout },
+    { id: "board", title: boardView ? "Show the graph" : "Show the board view", run: () => setBoardView((v) => !v) },
+    { id: "interrupts", title: "Toggle interrupt tree", disabled: !inTauri, run: () => setShowInterrupts((v) => !v) },
+    { id: "address-map", title: "Toggle address map", disabled: !inTauri, run: () => setShowAddressMap((v) => !v) },
+    { id: "kernels", title: "Kernel checkouts…", disabled: !inTauri, run: () => setShowKernels(true) },
+    { id: "dtc", title: "Set dtc path…", disabled: !inTauri, run: chooseDtc },
+    { id: "fit", title: "Fit the design in view", run: () => fitView({ maxZoom: 1, duration: 300 }) },
+    { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", run: () => setShowShortcuts(true) },
+  ];
+  const shortcutList: [string, string][] = [
+    ["Ctrl+K", "Command palette"],
+    ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
+    ["Ctrl+Y", "Redo"],
+    ["Delete", "Delete the selection"],
+    ["Shift+drag", "Select an area"],
+  ];
+  const commandsRef = useRef(commands);
+  commandsRef.current = commands;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowPalette((v) => !v);
+        return;
+      }
+      if (document.querySelector('[role="dialog"]')) return;
+      const combo = e.key === "F1" ? "F1" : ctrl ? `Ctrl+${e.shiftKey ? "Shift+" : ""}${e.key.toUpperCase()}` : null;
+      // Undo and redo have their own handler, which knows about text fields.
+      if (!combo || combo === "Ctrl+Z" || combo === "Ctrl+Shift+Z") return;
+      const command = commandsRef.current.find((c) => c.shortcut === combo);
+      if (!command) return;
+      // Ctrl+S works from a text field too; the rest belong to the canvas.
+      const target = e.target as HTMLElement | null;
+      const inText = !!target?.closest(`${TEXT_INPUTS}, textarea, select, [contenteditable], .cm-editor`);
+      if (inText && combo !== "Ctrl+S") return;
+      e.preventDefault();
+      if (!command.disabled) command.run();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const updateNodeData = (id: string, data: object) =>
     setNodes((ns) => ns.map((n) => (n.id === id ? ({ ...n, data: { ...n.data, ...data } } as FlowNode) : n)));
   const updateEdgeData = (id: string, data: RefData) =>
@@ -878,6 +1000,7 @@ export default function App() {
         <button onClick={() => setBoardView((v) => !v)} aria-pressed={boardView} title="Place devices where they sit on the board">
           Board view
         </button>
+        <button onClick={() => setShowPalette(true)} title="Command palette (Ctrl+K)">Commands…</button>
         <button onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">Undo</button>
         <button onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button onClick={autoLayout} disabled={!inTauri || boardView}>Auto layout</button>
@@ -960,6 +1083,15 @@ export default function App() {
           errors={errors}
         />
       </aside>
+      {showPalette && (
+        <CommandPalette
+          commands={commands}
+          library={!!kernel}
+          onAdd={(b) => addNode(b)}
+          onClose={() => setShowPalette(false)}
+        />
+      )}
+      {showShortcuts && <ShortcutSheet shortcuts={shortcutList} onClose={() => setShowShortcuts(false)} />}
       {showKernels && (
         <KernelSettings
           active={kernel?.path ?? null}

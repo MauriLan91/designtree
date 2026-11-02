@@ -204,6 +204,14 @@ step is recorded once the state has been still for 300 ms and its design
 file content changed, so a drag or a burst of typing is one step and
 selection is never one. Opening or creating a design starts a new history.
 
+The command palette (`app/src/components/CommandPalette.tsx`, US-9.3,
+Ctrl+K) lists the toolbar actions, with the same enabled state, and adds
+elements from the library by searching the loaded kernel's bindings.
+Commands that need a second node, such as connecting or moving the
+selected node, switch the palette to a node picker. Global shortcuts are
+read from the same command list, so the help sheet (F1) cannot drift from
+what the keys do; in text fields only Ctrl+S is taken.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed
