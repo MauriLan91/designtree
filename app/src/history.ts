@@ -16,6 +16,10 @@ export interface History {
   canRedo: boolean;
   /** Starts a new history at the next state, as when a design is opened. */
   reset: () => void;
+  /** Whether the state differs from the last one marked saved (or reset). */
+  dirty: boolean;
+  /** Marks the latest state as the one on disk. */
+  markSaved: () => void;
 }
 
 interface Snapshot<S> {
@@ -43,6 +47,7 @@ export function useHistory<S>(state: S, { key, same, restore, settled, limit }: 
   // The next state is a restore or a new design, not an edit.
   const skip = useRef<"restore" | "reset" | null>("reset");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saved = useRef<string | null>(null);
   const [, setVersion] = useState(0);
   const changed = () => setVersion((v) => v + 1);
   const options = useRef({ key, same, restore, settled, limit });
@@ -83,6 +88,7 @@ export function useHistory<S>(state: S, { key, same, restore, settled, limit }: 
       // A restore differs from its snapshot only in what the key leaves out.
       const restored = reason === "restore" ? current.current : null;
       current.current = { state, key: restored ? restored.key : options.current.key(state) };
+      if (reason === "reset") saved.current = current.current.key;
       return;
     }
     if (timer.current) clearTimeout(timer.current);
@@ -118,5 +124,12 @@ export function useHistory<S>(state: S, { key, same, restore, settled, limit }: 
     reset: useCallback(() => {
       skip.current = "reset";
     }, []),
+    dirty: current.current !== null && current.current.key !== saved.current,
+    markSaved: useCallback(() => {
+      // What was saved is the latest state, settled or not.
+      if (timer.current) commit();
+      saved.current = current.current?.key ?? null;
+      changed();
+    }, [commit]),
   };
 }

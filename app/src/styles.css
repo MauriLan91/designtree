@@ -33,10 +33,42 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 .app {
   display: grid;
   grid-template-columns: 260px 1fr 360px;
-  grid-template-rows: auto 1fr;
-  grid-template-areas: "bar bar bar" "palette canvas side";
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "tabs tabs tabs" "bar bar bar" "palette canvas side";
   height: 100%;
 }
+/* An editor's toolbar, canvas and side panel sit in the workspace grid. */
+.editor { display: contents; }
+.editor[hidden] { display: none; }
+.tabs {
+  grid-area: tabs;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 4px 8px 0;
+  overflow-x: auto;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.tab.active { background: var(--panel); color: var(--text); margin-bottom: -1px; padding-bottom: 5px; }
+.tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-dirty { color: var(--accent); font-size: 10px; }
+.tab-close, .tab-new { border: none; background: none; padding: 0 4px; line-height: 1; color: inherit; }
+.tab-close:hover, .tab-new:hover { background: var(--border); }
+.tab-new { font-size: 16px; margin: 0 0 4px 4px; }
 .toolbar {
   grid-area: bar;
   display: flex;

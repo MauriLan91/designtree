@@ -221,6 +221,14 @@ selected node, switch the palette to a node picker. Global shortcuts are
 read from the same command list, so the help sheet (F1) cannot drift from
 what the keys do; in text fields only Ctrl+S is taken.
 
+Designs open in tabs (`app/src/Workspace.tsx`, US-9.4). Each tab is a
+whole editor with its own React Flow instance, kept mounted while hidden
+so that its history, selection and viewport survive a switch; only the
+tab on show takes keys. The element library is shared, as the backend
+holds one kernel index. A tab is marked unsaved while its design file
+content differs from what was last loaded or saved, which the undo
+history already computes. Closing such a tab, or the window, asks first.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed
