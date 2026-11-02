@@ -48,6 +48,7 @@ import { DRAG_MIME, Palette } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import { CommandPalette, ShortcutSheet, type Command, type NodePick } from "./components/CommandPalette";
+import { CLIPBOARD_MIME, copySelection, parseClipboard, pasteClipboard } from "./clipboard";
 import {
   CHILD_HANDLE,
   PARENT_HANDLE,
@@ -183,6 +184,42 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [history.undo, history.redo]);
+  // Copy and paste of subtrees (US-9.2), through the system clipboard so
+  // that they reach other designs and windows.
+  useEffect(() => {
+    const onCanvas = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      return !target?.closest(`${TEXT_INPUTS}, textarea, select, [contenteditable], .cm-editor, [role="dialog"]`);
+    };
+    const onCopy = (e: ClipboardEvent) => {
+      if (!onCanvas(e) || !e.clipboardData) return;
+      const clip = copySelection(nodesRef.current, edgesRef.current);
+      if (!clip) return;
+      const text = JSON.stringify(clip);
+      e.clipboardData.setData(CLIPBOARD_MIME, text);
+      e.clipboardData.setData("text/plain", text);
+      e.preventDefault();
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (!onCanvas(e) || !e.clipboardData) return;
+      const clip = parseClipboard(e.clipboardData.getData(CLIPBOARD_MIME) || e.clipboardData.getData("text/plain"));
+      if (!clip) return;
+      e.preventDefault();
+      const current = nodesRef.current;
+      const selected = current.filter((n) => n.selected && isDtNode(n));
+      const into = selected.length === 1 ? selected[0].id : null;
+      const pasted = pasteClipboard(clip, current, edgesRef.current, into, newId);
+      // The pasted nodes come selected, ready to move.
+      setNodes((ns) => [...ns.map((n) => (n.selected ? ({ ...n, selected: false } as FlowNode) : n)), ...pasted.nodes]);
+      setEdges((es) => [...es.map((x) => (x.selected ? { ...x, selected: false } : x)), ...pasted.edges]);
+    };
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("paste", onPaste);
+    return () => {
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("paste", onPaste);
+    };
+  }, [setNodes, setEdges]);
   const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
@@ -928,6 +965,8 @@ export default function App() {
     ["Ctrl+K", "Command palette"],
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
     ["Ctrl+Y", "Redo"],
+    ["Ctrl+C", "Copy the selected nodes"],
+    ["Ctrl+V", "Paste into the selected node"],
     ["Delete", "Delete the selection"],
     ["Shift+drag", "Select an area"],
   ];
