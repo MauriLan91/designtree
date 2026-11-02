@@ -204,6 +204,15 @@ step is recorded once the state has been still for 300 ms and its design
 file content changed, so a drag or a burst of typing is one step and
 selection is never one. Opening or creating a design starts a new history.
 
+Copy and paste (`app/src/clipboard.ts`, US-9.2) put the selected nodes and
+their subtrees on the system clipboard in the design file format, so they
+paste into another design or window. Pasted nodes get new ids and labels
+the design does not use yet; references between them, as edges or as
+labels inside values, follow the copies, and references to other nodes
+stay where the target exists. A subtree goes under the selected node, else
+under its old parent, else under the root, renamed (`bus-1`) when a sibling
+already has its name.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed
