@@ -24,7 +24,6 @@ import { GroupNode } from "./components/GroupNode";
 import { initialProperties } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
 import { AddressMapPanel } from "./components/AddressMapPanel";
-import { KernelSettings } from "./components/KernelSettings";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
@@ -44,7 +43,7 @@ import {
 } from "./ports";
 import { Inspector } from "./components/Inspector";
 import { BoardView } from "./components/BoardView";
-import { DRAG_MIME, Palette } from "./components/Palette";
+import { DRAG_MIME } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import {
@@ -118,7 +117,50 @@ const sameEdges = (a: Edge[], b: Edge[]) =>
 let nextId = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(nextId++).toString(36)}`;
 
-export default function App() {
+/** A design to open, and the name its tab shows. */
+export interface DesignSource {
+  load: () => Promise<Design>;
+  /** The design file it is saved to, if it came from one. */
+  path: string | null;
+  name: string;
+}
+
+/** What the tab bar shows of an editor. */
+export interface EditorStatus {
+  title: string;
+  dirty: boolean;
+  /** A new empty design nobody touched: opening a design may replace it. */
+  fresh: boolean;
+}
+
+/** What the workspace asks of an editor. */
+export interface EditorApi {
+  addNode: (binding: Binding | null) => void;
+  load: (source: DesignSource) => Promise<void>;
+  /** Saves the design; false if the user cancelled or it failed. */
+  save: () => Promise<boolean>;
+}
+
+export type Kernel = { path: string; version: string | null };
+
+interface EditorProps {
+  /** The tab on show; the others keep their state but take no keys. */
+  active: boolean;
+  /** Loaded when the editor opens. */
+  start?: DesignSource;
+  /** The kernel the library is built from. */
+  kernel: Kernel | null;
+  api: (api: EditorApi) => void;
+  onStatus: (status: EditorStatus) => void;
+  /** Opens a design, in this tab or a new one. */
+  onOpen: (source: DesignSource) => void;
+  onNew: () => void;
+  onKernels: () => void;
+}
+
+const baseName = (path: string) => path.split(/[\\/]/).pop()!;
+
+export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, onKernels }: EditorProps) {
   const initial = useMemo(() => fromDesign(emptyDesign()), []);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
@@ -165,6 +207,7 @@ export default function App() {
     limit: 500,
   });
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
@@ -181,11 +224,13 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history.undo, history.redo]);
+  }, [active, history.undo, history.redo]);
   const [showApplied, setShowApplied] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
   const [designPath, setDesignPath] = useState<string | null>(null);
+  const [title, setTitle] = useState("Untitled");
+  const [fresh, setFresh] = useState(!start);
   const [build, setBuild] = useState<BuildState | null>(null);
   const [schema, setSchema] = useState<SchemaState>({ checking: false, problems: [] });
   const schemaRun = useRef(0);
@@ -199,31 +244,12 @@ export default function App() {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
-  const [requestedKernel, setRequestedKernel] = useState<string | null>(null);
-  /** The kernel the library is built from. */
-  const [kernel, setKernel] = useState<{ path: string; version: string | null } | null>(null);
-  const [showKernels, setShowKernels] = useState(false);
-
   useEffect(() => {
-    if (!inTauri) {
-      // In a plain browser, `?design=<url>` opens a design file: this is how
-      // the G5 benchmark loads its board (US-11.1).
-      const url = new URLSearchParams(window.location.search).get("design");
-      if (url) loadDesign(() => fetch(url).then((r) => r.json()));
-      return;
-    }
-    backend.startupArgs().then((args) => {
-      if (args.design) {
-        const d = fromDesign(args.design);
-        history.reset();
-        setNodes(d.nodes);
-        setEdges(d.edges);
-        setExtras(d.extras);
-        setDesignPath(args.design_path);
-      }
-      setRequestedKernel(args.linux_src);
-    }, (e) => setErrors([String(e)]));
-  }, [setNodes, setEdges]);
+    if (start) loadDesign(start);
+  }, []);
+
+  const { dirty, markSaved } = history;
+  useEffect(() => onStatus({ title, dirty, fresh: fresh && !dirty }), [title, dirty, fresh, onStatus]);
 
   const kernelWarning = !!extras.kernel && !!kernel?.version && extras.kernel !== kernel.version;
 
@@ -702,21 +728,12 @@ export default function App() {
     );
   };
 
-  const newDesign = () => {
-    const d = fromDesign(emptyDesign());
-    history.reset();
-    setNodes(d.nodes);
-    setEdges(d.edges);
-    setExtras(d.extras);
-    setOverriding(new Set());
-    setDesignPath(null);
-    setBuild(null);
-  };
-
-  const loadDesign = async (load: () => Promise<Design>, path: string | null = null) => {
+  const loadDesign = async ({ load, path, name }: DesignSource) => {
     try {
       const d = fromDesign(await load());
       history.reset();
+      setTitle(name);
+      setFresh(false);
       setNodes(d.nodes);
       setEdges(d.edges);
       setExtras(d.extras);
@@ -744,28 +761,44 @@ export default function App() {
 
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
-    if (path) await loadDesign(() => backend.openDesign(path), path);
+    if (path) onOpen({ load: () => backend.openDesign(path), path, name: baseName(path) });
   };
 
   const importDts = async () => {
     const path = await dialogs.pickDtsToOpen();
-    if (path) await loadDesign(() => backend.importDts(path));
+    if (path) onOpen({ load: () => backend.importDts(path), path: null, name: baseName(path) });
   };
 
   const saveDesign = async () => {
     const path = await dialogs.pickDesignToSave();
-    if (path) {
+    if (!path) return false;
+    try {
       // The design is now built against the library's kernel.
       const version = kernel?.version ?? extras.kernel;
       await backend.saveDesign(path, { ...toDesign(nodes, edges, extras), kernel: version });
+      markSaved();
       setExtras((x) => ({ ...x, kernel: version }));
       setDesignPath(path);
+      setTitle(baseName(path));
+      return true;
+    } catch (e) {
+      setErrors([String(e)]);
+      return false;
     }
   };
+  const apiRef = useRef<EditorApi | null>(null);
+  apiRef.current = { addNode: (b) => addNode(b), load: loadDesign, save: saveDesign };
+  useEffect(() => {
+    api({
+      addNode: (b) => apiRef.current!.addNode(b),
+      load: (source) => apiRef.current!.load(source),
+      save: () => apiRef.current!.save(),
+    });
+  }, [api]);
 
   const newOverlay = async () => {
     const base = await dialogs.pickOverlayBase();
-    if (base) await loadDesign(() => backend.newOverlay(base));
+    if (base) onOpen({ load: () => backend.newOverlay(base), path: null, name: `${baseName(base).replace(/\.[^.]*$/, "")} overlay` });
   };
 
   const exportDts = async () => {
@@ -843,10 +876,10 @@ export default function App() {
     setEdges((es) => es.map((e) => (e.id === id ? { ...e, data } : e)));
 
   return (
-    <div className="app">
+    <div className="editor" hidden={!active}>
       <header className="toolbar">
         <span className="brand">DesignTree</span>
-        <button onClick={newDesign}>New</button>
+        <button onClick={onNew}>New</button>
         <button onClick={() => setPickingSoc(true)} disabled={!inTauri} title="Start a board from a SoC .dtsi of the loaded kernel tree">
           New from SoC…
         </button>
@@ -864,7 +897,7 @@ export default function App() {
           Export .dts…
         </button>
         <button onClick={buildDtb} disabled={!inTauri || errors.length > 0}>Build .dtb</button>
-        <button onClick={() => setShowKernels(true)} disabled={!inTauri} title="Kernel checkouts the library can be built from">
+        <button onClick={onKernels} disabled={!inTauri} title="Kernel checkouts the library can be built from">
           Kernels…
         </button>
         <button onClick={chooseDtc} disabled={!inTauri} title="Use a dtc program that is not in PATH">dtc path…</button>
@@ -884,7 +917,6 @@ export default function App() {
         <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
         <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
       </header>
-      <Palette onAdd={(b) => addNode(b)} requestedKernel={requestedKernel} onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })} />
       <main ref={canvasRef} className="canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
         {kernelWarning && (
           <div className="kernel-warning" role="alert">
@@ -921,7 +953,7 @@ export default function App() {
             fitView
             fitViewOptions={{ maxZoom: 1 }}
             minZoom={0.1}
-            deleteKeyCode={["Backspace", "Delete"]}
+            deleteKeyCode={active ? ["Backspace", "Delete"] : null}
           >
             <Background />
             <Controls />
@@ -960,22 +992,12 @@ export default function App() {
           errors={errors}
         />
       </aside>
-      {showKernels && (
-        <KernelSettings
-          active={kernel?.path ?? null}
-          onUse={(path) => {
-            setShowKernels(false);
-            setRequestedKernel(path);
-          }}
-          onClose={() => setShowKernels(false)}
-        />
-      )}
       {pickingSoc && (
         <SocPicker
           onClose={() => setPickingSoc(false)}
           onPick={(soc) => {
             setPickingSoc(false);
-            loadDesign(() => backend.newBoard(soc.path));
+            onOpen({ load: () => backend.newBoard(soc.path), path: null, name: baseName(soc.path).replace(/\.dtsi$/, "") });
           }}
         />
       )}

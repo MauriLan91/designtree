@@ -204,6 +204,14 @@ step is recorded once the state has been still for 300 ms and its design
 file content changed, so a drag or a burst of typing is one step and
 selection is never one. Opening or creating a design starts a new history.
 
+Designs open in tabs (`app/src/Workspace.tsx`, US-9.4). Each tab is a
+whole editor with its own React Flow instance, kept mounted while hidden
+so that its history, selection and viewport survive a switch; only the
+tab on show takes keys. The element library is shared, as the backend
+holds one kernel index. A tab is marked unsaved while its design file
+content differs from what was last loaded or saved, which the undo
+history already computes. Closing such a tab, or the window, asks first.
+
 ## Next steps
 
 - Incremental validation: only re-check the subtrees an edit changed
