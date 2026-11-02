@@ -213,6 +213,14 @@ stay where the target exists. A subtree goes under the selected node, else
 under its old parent, else under the root, renamed (`bus-1`) when a sibling
 already has its name.
 
+The command palette (`app/src/components/CommandPalette.tsx`, US-9.3,
+Ctrl+K) lists the toolbar actions, with the same enabled state, and adds
+elements from the library by searching the loaded kernel's bindings.
+Commands that need a second node, such as connecting or moving the
+selected node, switch the palette to a node picker. Global shortcuts are
+read from the same command list, so the help sheet (F1) cannot drift from
+what the keys do; in text fields only Ctrl+S is taken.
+
 Designs open in tabs (`app/src/Workspace.tsx`, US-9.4). Each tab is a
 whole editor with its own React Flow instance, kept mounted while hidden
 so that its history, selection and viewport survive a switch; only the
