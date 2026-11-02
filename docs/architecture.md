@@ -210,7 +210,8 @@ paste into another design or window. Pasted nodes get new ids and labels
 the design does not use yet; references between them, as edges or as
 labels inside values, follow the copies, and references to other nodes
 stay where the target exists. A subtree goes under the selected node, else
-under its old parent, else under the root.
+under its old parent, else under the root, renamed (`bus-1`) when a sibling
+already has its name.
 
 ## Next steps
 

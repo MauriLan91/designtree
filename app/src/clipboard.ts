@@ -3,6 +3,7 @@
 // design, or another window, through the system clipboard.
 import type { Edge } from "@xyflow/react";
 import {
+  CHILD_HANDLE,
   fromDesign,
   isDtNode,
   toDesign,
@@ -83,6 +84,7 @@ const OFFSET = 40;
 export function pasteClipboard(
   clip: Clipboard,
   nodes: FlowNode[],
+  edges: Edge[],
   into: string | null,
   newId: (prefix: string) => string,
 ): { nodes: FlowNode[]; edges: Edge[] } {
@@ -113,17 +115,43 @@ export function pasteClipboard(
     board_position: undefined,
     position: { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
   }));
-  const edges: DesignEdge[] = [];
+  const childrenOf = (parent: string) =>
+    edges.filter((e) => e.source === parent && e.sourceHandle === CHILD_HANDLE).map((e) => e.target);
+  const added: DesignEdge[] = [];
   for (const e of clip.edges) {
     const to = ids.get(e.to) ?? (existing.has(e.to) ? e.to : null);
-    if (to) edges.push({ ...e, from: ids.get(e.from)!, to });
+    if (to) added.push({ ...e, from: ids.get(e.from)!, to });
   }
+  const byId = new Map(pasted.map((n) => [n.id, n]));
+  const fullName = (name: string, unit?: string | null) => (unit ? `${name}@${unit}` : name);
+  const siblings = new Map<string, Set<string>>();
+  const namesUnder = (parent: string) => {
+    let names = siblings.get(parent);
+    if (!names) {
+      const children = new Set(childrenOf(parent));
+      names = new Set(
+        nodes
+          .filter(isDtNode)
+          .filter((n) => children.has(n.id))
+          .map((n) => fullName(n.data.name, n.data.unitAddress)),
+      );
+      siblings.set(parent, names);
+    }
+    return names;
+  };
   for (const [id, parent] of Object.entries(clip.parents)) {
     const target = into ?? (existing.has(parent) ? parent : root?.id);
-    if (target && ids.has(id)) edges.push({ kind: "child", from: target, to: ids.get(id)! });
+    const node = byId.get(ids.get(id)!);
+    if (!target || !node) continue;
+    // Two nodes of one name under one parent are one node to dtc.
+    const names = namesUnder(target);
+    const base = node.name;
+    for (let i = 1; names.has(fullName(node.name, node.unit_address)); i++) node.name = `${base}-${i}`;
+    names.add(fullName(node.name, node.unit_address));
+    added.push({ kind: "child", from: target, to: node.id });
   }
 
-  const flow = fromDesign({ nodes: pasted, edges, groups: [] });
+  const flow = fromDesign({ nodes: pasted, edges: added, groups: [] });
   return {
     nodes: flow.nodes.map((n) => ({ ...n, selected: true }) as FlowNode),
     edges: flow.edges.map((e) => ({ ...e, id: newId("e") })),

@@ -207,7 +207,7 @@ export default function App() {
       const current = nodesRef.current;
       const selected = current.filter((n) => n.selected && isDtNode(n));
       const into = selected.length === 1 ? selected[0].id : null;
-      const pasted = pasteClipboard(clip, current, into, newId);
+      const pasted = pasteClipboard(clip, current, edgesRef.current, into, newId);
       // The pasted nodes come selected, ready to move.
       setNodes((ns) => [...ns.map((n) => (n.selected ? ({ ...n, selected: false } as FlowNode) : n)), ...pasted.nodes]);
       setEdges((es) => [...es.map((x) => (x.selected ? { ...x, selected: false } : x)), ...pasted.edges]);
