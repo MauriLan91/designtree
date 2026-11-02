@@ -275,3 +275,13 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .connector-editor li { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
 .connector-editor li button { padding: 0 6px; }
 .board-device-compatible { font-size: 11px; color: var(--muted); }
+.command-backdrop { align-items: flex-start; padding-top: 12vh; }
+.command-palette { padding: 8px; gap: 6px; }
+.command-palette input { font-size: 14px; padding: 8px 10px; }
+.command-palette ul { list-style: none; margin: 0; padding: 0; overflow: auto; max-height: 50vh; }
+.command-palette li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+.command-palette li.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.command-hint { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shortcuts { border-collapse: collapse; }
+.shortcuts td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.shortcuts kbd { font-family: ui-monospace, monospace; font-size: 12px; background: var(--code); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
