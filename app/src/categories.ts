@@ -38,7 +38,6 @@ const BY_CATEGORY: Record<string, Kind> = {
   net: "bus",
   mmc: "bus",
   pci: "bus",
-  "net/can": "bus",
   bus: "bus",
   gpio: "gpio",
   pinctrl: "gpio",
