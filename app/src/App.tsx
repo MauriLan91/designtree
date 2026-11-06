@@ -1029,10 +1029,7 @@ export function Editor({
   const shownKey = [...shown].join(" ");
   // References that leave the scope end at boundary ports (US-16.2); their
   // edges do not depend on positions, the ports' places do.
-  const portTitle = (id: string) => {
-    const n = nodes.find((x) => x.id === id);
-    return n && isDtNode(n) && n.data.label ? `&${n.data.label}` : (nodeName(id) ?? id);
-  };
+  const boundaryCache = useRef(new Map<string, FlowNode>());
   const shownEdges = useMemo(
     () => [...scopeEdges(portEdges, shown), ...boundaryPorts(portEdges, shown, () => undefined, () => "").edges],
     [portEdges, shownKey],
@@ -1050,8 +1047,23 @@ export function Editor({
       }
       return { x, y, width: n.measured?.width ?? 200, height: n.measured?.height ?? 80 };
     };
-    const ports = boundaryPorts(portEdges, shown, boxOf, portTitle).nodes;
-    const drawn = [...nodes.filter((n) => shown.has(n.id)), ...(ports as unknown as FlowNode[])];
+    const portTitle = (id: string) => {
+      const n = byId.get(id);
+      if (!n || !isDtNode(n)) return id;
+      if (n.data.label) return `&${n.data.label}`;
+      return n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name;
+    };
+    // Unchanged ports keep their object, so React Flow leaves them alone.
+    const cache = boundaryCache.current;
+    const ports = boundaryPorts(portEdges, shown, boxOf, portTitle).nodes.map((p) => {
+      const old = cache.get(p.id) as typeof p | undefined;
+      const same =
+        old && old.position.x === p.position.x && old.position.y === p.position.y && old.data.title === p.data.title;
+      const node = (same ? old : p) as unknown as FlowNode;
+      cache.set(p.id, node);
+      return node;
+    });
+    const drawn = [...nodes.filter((n) => shown.has(n.id)), ...ports];
     return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
   }, [nodes, portEdges, shownEdges, shownKey]);
 
