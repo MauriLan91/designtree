@@ -20,10 +20,11 @@ under the mouse.
 
 ## Command palette
 
-**Commands…** or Ctrl+K opens the command palette: type part of a command and
-press Enter. It has everything in the toolbar plus **Add empty node**,
-**Connect selected node to…**, **Move selected node under…**, **Fit the
-design in view** and **Check for updates now**.
+The search box in the toolbar, **View › Command palette…** or Ctrl+K opens the
+command palette: type part of a command and press Enter. It has every command
+of the menus, and adds elements of the library by name. Commands that need a
+second node, like **Insert › Reference from selected node to…** and **Edit ›
+Move selected node under…**, ask for it there.
 
 ## Keyboard shortcuts
 

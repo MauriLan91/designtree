@@ -10,10 +10,10 @@ start it with `WEBKIT_DISABLE_DMABUF_RENDERER=0`, drop that.
 
 **"Bindings may differ"** above the canvas: the design was made against
 another kernel version than the loaded one. Pick the matching checkout under
-**Kernels…**, or carry on and check the Schema check panel.
+**Tools › Kernel checkouts…**, or carry on and check the Schema check panel.
 
 **Build .dtb says dtc is missing.** Install it (`dtc` on Arch,
-`device-tree-compiler` on Debian and Ubuntu) or point **dtc path…** at it.
+`device-tree-compiler` on Debian and Ubuntu) or point **Tools › Set dtc path…** at it.
 
 **Build .dtb is greyed out.** The design has structural errors; the DTS
 source panel lists them.

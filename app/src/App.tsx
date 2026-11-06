@@ -46,7 +46,20 @@ import { BoardView } from "./components/BoardView";
 import { DRAG_MIME } from "./components/Palette";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
-import { CommandPalette, ShortcutSheet, type Command, type NodePick } from "./components/CommandPalette";
+import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
+import { MenuBar } from "./components/MenuBar";
+import { comboOf, pickOf, tooltipOf, type Command, type NodePick } from "./commands";
+import {
+  FilePlus,
+  FolderOpen,
+  Hammer,
+  Redo2,
+  Save,
+  Search,
+  SquarePlus,
+  Undo2,
+  Workflow,
+} from "lucide-react";
 import { CLIPBOARD_MIME, copySelection, parseClipboard, pasteClipboard } from "./clipboard";
 import {
   CHILD_HANDLE,
@@ -279,6 +292,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
   const [showInterrupts, setShowInterrupts] = useState(false);
   const [pickingSoc, setPickingSoc] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [palettePick, setPalettePick] = useState<NodePick | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const [showAddressMap, setShowAddressMap] = useState(false);
@@ -966,36 +980,46 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
     }
     return found;
   };
+  // Every action of the editor. Menus, toolbar, palette and shortcuts all
+  // read this list; see commands.ts.
   const commands: Command[] = [
-    { id: "new", title: "New design", shortcut: "Ctrl+N", run: onNew },
-    { id: "open", title: "Open design…", shortcut: "Ctrl+O", disabled: !inTauri, run: openDesign },
-    { id: "import", title: "Import .dts…", disabled: !inTauri, run: importDts },
-    { id: "soc", title: "New board from SoC…", disabled: !inTauri, run: () => setPickingSoc(true) },
-    { id: "overlay", title: "New overlay…", disabled: !inTauri, run: newOverlay },
-    { id: "save", title: "Save design…", shortcut: "Ctrl+S", disabled: !inTauri, run: saveDesign },
+    { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
+    {
+      id: "soc",
+      title: "New board from SoC…",
+      menu: "File",
+      hint: "Start a board from a SoC .dtsi of the loaded kernel tree",
+      disabled: !inTauri,
+      run: () => setPickingSoc(true),
+    },
+    {
+      id: "overlay",
+      title: "New overlay…",
+      menu: "File",
+      hint: "Start an overlay (.dtso) for a design or board file",
+      disabled: !inTauri,
+      run: newOverlay,
+    },
+    { id: "open", title: "Open design…", shortcut: "Ctrl+O", menu: "File", group: 1, icon: FolderOpen, disabled: !inTauri, run: openDesign },
+    { id: "import", title: "Import .dts…", menu: "File", group: 1, disabled: !inTauri, run: importDts },
+    { id: "save", title: "Save design…", shortcut: "Ctrl+S", menu: "File", group: 2, icon: Save, disabled: !inTauri, run: saveDesign },
     {
       id: "export",
       title: "Export .dts…",
       shortcut: "Ctrl+E",
+      menu: "File",
+      group: 2,
+      hint: sourceError ? "Fix the error in the DTS source first" : undefined,
       disabled: !inTauri || !dts || errors.length > 0 || sourceError !== null,
       run: exportDts,
     },
-    { id: "build", title: "Build .dtb", shortcut: "Ctrl+B", disabled: !inTauri || errors.length > 0, run: buildDtb },
-    { id: "undo", title: "Undo", shortcut: "Ctrl+Z", disabled: !history.canUndo, run: history.undo },
-    { id: "redo", title: "Redo", shortcut: "Ctrl+Shift+Z", disabled: !history.canRedo, run: history.redo },
-    { id: "add", title: "Add empty node", run: () => addNode(null) },
-    {
-      id: "connect",
-      title: "Connect selected node to…",
-      disabled: selectedDt.length !== 1,
-      run: () =>
-        pickNode("Node to reference", (target) =>
-          onConnect({ source: selectedDt[0].id, sourceHandle: REF_HANDLE, target, targetHandle: PHANDLE_HANDLE }),
-        ),
-    },
+    { id: "undo", title: "Undo", shortcut: "Ctrl+Z", menu: "Edit", icon: Undo2, disabled: !history.canUndo, run: history.undo },
+    { id: "redo", title: "Redo", shortcut: "Ctrl+Shift+Z", menu: "Edit", icon: Redo2, disabled: !history.canRedo, run: history.redo },
     {
       id: "move",
       title: "Move selected node under…",
+      menu: "Edit",
+      group: 1,
       disabled: selectedDt.length !== 1 || selectedDt[0].data.name === "/",
       run: () =>
         pickNode(
@@ -1005,32 +1029,113 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
           subtreeOf(selectedDt[0].id),
         ),
     },
-    { id: "group", title: "Group selection", shortcut: "Ctrl+G", disabled: !selectedNodes.some((n) => !n.parentId), run: groupSelection },
+    {
+      id: "group",
+      title: "Group selection",
+      shortcut: "Ctrl+G",
+      menu: "Edit",
+      group: 1,
+      disabled: !selectedNodes.some((n) => !n.parentId),
+      run: groupSelection,
+    },
     {
       id: "ungroup",
       title: "Ungroup",
       shortcut: "Ctrl+Shift+G",
+      menu: "Edit",
+      group: 1,
       disabled: !selectedNodes.some((n) => n.type === "group"),
       run: ungroupSelection,
     },
-    { id: "layout", title: "Auto layout", shortcut: "Ctrl+L", disabled: !inTauri || boardView, run: autoLayout },
-    { id: "board", title: boardView ? "Show the graph" : "Show the board view", run: () => setBoardView((v) => !v) },
-    { id: "interrupts", title: "Toggle interrupt tree", disabled: !inTauri, run: () => setShowInterrupts((v) => !v) },
-    { id: "address-map", title: "Toggle address map", disabled: !inTauri, run: () => setShowAddressMap((v) => !v) },
-    { id: "kernels", title: "Kernel checkouts…", disabled: !inTauri, run: onKernels },
-    { id: "dtc", title: "Set dtc path…", disabled: !inTauri, run: chooseDtc },
-    { id: "fit", title: "Fit the design in view", run: () => fitView({ maxZoom: 1, duration: 300 }) },
-    { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", run: () => setShowShortcuts(true) },
-    { id: "updates", title: "Check for updates now", disabled: !inTauri, run: onCheckUpdates },
+    {
+      id: "layout",
+      title: "Auto layout",
+      shortcut: "Ctrl+L",
+      menu: "Edit",
+      group: 2,
+      icon: Workflow,
+      disabled: !inTauri || boardView,
+      run: autoLayout,
+    },
+    { id: "palette", title: "Command palette…", shortcut: "Ctrl+K", menu: "View", run: () => setShowPalette(true) },
+    {
+      id: "board",
+      title: "Board view",
+      menu: "View",
+      group: 1,
+      hint: "Place devices where they sit on the board",
+      checked: boardView,
+      run: () => setBoardView((v) => !v),
+    },
+    {
+      id: "interrupts",
+      title: "Interrupt tree",
+      menu: "View",
+      group: 1,
+      checked: showInterrupts,
+      disabled: !inTauri,
+      run: () => setShowInterrupts((v) => !v),
+    },
+    {
+      id: "address-map",
+      title: "Address map",
+      menu: "View",
+      group: 1,
+      checked: showAddressMap,
+      disabled: !inTauri,
+      run: () => setShowAddressMap((v) => !v),
+    },
+    { id: "fit", title: "Fit the design in view", menu: "View", group: 2, run: () => fitView({ maxZoom: 1, duration: 300 }) },
+    { id: "add", title: "Empty node", menu: "Insert", icon: SquarePlus, hint: "Add a node with no binding", run: () => addNode(null) },
+    {
+      id: "connect",
+      title: "Reference from selected node to…",
+      menu: "Insert",
+      disabled: selectedDt.length !== 1,
+      run: () =>
+        pickNode("Node to reference", (target) =>
+          onConnect({ source: selectedDt[0].id, sourceHandle: REF_HANDLE, target, targetHandle: PHANDLE_HANDLE }),
+        ),
+    },
+    {
+      id: "build",
+      title: "Build .dtb",
+      shortcut: "Ctrl+B",
+      menu: "Tools",
+      icon: Hammer,
+      disabled: !inTauri || errors.length > 0,
+      run: buildDtb,
+    },
+    {
+      id: "kernels",
+      title: "Kernel checkouts…",
+      menu: "Tools",
+      group: 1,
+      hint: "Kernel checkouts the library can be built from",
+      disabled: !inTauri,
+      run: onKernels,
+    },
+    {
+      id: "dtc",
+      title: "Set dtc path…",
+      menu: "Tools",
+      group: 1,
+      hint: "Use a dtc program that is not in PATH",
+      disabled: !inTauri,
+      run: chooseDtc,
+    },
+    { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", menu: "Help", run: () => setShowShortcuts(true) },
+    { id: "updates", title: "Check for updates now", menu: "Help", disabled: !inTauri, run: onCheckUpdates },
   ];
+  const byId = (id: string) => commands.find((c) => c.id === id)!;
   const shortcutList: [string, string][] = [
-    ["Ctrl+K", "Command palette"],
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
     ["Ctrl+Y", "Redo"],
     ["Ctrl+C", "Copy the selected nodes"],
     ["Ctrl+V", "Paste into the selected node"],
     ["Ctrl+Tab", "Next tab (Ctrl+Shift+Tab: previous)"],
     ["Ctrl+W", "Close the tab"],
+    ["Alt+letter", "Open a menu (Alt+F: File)"],
     ["Delete", "Delete the selection"],
     ["Shift+drag", "Select an area"],
   ];
@@ -1047,7 +1152,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
         return;
       }
       if (document.querySelector('[role="dialog"]')) return;
-      const combo = e.key === "F1" ? "F1" : ctrl ? `Ctrl+${e.shiftKey ? "Shift+" : ""}${e.key.toUpperCase()}` : null;
+      const combo = comboOf(e);
       // Undo and redo have their own handler, which knows about text fields.
       if (!combo || combo === "Ctrl+Z" || combo === "Ctrl+Shift+Z") return;
       const command = commandsRef.current.find((c) => c.shortcut === combo);
@@ -1071,45 +1176,57 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
   return (
     <div className="editor" hidden={!active}>
       <header className="toolbar">
-        <span className="brand">DesignTree</span>
-        <button onClick={onNew}>New</button>
-        <button onClick={() => setPickingSoc(true)} disabled={!inTauri} title="Start a board from a SoC .dtsi of the loaded kernel tree">
-          New from SoC…
-        </button>
-        <button onClick={newOverlay} disabled={!inTauri} title="Start an overlay (.dtso) for a design or board file">
-          New overlay…
-        </button>
-        <button onClick={openDesign} disabled={!inTauri}>Open…</button>
-        <button onClick={importDts} disabled={!inTauri}>Import .dts…</button>
-        <button onClick={saveDesign} disabled={!inTauri}>Save…</button>
-        <button
-          onClick={exportDts}
-          disabled={!inTauri || !dts || errors.length > 0 || sourceError !== null}
-          title={sourceError ? "Fix the error in the DTS source first" : undefined}
-        >
-          Export .dts…
-        </button>
-        <button onClick={buildDtb} disabled={!inTauri || errors.length > 0}>Build .dtb</button>
-        <button onClick={onKernels} disabled={!inTauri} title="Kernel checkouts the library can be built from">
-          Kernels…
-        </button>
-        <button onClick={chooseDtc} disabled={!inTauri} title="Use a dtc program that is not in PATH">dtc path…</button>
-        <span className="sep" />
-        <button onClick={() => setShowInterrupts((v) => !v)} disabled={!inTauri} aria-pressed={showInterrupts}>
-          Interrupts
-        </button>
-        <button onClick={() => setShowAddressMap((v) => !v)} disabled={!inTauri} aria-pressed={showAddressMap}>
-          Address map
-        </button>
-        <button onClick={() => setBoardView((v) => !v)} aria-pressed={boardView} title="Place devices where they sit on the board">
-          Board view
-        </button>
-        <button onClick={() => setShowPalette(true)} title="Command palette (Ctrl+K)">Commands…</button>
-        <button onClick={history.undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">Undo</button>
-        <button onClick={history.redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">Redo</button>
-        <button onClick={autoLayout} disabled={!inTauri || boardView}>Auto layout</button>
-        <button onClick={groupSelection} disabled={!selectedNodes.some((n) => !n.parentId)}>Group</button>
-        <button onClick={ungroupSelection} disabled={!selectedNodes.some((n) => n.type === "group")}>Ungroup</button>
+        <div className="menubar-row">
+          <span className="brand">DesignTree</span>
+          <MenuBar
+            commands={commands}
+            active={active}
+            onRun={(result) => {
+              // A command that still needs a node continues in the palette.
+              const next = pickOf(result);
+              if (next) {
+                setPalettePick(next);
+                setShowPalette(true);
+              }
+            }}
+          />
+        </div>
+        <div className="toolbar-row" role="toolbar" aria-label="Main actions">
+          {[["new", "open", "save"], ["undo", "redo"], ["add", "layout"]].map((ids, g) => (
+            <div className="tool-group" key={g}>
+              {ids.map((id) => {
+                const c = byId(id);
+                const Icon = c.icon!;
+                return (
+                  <button
+                    key={id}
+                    className="tool"
+                    aria-label={c.title.replace(/…$/, "")}
+                    title={tooltipOf(c)}
+                    disabled={c.disabled}
+                    onClick={() => c.run()}
+                  >
+                    <Icon size={18} strokeWidth={1.75} aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          <button className="command-search" onClick={() => setShowPalette(true)} title={tooltipOf(byId("palette"))}>
+            <Search size={14} strokeWidth={2} aria-hidden />
+            <span>Search commands and elements</span>
+            <kbd>Ctrl+K</kbd>
+          </button>
+          {(() => {
+            const build = byId("build");
+            return (
+              <button className="primary tool-primary" title={tooltipOf(build)} disabled={build.disabled} onClick={() => build.run()}>
+                <Hammer size={16} strokeWidth={2} aria-hidden />
+                Build .dtb
+              </button>
+            );
+          })()}
+        </div>
       </header>
       <main ref={canvasRef} className="canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
         {kernelWarning && (
@@ -1193,7 +1310,11 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
           commands={commands}
           library={!!kernel}
           onAdd={(b) => addNode(b)}
-          onClose={() => setShowPalette(false)}
+          initialPick={palettePick}
+          onClose={() => {
+            setShowPalette(false);
+            setPalettePick(null);
+          }}
         />
       )}
       {showShortcuts && <ShortcutSheet shortcuts={shortcutList} onClose={() => setShowShortcuts(false)} />}

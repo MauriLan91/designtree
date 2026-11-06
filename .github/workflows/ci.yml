@@ -40,6 +40,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
 
   # G1: import, export and recompile a fixed corpus of kernel board files and

@@ -7,7 +7,7 @@ only from a kernel checkout on your machine (see
 
 ## Adding a checkout
 
-Press **Kernels…**, then **Add checkout…** and pick the top directory of the
+Choose **Tools › Kernel checkouts…**, then **Add checkout…** and pick the top directory of the
 kernel tree. The list shows each checkout with its version, read from the
 kernel's `Makefile`. **Use** loads one; the first index of a checkout takes a
 few seconds and is cached, so the next start is fast. The cache is rebuilt

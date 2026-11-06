@@ -3,28 +3,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { backend } from "../backend";
 import type { Binding } from "../model";
-
-export interface Command {
-  id: string;
-  title: string;
-  shortcut?: string;
-  disabled?: boolean;
-  /** Runs the command, or returns the node it still needs. */
-  run: () => void | NodePick;
-}
-
-/** A second step that picks a node, as for "Connect to…". */
-export interface NodePick {
-  title: string;
-  nodes: { id: string; title: string }[];
-  onPick: (id: string) => void;
-}
+import { pickOf, type Command, type NodePick } from "../commands";
 
 interface Item {
   key: string;
   title: string;
   hint?: string;
-  run: () => void | NodePick;
+  run: () => unknown;
 }
 
 interface Props {
@@ -33,13 +18,15 @@ interface Props {
   library: boolean;
   onAdd: (binding: Binding) => void;
   onClose: () => void;
+  /** Open on a node pick a menu command asked for. */
+  initialPick?: NodePick | null;
 }
 
 const MAX = 50;
 
-export function CommandPalette({ commands, library, onAdd, onClose }: Props) {
+export function CommandPalette({ commands, library, onAdd, onClose, initialPick = null }: Props) {
   const [query, setQuery] = useState("");
-  const [pick, setPick] = useState<NodePick | null>(null);
+  const [pick, setPick] = useState<NodePick | null>(initialPick);
   const [bindings, setBindings] = useState<Binding[]>([]);
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -94,7 +81,7 @@ export function CommandPalette({ commands, library, onAdd, onClose }: Props) {
 
   const choose = (item: Item | undefined) => {
     if (!item) return;
-    const next = item.run();
+    const next = pickOf(item.run());
     // A command that asks for a node keeps the palette open on that step.
     if (next) {
       setPick(next);

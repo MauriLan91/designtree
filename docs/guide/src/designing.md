@@ -27,15 +27,15 @@ specifier cells with names from the kernel's `dt-bindings` headers, such as
 
 ## Groups
 
-Select nodes (Shift+drag selects an area) and press **Group** (Ctrl+G) to
+Select nodes (Shift+drag selects an area) and choose **Edit › Group selection** (Ctrl+G) to
 frame them, for example "SoC peripherals". Groups are only visual and never
 reach the devicetree. The triangle in a group's header collapses it into a
 block, like a Simulink subsystem: edges that cross its border become ports
-on the block. **Ungroup** (Ctrl+Shift+G) removes the frame.
+on the block. **Edit › Ungroup** (Ctrl+Shift+G) removes the frame.
 
 ## Layout
 
-**Auto layout** (Ctrl+L) arranges the tree from the root down, with a group
+**Auto layout** (Ctrl+L, in the toolbar and the Edit menu) arranges the tree from the root down, with a group
 for each bus. Imported designs are laid out on import. Positions are saved in
 the design file.
 
