@@ -5,6 +5,10 @@
 //! scores by how well it matches (whole text, start, word start, anywhere,
 //! scattered letters), and the words' scores add up, so `st stm32 uart`
 //! finds `st,stm32-uart` before a schema that merely mentions them.
+//!
+//! A schema often documents many compatibles (`arm/cpus.yaml` has over a
+//! hundred), so each hit also names the compatible the query matched best:
+//! that is the one the user was looking for and the one a new node gets.
 
 use crate::{Binding, Catalog};
 
@@ -71,11 +75,50 @@ fn score_binding(words: &[String], binding: &Binding, title: Option<&str>) -> Op
     Some(total)
 }
 
+/// The compatible of `binding` that matches `words` best, if any matches at
+/// all; the shorter one among equals, so `cortex-a7` picks `arm,cortex-a7`
+/// over `arm,cortex-a710`.
+fn best_compatible<'a>(words: &[String], binding: &'a Binding) -> Option<&'a str> {
+    binding
+        .compatibles
+        .iter()
+        .map(|c| {
+            let score: u32 = words.iter().map(|w| score_word(w, c)).sum();
+            (score, c)
+        })
+        .filter(|(score, _)| *score > 0)
+        .min_by(|(sa, a), (sb, b)| sb.cmp(sa).then_with(|| a.len().cmp(&b.len())))
+        .map(|(_, c)| c.as_str())
+}
+
+/// One search result: the binding and the compatible the query matched.
+#[derive(Debug, Clone, Copy)]
+pub struct Hit<'a> {
+    pub binding: &'a Binding,
+    /// `None` when the query matched only the title or the path.
+    pub compatible: Option<&'a str>,
+}
+
+impl Hit<'_> {
+    /// A copy of the binding with the matched compatible first, where the
+    /// library row and a new node take it from.
+    pub fn to_binding(&self) -> Binding {
+        let mut binding = self.binding.clone();
+        if let Some(c) = self.compatible {
+            if let Some(i) = binding.compatibles.iter().position(|x| x == c) {
+                let matched = binding.compatibles.remove(i);
+                binding.compatibles.insert(0, matched);
+            }
+        }
+        binding
+    }
+}
+
 impl Catalog {
     /// The bindings that match `query`, best first, at most `limit`;
     /// restricted to `category` when given. An empty query lists the
     /// category in catalog order.
-    pub fn search(&self, query: &str, category: Option<&str>, limit: usize) -> Vec<&Binding> {
+    pub fn search(&self, query: &str, category: Option<&str>, limit: usize) -> Vec<Hit<'_>> {
         let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
         let in_category = |b: &&Binding| category.is_none_or(|c| b.category == c);
         if words.is_empty() {
@@ -84,6 +127,10 @@ impl Catalog {
                 .iter()
                 .filter(in_category)
                 .take(limit)
+                .map(|binding| Hit {
+                    binding,
+                    compatible: None,
+                })
                 .collect();
         }
         let mut scored: Vec<(u32, &Binding)> = self
@@ -109,7 +156,14 @@ impl Catalog {
                 .then_with(|| shortest(a).cmp(&shortest(b)))
                 .then_with(|| a.path.cmp(&b.path))
         });
-        scored.into_iter().take(limit).map(|(_, b)| b).collect()
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(_, binding)| Hit {
+                binding,
+                compatible: best_compatible(&words, binding),
+            })
+            .collect()
     }
 
     /// The bindings whose schema path is in `paths`, in that order; paths
@@ -156,8 +210,8 @@ mod tests {
         }
     }
 
-    fn paths(found: Vec<&Binding>) -> Vec<&str> {
-        found.into_iter().map(|b| b.path.as_str()).collect()
+    fn paths(found: Vec<Hit<'_>>) -> Vec<&str> {
+        found.into_iter().map(|h| h.binding.path.as_str()).collect()
     }
 
     #[test]
@@ -199,6 +253,32 @@ mod tests {
     }
 
     #[test]
+    fn names_the_compatible_that_matched() {
+        let c = Catalog {
+            bindings: vec![binding(
+                "arm/cpus.yaml",
+                "ARM CPUs",
+                &[
+                    "apm,potenza",
+                    "arm,cortex-a710",
+                    "arm,cortex-a7",
+                    "arm,cortex-a9",
+                ],
+            )],
+            ..Catalog::default()
+        };
+        let hit = c.search("cortex-a7", None, 10)[0];
+        assert_eq!(hit.compatible, Some("arm,cortex-a7"));
+        let added = hit.to_binding();
+        assert_eq!(added.compatibles[0], "arm,cortex-a7");
+        assert_eq!(added.compatibles.len(), 4);
+        // A match on the title alone keeps the schema's own order.
+        let hit = c.search("cpus", None, 10)[0];
+        assert_eq!(hit.compatible, None);
+        assert_eq!(hit.to_binding().compatibles[0], "apm,potenza");
+    }
+
+    #[test]
     fn looks_up_paths_in_order() {
         let c = catalog();
         let wanted = [
@@ -207,7 +287,10 @@ mod tests {
             "serial/8250.yaml".to_string(),
         ];
         assert_eq!(
-            paths(c.by_paths(&wanted)),
+            c.by_paths(&wanted)
+                .iter()
+                .map(|b| b.path.as_str())
+                .collect::<Vec<_>>(),
             ["net/fsl,fec.yaml", "serial/8250.yaml"]
         );
     }

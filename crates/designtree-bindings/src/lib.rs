@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 pub use check::{parse_fdt, Checker, FdtError, FdtNode, SchemaProblem, SchemaSet};
 pub use kernel::{index_kernel_tree_cached, kernel_version, CacheStatus};
 pub use macros::{index_dt_macros, DtMacro};
+pub use search::Hit;
 use serde::{Deserialize, Serialize};
 use serde_norway::Value;
 use thiserror::Error;
