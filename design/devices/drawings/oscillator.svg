@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Oscillator">
+  <path d="M40 24H50A2 2 0 0 1 52 26V34A2 2 0 0 1 50 36H40A2 2 0 0 1 38 34V26A2 2 0 0 1 40 24ZM110 24H120A2 2 0 0 1 122 26V34A2 2 0 0 1 120 36H110A2 2 0 0 1 108 34V26A2 2 0 0 1 110 24ZM40 64H50A2 2 0 0 1 52 66V74A2 2 0 0 1 50 76H40A2 2 0 0 1 38 74V66A2 2 0 0 1 40 64ZM110 64H120A2 2 0 0 1 122 66V74A2 2 0 0 1 120 76H110A2 2 0 0 1 108 74V66A2 2 0 0 1 110 64Z" style="fill:var(--device-metal, #b9c0c9)"/>
+  <path d="M52 26H108A6 6 0 0 1 114 32V68A6 6 0 0 1 108 74H52A6 6 0 0 1 46 68V32A6 6 0 0 1 52 26Z" style="fill:var(--device-body, #fdf0dc);stroke:var(--device-ink, #9a5b00);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M58 34H102A4 4 0 0 1 106 38V62A4 4 0 0 1 102 66H58A4 4 0 0 1 54 62V38A4 4 0 0 1 58 34Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #9a5b00);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M60 58L60 42L70 42L70 58L80 58L80 42L90 42L90 58L100 58L100 42" style="fill:none;stroke:var(--device-ink, #9a5b00);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
+</svg>

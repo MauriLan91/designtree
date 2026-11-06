@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Regulator (SOT-223)">
+  <path d="M58 6H102A2 2 0 0 1 104 8V24A2 2 0 0 1 102 26H58A2 2 0 0 1 56 24V8A2 2 0 0 1 58 6ZM61.5 72H66.5A1.5 1.5 0 0 1 68 73.5V92.5A1.5 1.5 0 0 1 66.5 94H61.5A1.5 1.5 0 0 1 60 92.5V73.5A1.5 1.5 0 0 1 61.5 72ZM77.5 72H82.5A1.5 1.5 0 0 1 84 73.5V92.5A1.5 1.5 0 0 1 82.5 94H77.5A1.5 1.5 0 0 1 76 92.5V73.5A1.5 1.5 0 0 1 77.5 72ZM93.5 72H98.5A1.5 1.5 0 0 1 100 73.5V92.5A1.5 1.5 0 0 1 98.5 94H93.5A1.5 1.5 0 0 1 92 92.5V73.5A1.5 1.5 0 0 1 93.5 72Z" style="fill:var(--device-metal, #b9c0c9)"/>
+  <path d="M52 22H108A4 4 0 0 1 112 26V72A4 4 0 0 1 108 76H52A4 4 0 0 1 48 72V26A4 4 0 0 1 52 22Z" style="fill:var(--device-body, #fdf0dc);stroke:var(--device-ink, #9a5b00);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M60 40H100M60 50H88" style="fill:none;stroke:var(--device-ink, #9a5b00);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M55.5 66A2.5 2.5 0 1 0 60.5 66A2.5 2.5 0 1 0 55.5 66Z" style="fill:var(--device-ink, #9a5b00)"/>
+</svg>

@@ -22,6 +22,7 @@ repository never carries it.
 | `packaging/` | Linux packages: Arch PKGBUILDs (`arch/`, built in CI by `arch/build.sh`), desktop entry, AppStream metadata and `install.sh` (`linux/`). Releases: `.github/workflows/release.yml` on a `v*` tag. |
 | `docs/` | Architecture, GUI options, backlog, install guide; `docs/guide` is the mdBook user guide. |
 | `site/` | Landing page; published with the guide (under `guide/`) to GitHub Pages from main. |
+| `design/` | Design assets kept aside, not used by the app yet: device icons and canvas node drawings (`design/devices`). |
 
 Dependencies point one way: app and cli use core and bindings; core and
 bindings never use each other or the app.

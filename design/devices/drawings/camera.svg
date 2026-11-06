@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Camera module">
+  <path d="M71 78H89A1 1 0 0 1 90 79V97A1 1 0 0 1 89 98H71A1 1 0 0 1 70 97V79A1 1 0 0 1 71 78Z" style="fill:var(--device-metal, #b9c0c9)"/>
+  <path d="M50 10H110A6 6 0 0 1 116 16V74A6 6 0 0 1 110 80H50A6 6 0 0 1 44 74V16A6 6 0 0 1 50 10Z" style="fill:var(--device-body, #eef0f3);stroke:var(--device-ink, #4b535d);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M56 45A24 24 0 1 0 104 45A24 24 0 1 0 56 45Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #4b535d);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M65 45A15 15 0 1 0 95 45A15 15 0 1 0 65 45Z" style="fill:none;stroke:var(--device-ink, #4b535d);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M74 45A6 6 0 1 0 86 45A6 6 0 1 0 74 45Z" style="fill:var(--device-ink, #4b535d)"/>
+</svg>

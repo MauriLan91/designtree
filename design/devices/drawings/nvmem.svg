@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="EEPROM, fuses (SOT-23)">
+  <path d="M69 20H73A1 1 0 0 1 74 21V33A1 1 0 0 1 73 34H69A1 1 0 0 1 68 33V21A1 1 0 0 1 69 20ZM87 20H91A1 1 0 0 1 92 21V33A1 1 0 0 1 91 34H87A1 1 0 0 1 86 33V21A1 1 0 0 1 87 20ZM65 66H69A1 1 0 0 1 70 67V79A1 1 0 0 1 69 80H65A1 1 0 0 1 64 79V67A1 1 0 0 1 65 66ZM78 66H82A1 1 0 0 1 83 67V79A1 1 0 0 1 82 80H78A1 1 0 0 1 77 79V67A1 1 0 0 1 78 66ZM91 66H95A1 1 0 0 1 96 67V79A1 1 0 0 1 95 80H91A1 1 0 0 1 90 79V67A1 1 0 0 1 91 66Z" style="fill:var(--device-metal, #b9c0c9)"/>
+  <path d="M61 30H99A3 3 0 0 1 102 33V67A3 3 0 0 1 99 70H61A3 3 0 0 1 58 67V33A3 3 0 0 1 61 30Z" style="fill:var(--device-body, #eef0f3);stroke:var(--device-ink, #4b535d);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
+  <path d="M68 46H92M68 54H84" style="fill:none;stroke:var(--device-ink, #4b535d);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
+</svg>
