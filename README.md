@@ -33,6 +33,14 @@ examples/               sample design files
 docs/                   architecture notes, GUI options, product backlog
 ```
 
+## Install
+
+Arch Linux and Manjaro build the package from `packaging/arch/` with
+`makepkg -si`; other Linux distributions use the AppImage or `.deb` from the
+[releases](https://github.com/MauriLan91/designtree/releases). See
+[docs/install.md](docs/install.md), which also covers the kernel checkout
+the element library is built from.
+
 ## Desktop app
 
 ```sh

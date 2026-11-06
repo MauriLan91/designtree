@@ -1,0 +1,58 @@
+# Maintainer: Maurizio Lanza <54776010+MauriLan91@users.noreply.github.com>
+#
+# Builds DesignTree from the latest commit on main. The tagged release is
+# packaging/arch/designtree; see docs/install.md.
+pkgname=designtree-git
+_name=designtree
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Graphical editor for Linux devicetrees, with the element library built from kernel binding schemas'
+arch=('x86_64' 'aarch64')
+url='https://github.com/MauriLan91/designtree'
+license=('MIT')
+# namcap cannot see dtc: the app runs it for Build .dtb.
+depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'gdk-pixbuf2' 'glib2' 'glibc' 'libgcc' 'libsoup3' 'dbus' 'dtc' 'hicolor-icon-theme')
+makedepends=('git' 'cargo' 'nodejs' 'npm')
+checkdepends=('dtc')
+provides=("$_name")
+conflicts=("$_name")
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+	cd "$_name"
+	local base
+	base=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+	printf '%s.r%s.g%s' "$base" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+	cd "$_name"
+	export RUSTUP_TOOLCHAIN=stable
+	cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+	cd app
+	npm ci --no-audit --no-fund
+}
+
+build() {
+	cd "$_name"
+	export RUSTUP_TOOLCHAIN=stable
+	# Absolute: tauri runs cargo from app/src-tauri.
+	export CARGO_TARGET_DIR="$PWD/target"
+	# `tauri build` builds the frontend (beforeBuildCommand) and embeds it;
+	# a plain `cargo build` would load the dev server URL instead.
+	(cd app && ./node_modules/.bin/tauri build --no-bundle -- --frozen)
+	cargo build --frozen --release -p designtree-cli
+}
+
+check() {
+	cd "$_name"
+	export RUSTUP_TOOLCHAIN=stable
+	DESIGNTREE_REQUIRE_DTC=1 cargo test --frozen --release -p designtree-core -p designtree-bindings
+}
+
+package() {
+	cd "$_name"
+	packaging/linux/install.sh "$pkgdir" /usr target/release
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

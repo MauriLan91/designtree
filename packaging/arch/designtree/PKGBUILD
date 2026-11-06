@@ -1,0 +1,49 @@
+# Maintainer: Maurizio Lanza <54776010+MauriLan91@users.noreply.github.com>
+#
+# Builds a tagged release. The release workflow sets pkgver and the
+# checksum and attaches this file to the GitHub release; the version below
+# follows the workspace version in Cargo.toml.
+pkgname=designtree
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Graphical editor for Linux devicetrees, with the element library built from kernel binding schemas'
+arch=('x86_64' 'aarch64')
+url='https://github.com/MauriLan91/designtree'
+license=('MIT')
+# namcap cannot see dtc: the app runs it for Build .dtb.
+depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'gdk-pixbuf2' 'glib2' 'glibc' 'libgcc' 'libsoup3' 'dbus' 'dtc' 'hicolor-icon-theme')
+makedepends=('cargo' 'nodejs' 'npm')
+checkdepends=('dtc')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+	cd "$pkgname-$pkgver"
+	export RUSTUP_TOOLCHAIN=stable
+	cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+	cd app
+	npm ci --no-audit --no-fund
+}
+
+build() {
+	cd "$pkgname-$pkgver"
+	export RUSTUP_TOOLCHAIN=stable
+	# Absolute: tauri runs cargo from app/src-tauri.
+	export CARGO_TARGET_DIR="$PWD/target"
+	# `tauri build` builds the frontend (beforeBuildCommand) and embeds it;
+	# a plain `cargo build` would load the dev server URL instead.
+	(cd app && ./node_modules/.bin/tauri build --no-bundle -- --frozen)
+	cargo build --frozen --release -p designtree-cli
+}
+
+check() {
+	cd "$pkgname-$pkgver"
+	export RUSTUP_TOOLCHAIN=stable
+	DESIGNTREE_REQUIRE_DTC=1 cargo test --frozen --release -p designtree-core -p designtree-bindings
+}
+
+package() {
+	cd "$pkgname-$pkgver"
+	packaging/linux/install.sh "$pkgdir" /usr target/release
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

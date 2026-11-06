@@ -19,7 +19,8 @@ repository never carries it.
 | `crates/designtree-cli` | `designtree` command line over both crates. Also hosts the type-generation test. |
 | `app/src-tauri` | Tauri shell: thin `#[tauri::command]` wrappers over the crates. Keep logic in the crates, not here. |
 | `app/src` | React + React Flow front end. `model.gen.ts` is generated; `model.ts` converts to and from the canvas. |
-| `docs/` | Architecture, GUI options, backlog. |
+| `packaging/` | Linux packages: Arch PKGBUILDs (`arch/`, built in CI by `arch/build.sh`), desktop entry, AppStream metadata and `install.sh` (`linux/`). Releases: `.github/workflows/release.yml` on a `v*` tag. |
+| `docs/` | Architecture, GUI options, backlog, install guide. |
 
 Dependencies point one way: app and cli use core and bindings; core and
 bindings never use each other or the app.
