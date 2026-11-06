@@ -1,11 +1,9 @@
-// Builds the device icon set and the canvas device drawings from the shapes
-// below: one SVG per icon and per drawing, plus catalog.json with the same
-// path data for tools that draw them themselves.
+// Builds the device icon set from the shapes below: one SVG per icon, plus
+// icons.json with the same path data for tools that draw them themselves.
 //
 //   node design/devices/build.mjs
 //
-// Everything is plain path data so an icon is one <path> and a drawing is a
-// fixed stack of role layers, each themed by a CSS variable.
+// Everything is plain path data, so an icon is one <path>.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +28,7 @@ const D = (x, y) => `M${x} ${y}h0`;
 const range = (count, from, step) => Array.from({ length: count }, (_, i) => from + i * step);
 
 // The kinds of US-15.6 (app/src/categories.ts), with the chip tokens of
-// docs/workbench.md. A drawing is tinted with its kind's chip colors.
+// docs/workbench.md.
 const KINDS = {
   cpu: { title: "CPU", light: ["#e6edfb", "#1d4fd8"], dark: ["#1f2b42", "#8fb8ff"] },
   irq: { title: "Interrupt controller", light: ["#fde8e8", "#b42318"], dark: ["#3a1f23", "#f59a9f"] },
@@ -39,11 +37,6 @@ const KINDS = {
   gpio: { title: "GPIO, pins, LEDs", light: ["#efe9fd", "#6d3fd6"], dark: ["#2a2142", "#b9a0ff"] },
   mem: { title: "Memory", light: ["#eef0f3", "#4b535d"], dark: ["#14171b", "#aab2bc"] },
   other: { title: "Device", light: ["#eef0f3", "#4b535d"], dark: ["#14171b", "#aab2bc"] },
-};
-// Neutral layers of a drawing: pins and contacts, and openings or screens.
-const NEUTRAL = {
-  light: { metal: "#b9c0c9", face: "#ffffff" },
-  dark: { metal: "#5b636e", face: "#22262d" },
 };
 
 // Icons: 24 px grid, 1.75 px stroke, round caps and joins, like Lucide, so
@@ -230,205 +223,6 @@ const ICONS = {
   },
 };
 
-// Drawings for canvas nodes: a top or front view of the part, 160 × 100,
-// drawn as role layers back to front. `metal` sits under the body (legs),
-// `contacts` on top of it (pads, pins seen from above).
-const LAYERS = ["metal", "body", "face", "contacts", "detail", "solid"];
-
-const qfnPads = (x0, y0, size, count, len = 8) => {
-  const step = (size - 20) / (count - 1);
-  return range(count, 10, step).flatMap((o) => [
-    R(x0 - len / 2 - 1, y0 + o - 2, len, 4, 1), R(x0 + size - len / 2 + 1, y0 + o - 2, len, 4, 1),
-    R(x0 + o - 2, y0 - len / 2 - 1, 4, len, 1), R(x0 + o - 2, y0 + size - len / 2 + 1, 4, len, 1),
-  ]);
-};
-
-const DEVICES = {
-  cpu: {
-    kind: "cpu", label: "CPU (QFP)", icon: "cpu",
-    metal: range(8, 22, 8).flatMap((p) => [R(34, p - 1.8, 12, 3.6, 0.8), R(114, p - 1.8, 12, 3.6, 0.8)])
-      .concat(range(8, 52, 8).flatMap((p) => [R(p - 1.8, 4, 3.6, 12, 0.8), R(p - 1.8, 84, 3.6, 12, 0.8)])),
-    body: [R(44, 14, 72, 72, 5)],
-    face: [R(60, 30, 40, 40, 3)],
-    detail: ["M67 46H93M67 54H85"],
-    solid: [C(52, 22, 2.6)],
-  },
-  soc: {
-    kind: "cpu", label: "SoC (BGA, lidded)", icon: "cores",
-    body: [R(28, 6, 104, 88, 8)],
-    face: [R(50, 22, 60, 56, 5)],
-    detail: [R(56, 28, 48, 44, 3)],
-    solid: ["M35 13H44L35 22Z"],
-  },
-  "interrupt-controller": {
-    kind: "irq", label: "Interrupt controller (QFN)", icon: "interrupt-controller",
-    metal: qfnPads(52, 22, 56, 5),
-    body: [R(52, 22, 56, 56, 6)],
-    solid: ["M84 30L68 54H80L76 70L92 46H80Z"],
-  },
-  oscillator: {
-    kind: "clock", label: "Oscillator", icon: "clock",
-    metal: [R(38, 24, 14, 12, 2), R(108, 24, 14, 12, 2), R(38, 64, 14, 12, 2), R(108, 64, 14, 12, 2)],
-    body: [R(46, 26, 68, 48, 6)],
-    face: [R(54, 34, 52, 32, 4)],
-    detail: [L(60, 58, 60, 42, 70, 42, 70, 58, 80, 58, 80, 42, 90, 42, 90, 58, 100, 58, 100, 42)],
-  },
-  crystal: {
-    kind: "clock", label: "Crystal (HC-49)", icon: "crystal",
-    metal: [R(14, 46, 22, 8, 2), R(124, 46, 22, 8, 2)],
-    body: [R(30, 28, 100, 44, 22)],
-    face: [R(38, 35, 84, 30, 15)],
-    detail: ["M66 50H94"],
-  },
-  regulator: {
-    kind: "clock", label: "Regulator (SOT-223)", icon: "regulator",
-    metal: [R(56, 6, 48, 20, 2), R(60, 72, 8, 22, 1.5), R(76, 72, 8, 22, 1.5), R(92, 72, 8, 22, 1.5)],
-    body: [R(48, 22, 64, 54, 4)],
-    detail: ["M60 40H100M60 50H88"],
-    solid: [C(58, 66, 2.5)],
-  },
-  rtc: {
-    kind: "clock", label: "RTC backup cell", icon: "rtc",
-    metal: [R(34, 42, 12, 16, 2), R(114, 42, 12, 16, 2)],
-    body: [C(80, 50, 38)],
-    face: [C(80, 50, 30)],
-    detail: ["M80 41V59M71 50H89"],
-  },
-  battery: {
-    kind: "clock", label: "Battery, supply", icon: "battery",
-    metal: [R(124, 40, 12, 20, 2)],
-    body: [R(24, 26, 104, 48, 6)],
-    face: [R(30, 32, 30, 36, 3)],
-    detail: ["M100 50H112M106 44V56M39 50H51"],
-  },
-  serial: {
-    kind: "bus", label: "Serial port (DE-9)", icon: "serial",
-    metal: [R(8, 22, 144, 56, 6)],
-    body: ["M36 28H124L116 72H44Z"],
-    face: ["M42 33H118L111 67H49Z", C(22, 50, 6), C(138, 50, 6)],
-    solid: [...range(5, 56, 12).map((x) => C(x, 43, 3)), ...range(4, 62, 12).map((x) => C(x, 57, 3))],
-  },
-  ethernet: {
-    kind: "bus", label: "Ethernet jack (RJ45)", icon: "ethernet",
-    body: [R(30, 8, 100, 84, 6)],
-    face: ["M46 28H114V68H98V78H62V68H46Z"],
-    contacts: range(8, 54, 7.2).map((x) => R(x, 30, 3, 12, 0.8)),
-    solid: [R(36, 14, 14, 7, 2), R(110, 14, 14, 7, 2)],
-  },
-  usb: {
-    kind: "bus", label: "USB-C receptacle", icon: "usb",
-    body: [R(22, 30, 116, 40, 20)],
-    face: [R(30, 37, 100, 26, 13)],
-    solid: [R(48, 46, 64, 8, 4)],
-  },
-  mmc: {
-    kind: "bus", label: "SD card", icon: "mmc",
-    body: ["M34 14H120L132 26V84A2 2 0 0 1 130 86H34A2 2 0 0 1 32 84V16A2 2 0 0 1 34 14Z"],
-    face: [R(60, 26, 58, 48, 4)],
-    contacts: range(8, 20, 8).map((y) => R(38, y, 12, 5, 1)),
-  },
-  wireless: {
-    kind: "bus", label: "Wireless module", icon: "wireless",
-    metal: [...range(10, 34, 10).map((x) => R(x, 84, 5, 10, 1)), ...range(6, 22, 12).flatMap((y) => [R(18, y, 10, 5, 1), R(132, y, 10, 5, 1)])],
-    body: [R(26, 12, 108, 76, 5)],
-    face: [R(98, 18, 30, 64, 3)],
-    detail: [L(104, 28, 122, 28, 122, 36, 104, 36, 104, 44, 122, 44, 122, 52, 104, 52, 104, 60, 122, 60, 122, 68, 104, 68), "M38 30H80M38 40H70"],
-  },
-  gpio: {
-    kind: "gpio", label: "Pin header (2 × 5)", icon: "gpio",
-    body: [R(30, 28, 100, 44, 4)],
-    contacts: range(5, 38, 18).flatMap((x, i) => (i ? [R(x, 34, 12, 12, 1.5)] : [])).concat(range(5, 38, 18).map((x) => R(x, 54, 12, 12, 1.5))),
-    solid: [R(38, 34, 12, 12, 1.5)],
-  },
-  led: {
-    kind: "gpio", label: "LED (5 mm)", icon: "led",
-    metal: [R(70, 66, 5, 30, 1), R(86, 66, 5, 22, 1)],
-    body: ["M62 60V38A18 18 0 0 1 98 38V60Z", R(58, 60, 44, 8, 2)],
-    face: [R(72, 42, 16, 12, 2)],
-    detail: ["M48 24L40 18M46 40H36M112 24L120 18M114 40H124"],
-  },
-  button: {
-    kind: "gpio", label: "Push button", icon: "button",
-    metal: [R(36, 18, 14, 8, 2), R(110, 18, 14, 8, 2), R(36, 74, 14, 8, 2), R(110, 74, 14, 8, 2)],
-    body: [R(45, 15, 70, 70, 5)],
-    face: [C(80, 50, 20)],
-    detail: [C(80, 50, 13)],
-  },
-  memory: {
-    kind: "mem", label: "Memory module (DIMM)", icon: "memory",
-    metal: range(28, 10, 5).filter((x) => x < 64 || x > 74).map((x) => R(x, 74, 3, 14, 0.8)),
-    body: ["M8 16H152A2 2 0 0 1 154 18V78H74V73H66V78H6V18A2 2 0 0 1 8 16Z"],
-    face: range(4, 16, 35).map((x) => R(x, 26, 24, 32, 2)),
-    detail: ["M18 68H54"],
-  },
-  flash: {
-    kind: "mem", label: "Flash (SOIC-8)", icon: "flash",
-    metal: [32, 44, 56, 68].flatMap((y) => [R(36, y - 2.5, 16, 5, 1), R(108, y - 2.5, 16, 5, 1)]),
-    body: [R(48, 22, 64, 56, 4)],
-    detail: ["M64 48H96M64 58H88"],
-    solid: [C(58, 32, 3)],
-  },
-  nvmem: {
-    kind: "mem", label: "EEPROM, fuses (SOT-23)", icon: "nvmem",
-    metal: [R(68, 20, 6, 14, 1), R(86, 20, 6, 14, 1), R(64, 66, 6, 14, 1), R(77, 66, 6, 14, 1), R(90, 66, 6, 14, 1)],
-    body: [R(58, 30, 44, 40, 3)],
-    detail: ["M68 46H92M68 54H84"],
-  },
-  device: {
-    kind: "other", label: "Device (QFN)", icon: "device",
-    metal: qfnPads(54, 24, 52, 4),
-    body: [R(54, 24, 52, 52, 6)],
-    detail: ["M68 52H92M68 60H84"],
-    solid: [C(63, 33, 2.5)],
-  },
-  sensor: {
-    kind: "other", label: "Sensor (DFN)", icon: "sensor",
-    metal: [32, 47, 62].flatMap((y) => [R(46, y, 10, 6, 1.5), R(104, y, 10, 6, 1.5)]),
-    body: [R(52, 24, 56, 52, 6)],
-    face: [C(80, 50, 12)],
-    detail: [C(80, 50, 5)],
-    solid: [C(61, 33, 2.5)],
-  },
-  display: {
-    kind: "other", label: "Display panel", icon: "display",
-    metal: [R(64, 84, 32, 14, 1)],
-    body: [R(12, 6, 136, 82, 6)],
-    face: [R(20, 14, 120, 60, 3)],
-    detail: ["M70 81H90"],
-  },
-  audio: {
-    kind: "other", label: "Speaker", icon: "audio",
-    body: [C(80, 50, 40)],
-    face: [C(80, 50, 28)],
-    detail: [C(80, 50, 18)],
-    solid: [C(80, 50, 7)],
-  },
-  camera: {
-    kind: "other", label: "Camera module", icon: "camera",
-    metal: [R(70, 78, 20, 20, 1)],
-    body: [R(44, 10, 72, 70, 6)],
-    face: [C(80, 45, 24)],
-    detail: [C(80, 45, 15)],
-    solid: [C(80, 45, 6)],
-  },
-};
-
-// Role styles. Variables let a host theme a drawing per kind; the fallbacks
-// are the light theme, so a file also renders on its own.
-const style = (kind) => {
-  const [bg, ink] = KINDS[kind].light;
-  const v = (name, fallback) => `var(--device-${name}, ${fallback})`;
-  const line = "stroke-linecap:round;stroke-linejoin:round";
-  return {
-    metal: `fill:${v("metal", NEUTRAL.light.metal)}`,
-    body: `fill:${v("body", bg)};stroke:${v("ink", ink)};stroke-width:2;${line}`,
-    face: `fill:${v("face", NEUTRAL.light.face)};stroke:${v("ink", ink)};stroke-width:1.5;${line}`,
-    contacts: `fill:${v("metal", NEUTRAL.light.metal)};stroke:${v("ink", ink)};stroke-width:1;${line}`,
-    detail: `fill:none;stroke:${v("ink", ink)};stroke-width:1.75;${line}`,
-    solid: `fill:${v("ink", ink)}`,
-  };
-};
-
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
 function iconSvg({ label, d }) {
@@ -439,33 +233,16 @@ function iconSvg({ label, d }) {
   );
 }
 
-function deviceSvg(dev) {
-  const s = style(dev.kind);
-  const paths = LAYERS.filter((l) => dev[l]?.length).map((l) => `  <path d="${dev[l].join("")}" style="${s[l]}"/>`);
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" ` +
-    `role="img" aria-label="${esc(dev.label)}">\n${paths.join("\n")}\n</svg>\n`
-  );
-}
-
 function write(path, text) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 }
 
 for (const [name, icon] of Object.entries(ICONS)) write(join(here, "icons", `${name}.svg`), iconSvg(icon));
-for (const [name, dev] of Object.entries(DEVICES)) write(join(here, "drawings", `${name}.svg`), deviceSvg(dev));
 
 const catalog = {
   kinds: KINDS,
-  neutral: NEUTRAL,
   icons: Object.fromEntries(Object.entries(ICONS).map(([k, { kind, label, categories, d }]) => [k, { kind, label, categories, d: d.join("") }])),
-  drawings: Object.fromEntries(
-    Object.entries(DEVICES).map(([k, dev]) => [
-      k,
-      { kind: dev.kind, label: dev.label, icon: dev.icon, ...Object.fromEntries(LAYERS.map((l) => [l, (dev[l] ?? []).join("")])) },
-    ]),
-  ),
 };
-write(join(here, "catalog.json"), JSON.stringify(catalog, null, 1) + "\n");
-console.log(`${Object.keys(ICONS).length} icons, ${Object.keys(DEVICES).length} drawings`);
+write(join(here, "icons.json"), JSON.stringify(catalog, null, 1) + "\n");
+console.log(`${Object.keys(ICONS).length} icons`);

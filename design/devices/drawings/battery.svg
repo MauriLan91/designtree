@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Battery, supply">
-  <path d="M126 40H134A2 2 0 0 1 136 42V58A2 2 0 0 1 134 60H126A2 2 0 0 1 124 58V42A2 2 0 0 1 126 40Z" style="fill:var(--device-metal, #b9c0c9)"/>
-  <path d="M30 26H122A6 6 0 0 1 128 32V68A6 6 0 0 1 122 74H30A6 6 0 0 1 24 68V32A6 6 0 0 1 30 26Z" style="fill:var(--device-body, #fdf0dc);stroke:var(--device-ink, #9a5b00);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M33 32H57A3 3 0 0 1 60 35V65A3 3 0 0 1 57 68H33A3 3 0 0 1 30 65V35A3 3 0 0 1 33 32Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #9a5b00);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M100 50H112M106 44V56M39 50H51" style="fill:none;stroke:var(--device-ink, #9a5b00);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
-</svg>

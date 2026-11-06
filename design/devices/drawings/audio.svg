@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Speaker">
-  <path d="M40 50A40 40 0 1 0 120 50A40 40 0 1 0 40 50Z" style="fill:var(--device-body, #eef0f3);stroke:var(--device-ink, #4b535d);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M52 50A28 28 0 1 0 108 50A28 28 0 1 0 52 50Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #4b535d);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M62 50A18 18 0 1 0 98 50A18 18 0 1 0 62 50Z" style="fill:none;stroke:var(--device-ink, #4b535d);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M73 50A7 7 0 1 0 87 50A7 7 0 1 0 73 50Z" style="fill:var(--device-ink, #4b535d)"/>
-</svg>

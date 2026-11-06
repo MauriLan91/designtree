@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="LED (5 mm)">
-  <path d="M71 66H74A1 1 0 0 1 75 67V95A1 1 0 0 1 74 96H71A1 1 0 0 1 70 95V67A1 1 0 0 1 71 66ZM87 66H90A1 1 0 0 1 91 67V87A1 1 0 0 1 90 88H87A1 1 0 0 1 86 87V67A1 1 0 0 1 87 66Z" style="fill:var(--device-metal, #b9c0c9)"/>
-  <path d="M62 60V38A18 18 0 0 1 98 38V60ZM60 60H100A2 2 0 0 1 102 62V66A2 2 0 0 1 100 68H60A2 2 0 0 1 58 66V62A2 2 0 0 1 60 60Z" style="fill:var(--device-body, #efe9fd);stroke:var(--device-ink, #6d3fd6);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M74 42H86A2 2 0 0 1 88 44V52A2 2 0 0 1 86 54H74A2 2 0 0 1 72 52V44A2 2 0 0 1 74 42Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #6d3fd6);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M48 24L40 18M46 40H36M112 24L120 18M114 40H124" style="fill:none;stroke:var(--device-ink, #6d3fd6);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
-</svg>

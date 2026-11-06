@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100" role="img" aria-label="Push button">
-  <path d="M38 18H48A2 2 0 0 1 50 20V24A2 2 0 0 1 48 26H38A2 2 0 0 1 36 24V20A2 2 0 0 1 38 18ZM112 18H122A2 2 0 0 1 124 20V24A2 2 0 0 1 122 26H112A2 2 0 0 1 110 24V20A2 2 0 0 1 112 18ZM38 74H48A2 2 0 0 1 50 76V80A2 2 0 0 1 48 82H38A2 2 0 0 1 36 80V76A2 2 0 0 1 38 74ZM112 74H122A2 2 0 0 1 124 76V80A2 2 0 0 1 122 82H112A2 2 0 0 1 110 80V76A2 2 0 0 1 112 74Z" style="fill:var(--device-metal, #b9c0c9)"/>
-  <path d="M50 15H110A5 5 0 0 1 115 20V80A5 5 0 0 1 110 85H50A5 5 0 0 1 45 80V20A5 5 0 0 1 50 15Z" style="fill:var(--device-body, #efe9fd);stroke:var(--device-ink, #6d3fd6);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M60 50A20 20 0 1 0 100 50A20 20 0 1 0 60 50Z" style="fill:var(--device-face, #ffffff);stroke:var(--device-ink, #6d3fd6);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"/>
-  <path d="M67 50A13 13 0 1 0 93 50A13 13 0 1 0 67 50Z" style="fill:none;stroke:var(--device-ink, #6d3fd6);stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round"/>
-</svg>
