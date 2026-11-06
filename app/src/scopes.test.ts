@@ -94,3 +94,33 @@ describe("scopes", () => {
     expect(canHaveChildren(dt("x", "oscillator"), false)).toBe(false);
   });
 });
+
+describe("boundaryPorts", () => {
+  const box = (y: number) => ({ x: 0, y, width: 100, height: 40 });
+  const boxes: Record<string, { x: number; y: number; width: number; height: number }> = { uart: box(0), i2c: box(100) };
+  const title = (id: string) => (id === "osc" ? "&osc24m" : id);
+
+  it("gives each outside node one port per side and rewires the references to it", async () => {
+    const { boundaryPorts, realId } = await import("./scopes");
+    const crossing = [...edges, ref("cpu0", "i2c")];
+    const shown = new Set(["uart", "i2c"]);
+    const { nodes: ports, edges: rewired } = boundaryPorts(crossing, shown, (id) => boxes[id], title);
+    expect(ports.map((p) => [p.id, p.data.title, p.data.side])).toEqual([
+      ["boundary:in:cpu0", "cpu0", "in"],
+      ["boundary:out:osc", "&osc24m", "out"],
+    ]);
+    // Out ports on the right of the scope's nodes, in ports on the left.
+    expect(ports[1].position.x).toBeGreaterThan(100);
+    expect(ports[0].position.x).toBeLessThan(0);
+    // Beside the nodes wherever they are, not beside the canvas origin.
+    const far = boundaryPorts(crossing, shown, (id) => (boxes[id] ? { ...boxes[id], x: 3000 } : undefined), title).nodes;
+    expect(far[0].position.x).toBeGreaterThan(2500);
+    // The edges keep their ids and end at the ports.
+    expect(rewired.map((e) => [e.id, e.source, e.target])).toEqual([
+      ["r-uart-osc", "uart", "boundary:out:osc"],
+      ["r-cpu0-i2c", "boundary:in:cpu0", "i2c"],
+    ]);
+    expect(realId("boundary:out:osc")).toBe("osc");
+    expect(realId("uart")).toBe("uart");
+  });
+});

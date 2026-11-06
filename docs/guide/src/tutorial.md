@@ -80,9 +80,10 @@ Checkpoint: `first-board-4-uart.json`.
 2. Search for `gpio-leds` and add it under the root, named `leds`.
 3. Double-click `leds`, then **+ Empty node** in it, named `led-0`, with
    `default-state = "off"`.
-4. The GPIO controller is on the main canvas, so connect the LED from the
-   keyboard: with `led-0` selected, **Insert › Reference from selected node
-   to…** and pick `gpio@1c20800`. Rename the property to `gpios`. Click the new edge and, in the specifier editor, set line `0`
+4. The GPIO controller is on the main canvas, not in `leds`: drag from the
+   LED's right handle and drop it on empty canvas, then pick `gpio@1c20800`.
+   The property becomes `gpios`, and the reference ends at a `&gpio` port on
+   the border. Click the new edge and, in the specifier editor, set line `0`
    and pick `GPIO_ACTIVE_HIGH` (the names come from the kernel's
    `dt-bindings` headers).
 

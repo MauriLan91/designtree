@@ -53,7 +53,8 @@ import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
-import { canHaveChildren, inScope, mainScope, parentsOf, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
+import { BoundaryNode } from "./components/BoundaryNode";
+import { boundaryPorts, canHaveChildren, inScope, mainScope, parentsOf, realId, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
 import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -96,7 +97,7 @@ import {
   type RefData,
 } from "./model";
 
-const nodeTypes = { dt: DtNode, group: GroupNode };
+const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode };
 const edgeTypes = { ref: RefEdge };
 const GROUP_PADDING = 40;
 
@@ -712,7 +713,9 @@ export function Editor({
   );
 
   const isValidConnection: IsValidConnection = useCallback(
-    (c) => {
+    (drawn) => {
+      // A boundary port stands for its node in another scope.
+      const c = { ...drawn, source: realId(drawn.source), target: realId(drawn.target) };
       if (c.source === c.target) return false;
       // Inherited nodes keep their place in the tree; only overrides can change them.
       const target = nodes.find((n) => n.id === c.target);
@@ -729,7 +732,8 @@ export function Editor({
   );
 
   const onConnect = useCallback(
-    (c: Connection) => {
+    (drawn: Connection) => {
+      const c = { ...drawn, source: realId(drawn.source), target: realId(drawn.target) };
       if (c.sourceHandle === CHILD_HANDLE) {
         // A node has exactly one parent: rewiring replaces the old link.
         setEdges((es) =>
@@ -1023,11 +1027,45 @@ export function Editor({
   // same object then, so React Flow does not redo every edge each frame.
   const shown = scopeIds(nodes, scope, main, parents);
   const shownKey = [...shown].join(" ");
-  const shownEdges = useMemo(() => scopeEdges(portEdges, shown), [portEdges, shownKey]);
-  const view = useMemo(
-    () => collapseView(nodes.filter((n) => shown.has(n.id)), shownEdges, (id) => nodeName(id) ?? id),
-    [nodes, shownEdges, shownKey],
+  // References that leave the scope end at boundary ports (US-16.2); their
+  // edges do not depend on positions, the ports' places do.
+  const boundaryCache = useRef(new Map<string, FlowNode>());
+  const shownEdges = useMemo(
+    () => [...scopeEdges(portEdges, shown), ...boundaryPorts(portEdges, shown, () => undefined, () => "").edges],
+    [portEdges, shownKey],
   );
+  const view = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    // Where a drawn node sits on the canvas: group members are relative.
+    const boxOf = (id: string) => {
+      const n = byId.get(id);
+      if (!n || !isDtNode(n)) return undefined;
+      let { x, y } = n.position;
+      for (let g = n.parentId ? byId.get(n.parentId) : undefined; g; g = g.parentId ? byId.get(g.parentId) : undefined) {
+        x += g.position.x;
+        y += g.position.y;
+      }
+      return { x, y, width: n.measured?.width ?? 200, height: n.measured?.height ?? 80 };
+    };
+    const portTitle = (id: string) => {
+      const n = byId.get(id);
+      if (!n || !isDtNode(n)) return id;
+      if (n.data.label) return `&${n.data.label}`;
+      return n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name;
+    };
+    // Unchanged ports keep their object, so React Flow leaves them alone.
+    const cache = boundaryCache.current;
+    const ports = boundaryPorts(portEdges, shown, boxOf, portTitle).nodes.map((p) => {
+      const old = cache.get(p.id) as typeof p | undefined;
+      const same =
+        old && old.position.x === p.position.x && old.position.y === p.position.y && old.data.title === p.data.title;
+      const node = (same ? old : p) as unknown as FlowNode;
+      cache.set(p.id, node);
+      return node;
+    });
+    const drawn = [...nodes.filter((n) => shown.has(n.id)), ...ports];
+    return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
+  }, [nodes, portEdges, shownEdges, shownKey]);
 
   /**
    * Shows `id`'s scope (null: the main canvas). `pin` keeps a tab for it;
@@ -1483,6 +1521,22 @@ export function Editor({
               minZoom={0.1}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
               onNodeDoubleClick={(_, node) => openNode(node.id)}
+              onNodeClick={(_, node) => realId(node.id) !== node.id && focusNode(realId(node.id))}
+              onConnectEnd={(_, state) => {
+                // A reference dropped on empty canvas asks which node it is
+                // for, anywhere in the design: the way to reach other scopes.
+                if (state.isValid || state.toNode || !state.fromNode || state.fromHandle?.type !== "source") return;
+                const source = realId(state.fromNode.id);
+                const sourceHandle = state.fromHandle.id ?? REF_HANDLE;
+                setPalettePick(
+                  pickNode(
+                    "Node to reference",
+                    (target) => onConnect({ source, sourceHandle, target, targetHandle: PHANDLE_HANDLE }),
+                    new Set([source]),
+                  ),
+                );
+                setShowPalette(true);
+              }}
               zoomOnDoubleClick={false}
             >
               <Background />

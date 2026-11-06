@@ -787,3 +787,25 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .breadcrumb li { display: flex; align-items: center; gap: 2px; }
 .breadcrumb [aria-current] { color: var(--text); }
 .scope-tab.passing button { font-style: italic; }
+
+/* Boundary ports (US-16.2): nodes of other scopes that references reach. */
+.boundary-port {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 160px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed var(--ref);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ref);
+  font: 12px var(--mono);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.boundary-port span { overflow: hidden; text-overflow: ellipsis; }
+.boundary-port.in { justify-content: flex-end; }
+.boundary-port.selected { border-style: solid; box-shadow: 0 0 0 3px var(--accent-soft); }
