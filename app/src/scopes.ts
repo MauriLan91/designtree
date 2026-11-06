@@ -2,9 +2,9 @@
 // instead of the whole tree wired with parent/child edges. The tree itself
 // is unchanged (it is still the child edges, so design files and the DTS
 // export stay as they were); a scope is only a view of it.
-import type { Edge } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 import { kindOf } from "./categories";
-import { CHILD_HANDLE, isDtNode, type DtFlowNode, type FlowNode } from "./model";
+import { CHILD_HANDLE, PHANDLE_HANDLE, REF_HANDLE, isDtNode, type DtFlowNode, type FlowNode } from "./model";
 
 export const isTreeEdge = (e: Edge) => e.sourceHandle === CHILD_HANDLE;
 
@@ -92,4 +92,98 @@ export function canHaveChildren(node: DtFlowNode, hasChildren: boolean): boolean
   if (node.data.properties.some((p) => p.name === "#address-cells")) return true;
   if (node.data.binding?.properties?.some((p) => p.name === "#address-cells")) return true;
   return kindOf(node.data.binding?.category, node.data.name) === "bus";
+}
+
+/** Boundary ports (US-16.2): a node outside the scope that a reference
+ * crosses to, drawn on the canvas border. */
+export interface BoundaryData extends Record<string, unknown> {
+  /** The real node it stands for. */
+  node: string;
+  /** `&label`, or the node's name when it has none. */
+  title: string;
+  /** "out": a node in the scope refers to it (port on the right border);
+   * "in": it refers to a node in the scope (port on the left border). */
+  side: "in" | "out";
+}
+export type BoundaryNode = Node<BoundaryData, "boundary">;
+
+export const BOUNDARY_PREFIX = "boundary:";
+/** The real node a drawn node stands for: itself, or a boundary port's node. */
+export const realId = (id: string) => (id.startsWith(BOUNDARY_PREFIX) ? id.slice(id.indexOf(":", BOUNDARY_PREFIX.length) + 1) : id);
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const PORT_GAP = 140;
+const PORT_ROW = 44;
+const PORT_WIDTH = 160;
+const PORT_HEIGHT = 28;
+
+/**
+ * The boundary ports of a scope and the references rewired to them. Each
+ * node outside that a reference crosses to gets one port per side, however
+ * many references reach it; the edges keep their ids, so selecting or
+ * deleting one acts on the real reference. Ports sit in a column beside the
+ * scope's nodes (`boxOf` gives their place on the canvas), in the order of
+ * the nodes they connect to, so the lines do not cross needlessly.
+ */
+export function boundaryPorts(
+  edges: Edge[],
+  shown: Set<string>,
+  boxOf: (id: string) => Box | undefined,
+  titleOf: (id: string) => string,
+): { nodes: BoundaryNode[]; edges: Edge[] } {
+  const crossing = edges.filter((e) => !isTreeEdge(e) && shown.has(e.source) !== shown.has(e.target));
+  if (crossing.length === 0) return { nodes: [], edges: [] };
+
+  const boxes = [...shown].map(boxOf).filter((b): b is Box => b !== undefined);
+  const left = Math.min(...boxes.map((b) => b.x), 0);
+  const right = Math.max(...boxes.map((b) => b.x + b.width), 0);
+  const centreY = (id: string) => {
+    const b = boxOf(id);
+    return b ? b.y + b.height / 2 : 0;
+  };
+
+  // Per side, the outside node and where its first partner inside sits.
+  const ports = new Map<string, { node: string; side: "in" | "out"; y: number }>();
+  const rewired = crossing.map((e) => {
+    const side = shown.has(e.source) ? "out" : "in";
+    const outside = side === "out" ? e.target : e.source;
+    const inside = side === "out" ? e.source : e.target;
+    const id = `${BOUNDARY_PREFIX}${side}:${outside}`;
+    if (!ports.has(id)) ports.set(id, { node: outside, side, y: centreY(inside) });
+    return side === "out"
+      ? { ...e, target: id, targetHandle: PHANDLE_HANDLE }
+      : { ...e, source: id, sourceHandle: REF_HANDLE };
+  });
+
+  const nodes: BoundaryNode[] = [];
+  for (const side of ["in", "out"] as const) {
+    const column = [...ports].filter(([, p]) => p.side === side).sort(([, a], [, b]) => a.y - b.y);
+    // Keep the order, but never closer than one row.
+    let last = -Infinity;
+    for (const [id, p] of column) {
+      const y = Math.max(p.y - PORT_ROW / 2, last + PORT_ROW);
+      last = y;
+      nodes.push({
+        id,
+        type: "boundary",
+        position: { x: side === "out" ? right + PORT_GAP : left - PORT_GAP - PORT_WIDTH, y },
+        data: { node: p.node, title: titleOf(p.node), side },
+        // Not in the editor's node state, so React Flow's measurements would
+        // be dropped: give it its size up front, or it stays unmeasured and hidden.
+        width: PORT_WIDTH,
+        height: PORT_HEIGHT,
+        measured: { width: PORT_WIDTH, height: PORT_HEIGHT },
+        draggable: false,
+        deletable: false,
+        connectable: true,
+      });
+    }
+  }
+  return { nodes, edges: rewired };
 }
