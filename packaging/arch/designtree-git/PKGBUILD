@@ -10,7 +10,8 @@ pkgdesc='Graphical editor for Linux devicetrees, with the element library built 
 arch=('x86_64' 'aarch64')
 url='https://github.com/MauriLan91/designtree'
 license=('MIT')
-depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'gdk-pixbuf2' 'glib2' 'glibc' 'gcc-libs' 'libsoup3' 'pango' 'dtc' 'hicolor-icon-theme')
+# namcap cannot see dtc: the app runs it for Build .dtb.
+depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'gdk-pixbuf2' 'glib2' 'glibc' 'libgcc' 'libsoup3' 'dbus' 'dtc' 'hicolor-icon-theme')
 makedepends=('git' 'cargo' 'nodejs' 'npm')
 checkdepends=('dtc')
 provides=("$_name")
