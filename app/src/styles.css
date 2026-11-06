@@ -185,6 +185,25 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .dt-node-origin { color: var(--muted); font-size: 10px; margin-top: 2px; font-style: italic; }
 .inherited-note { border: 1px dashed var(--muted); border-radius: 4px; padding: 6px 8px; font-size: 12px; }
 .inherited-note button { margin-top: 6px; }
+/* React Flow draws its controls and minimap from its own light or dark
+   palette; map them to ours so they match the panels in both themes. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-controls-button-background-color: var(--panel);
+  --xy-controls-button-background-color-hover: var(--code);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 0 2px 1px rgb(0 0 0 / 0.15);
+  --xy-minimap-background-color: var(--panel);
+  --xy-minimap-mask-background-color: rgb(127 127 127 / 0.25);
+  --xy-minimap-mask-stroke-color: var(--border);
+  --xy-minimap-node-background-color: var(--muted);
+  --xy-minimap-node-stroke-color: transparent;
+}
+.react-flow__minimap { border: 1px solid var(--border); }
+/* Its dark edge stroke is barely visible on our dark canvas. */
+.react-flow.dark { --xy-edge-stroke: #6b7280; --xy-edge-stroke-selected: #9aa0a6; }
 .react-flow__handle.h-tree { background: var(--accent); width: 9px; height: 9px; }
 .react-flow__handle.h-ref { background: var(--ref); width: 9px; height: 9px; border-radius: 2px; }
 /* Typed ports: providers on the left, consumer properties on the right. */

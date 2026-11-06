@@ -1145,6 +1145,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             onBeforeDelete={onBeforeDelete}
+            colorMode="system"
             fitView
             fitViewOptions={{ maxZoom: 1 }}
             minZoom={0.1}

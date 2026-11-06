@@ -470,6 +470,7 @@ function BoardCanvas({ nodes, edges, board, pinCheck, links, designPath, onPlace
           onEdgeClick={(_, e) => onSelect([e.source, e.target])}
           onNodesChange={onNodesChange}
           nodesConnectable={false}
+          colorMode="system"
           fitView
           fitViewOptions={{ maxZoom: 1 }}
           minZoom={0.05}
