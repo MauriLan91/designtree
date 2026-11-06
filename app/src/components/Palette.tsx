@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
 import { loadList, saveList, toggled, withRecent } from "../libraryHistory";
 import type { Binding } from "../model";
+import { KINDS, kindOf } from "../categories";
 
 export const DRAG_MIME = "application/x-designtree-binding";
 
@@ -88,6 +89,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
       title={`${b.path}\nDrag onto the canvas or double-click to add`}
     >
       <div className="binding-row">
+        <BindingChip binding={b} />
         <div className="binding-text">
           <div className="binding-title">{b.title ?? b.path}</div>
           <div className="binding-compat">{b.compatibles?.[0] ?? b.path}</div>
@@ -153,5 +155,15 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
         </>
       )}
     </aside>
+  );
+}
+
+function BindingChip({ binding }: { binding: Binding }) {
+  const kind = kindOf(binding.category, "");
+  const { Icon, title } = KINDS[kind];
+  return (
+    <span className={`kind-chip large kind-${kind}`} title={title}>
+      <Icon size={16} strokeWidth={1.75} aria-hidden />
+    </span>
   );
 }

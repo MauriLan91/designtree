@@ -13,7 +13,9 @@
   or the window with unsaved changes asks first.
 - **Library** (left): the elements of the loaded kernel checkout, with
   search, categories, favorites and recent elements.
-- **Canvas** (middle): the devicetree as a graph. Zoom with the mouse wheel
+- **Canvas** (middle): the devicetree as a graph. A tinted icon on each node
+  and library row shows its kind: CPU, interrupt controller, clock, bus or
+  serial device, GPIO, memory. Zoom with the mouse wheel
   or the buttons at the bottom left; the minimap at the bottom right shows
   where you are.
 - **Inspector** (right, top): the selected node, reference or group.
