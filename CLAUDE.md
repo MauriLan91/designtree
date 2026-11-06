@@ -32,7 +32,7 @@ bindings never use each other or the app.
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 DESIGNTREE_REQUIRE_DTC=1 cargo test --all        # needs dtc (device-tree-compiler)
-(cd app && npm install && npm run build)         # tsc + vite
+(cd app && npm install && npm test && npm run build)  # vitest, then tsc + vite
 ```
 
 CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, `g3-corpus`, `g5-bench` jobs). Rust tests that need

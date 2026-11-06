@@ -4,9 +4,9 @@ This tutorial builds a minimal board from an empty canvas to a `.dtb`: a
 CPU, memory, a clock, an interrupt controller with a UART, and an LED on a
 GPIO. It takes about 15 minutes. Each step ends with a checkpoint design in
 `examples/` (installed in `/usr/share/designtree/examples` by the Arch
-package); open it with **Open…** to compare, or to start from that step.
+package); open it with **File › Open design…** to compare, or to start from that step.
 
-You need a kernel checkout loaded under **Kernels…** (see
+You need a kernel checkout loaded under **Tools › Kernel checkouts…** (see
 [Kernel checkouts](library.md)) and `dtc` installed.
 
 Properties that have no field of their own go in the inspector's
@@ -67,7 +67,7 @@ Checkpoint: `first-board-3-clock.json`.
 5. So that the kernel prints to this UART: add empty nodes `aliases` with
    `serial0 = &uart0`, and `chosen` with `stdout-path = "serial0:115200n8"`.
 
-**Interrupts** in the toolbar should now show the UART under `gic`.
+**View › Interrupt tree** should now show the UART under `gic`.
 
 Checkpoint: `first-board-4-uart.json`.
 
@@ -91,10 +91,10 @@ Checkpoint: `first-board-5-led.json`.
 
 - The **Schema check** panel should be empty. If it lists something, click
   the problem to jump to the node, and compare with the checkpoint.
-- **Address map** shows the four devices on the root bus with no overlaps.
-- **Save…** the design, then **Build .dtb** (Ctrl+B): `board.dtb` appears
+- **View › Address map** shows the four devices on the root bus with no overlaps.
+- **File › Save design…** (Ctrl+S), then **Build .dtb** (Ctrl+B): `board.dtb` appears
   next to `board.json`, and the Build panel shows no warnings.
 
 You have a devicetree that the kernel can boot with. From here, try
-**Board view** to place the devices on a photo of your board, or
-**Export .dts…** to see the source in kernel style.
+**View › Board view** to place the devices on a photo of your board, or
+**File › Export .dts…** to see the source in kernel style.

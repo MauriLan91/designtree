@@ -1,6 +1,6 @@
 # Importing board files
 
-**Import .dts…** opens existing devicetree source: a kernel board file, a
+**File › Import .dts…** opens existing devicetree source: a kernel board file, a
 vendor BSP file or anything `dtc` accepts.
 
 - `#include` of `.dtsi` files and `dt-bindings` headers is resolved, and C

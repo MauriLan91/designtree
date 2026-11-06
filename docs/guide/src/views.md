@@ -2,20 +2,20 @@
 
 ## Interrupt tree
 
-**Interrupts** shows each interrupt controller with the devices wired to it,
+**View › Interrupt tree** shows each interrupt controller with the devices wired to it,
 following `interrupt-parent`, `interrupts` and `interrupts-extended`.
 Devices without an interrupt parent, and interrupt specifiers that do not
 fit their controller, are flagged.
 
 ## Address map
 
-**Address map** shows the `reg` regions of each bus, translated to CPU
+**View › Address map** shows the `reg` regions of each bus, translated to CPU
 addresses through `ranges`, `#address-cells` and `#size-cells`. Overlapping
 regions and regions outside their bus's ranges are highlighted.
 
 ## Board view
 
-**Board view** is a second canvas over the same design, for where devices
+**View › Board view** is a second canvas over the same design, for where devices
 sit on the PCB.
 
 - **Background…** puts a board photo or a schematic export behind the
