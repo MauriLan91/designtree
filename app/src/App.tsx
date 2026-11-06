@@ -68,6 +68,7 @@ import {
   type DesignExtras,
   type AddressMap,
   type InterruptTree,
+  type BoardLink,
   type PinCheck,
   type RefData,
 } from "./model";
@@ -282,6 +283,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
   const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
+  const [boardLinks, setBoardLinks] = useState<BoardLink[] | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const canvasRef = useRef<HTMLElement>(null);
 
@@ -456,6 +458,29 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
       clearTimeout(t);
     };
   }, [boardView, schemaKey, pinMapping.key]);
+
+  // What drives what reads only the devicetree: placing a device on the
+  // board changes which links are drawn, not the links.
+  useEffect(() => {
+    if (!boardView || !inTauri) {
+      setBoardLinks(null);
+      return;
+    }
+    const design = schemaInput.design;
+    let stale = false;
+    const t = setTimeout(async () => {
+      try {
+        const links = await backend.boardLinks(design);
+        if (!stale) setBoardLinks(links);
+      } catch {
+        if (!stale) setBoardLinks(null);
+      }
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [boardView, schemaKey]);
 
   useEffect(() => {
     if (!showAddressMap || !inTauri) {
@@ -1099,6 +1124,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
             onSelect={selectOnly}
             edges={edges}
             pinCheck={pinCheck}
+            links={boardLinks}
             onBoardChange={(board) =>
               setExtras((x) => ({ ...x, board: board.background || board.connectors?.length ? board : undefined }))
             }

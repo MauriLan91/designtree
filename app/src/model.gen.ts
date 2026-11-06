@@ -219,6 +219,23 @@ nodes: Array<NodeId>, };
 
 export type PinCheck = { pins: Array<PinState>, problems: Array<PinProblem>, };
 
+export type LinkKind = "i2c" | "spi" | "bus" | "gpio" | "interrupt" | "reference";
+
+export type BoardLink = { 
+/**
+ * The controller or provider.
+ */
+from: NodeId, 
+/**
+ * The peripheral or consumer.
+ */
+to: NodeId, kind: LinkKind, 
+/**
+ * What makes the link: the properties (`reset-gpios`), or for a
+ * device on a bus its unit address (`@1a`).
+ */
+via: Array<string>, };
+
 export type Region = { node: NodeId, 
 /**
  * Which entry of `reg` this is.
