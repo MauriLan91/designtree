@@ -278,6 +278,23 @@ fn startup_args() -> Result<StartupArgs, String> {
     })
 }
 
+/// How this copy was installed, so that an update notice can say how to
+/// update: the package manager owns `/usr`, an AppImage is replaced by hand.
+#[tauri::command]
+fn install_kind() -> &'static str {
+    if std::env::var_os("APPIMAGE").is_some() {
+        return "appimage";
+    }
+    let in_usr = std::env::current_exe().is_ok_and(|exe| exe.starts_with("/usr"));
+    if in_usr && Path::new("/var/lib/pacman/local").is_dir() {
+        "pacman"
+    } else if in_usr && Path::new("/var/lib/dpkg/status").is_file() {
+        "deb"
+    } else {
+        "other"
+    }
+}
+
 #[tauri::command]
 fn validate_design(design: Graph) -> Vec<String> {
     designtree_core::validate(&design)
@@ -603,9 +620,11 @@ fn write_text(path: PathBuf, content: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             startup_args,
+            install_kind,
             load_kernel_bindings,
             list_kernels,
             add_kernel,

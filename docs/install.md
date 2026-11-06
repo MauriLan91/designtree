@@ -63,8 +63,28 @@ sudo apt install ./DesignTree_<version>_amd64.deb
 The package depends on `device-tree-compiler` and the WebKitGTK 4.1 runtime
 (Ubuntu 22.04, Debian 12 or newer).
 
-Each release also has a `SHA256SUMS` file: `sha256sum -c SHA256SUMS
---ignore-missing` checks what you downloaded.
+## Verifying a download
+
+Each release has a `SHA256SUMS` file: `sha256sum -c SHA256SUMS
+--ignore-missing` checks what you downloaded. The packages also carry a
+signed [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
+that ties the file to the release workflow run that built it from this
+repository:
+
+```sh
+gh attestation verify DesignTree_<version>_amd64.AppImage --repo MauriLan91/designtree
+```
+
+## Updates
+
+Once a day at start, DesignTree asks GitHub for the latest published
+release (one request to `api.github.com`, nothing else is sent). When it is
+newer than the running version, a bar at the bottom says so and how to
+update for the way it was installed: the AUR helper or PKGBUILD on Arch, a
+new `.deb` or AppImage elsewhere. The app does not replace itself; on Arch
+the package manager stays in charge. **Don't check** in the bar turns the
+check off; **Check for updates now** in the command palette (Ctrl+K) checks
+at once and turns it back on.
 
 ## First start: a kernel checkout
 
