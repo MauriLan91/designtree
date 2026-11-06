@@ -1,6 +1,6 @@
 # Product backlog
 
-> Status: **draft v0.2** (2026-10-19). Product decisions below were taken
+> Status: **draft v0.3** (2026-11-06, M5 added from the first UX feedback). Product decisions below were taken
 > with the product owner; story details can still change during refinement.
 > Every milestone is mirrored as a
 > [GitHub milestone](https://github.com/MauriLan91/designtree/milestones) and
@@ -18,6 +18,9 @@
 | D4 | The element library is built **only from a local kernel checkout** chosen by the user; no prebuilt or downloaded catalog is shipped. | 2026-10-19 |
 | D5 | Besides the graph, three views are in scope: **synchronized DTS text**, **address map** and **physical board view**. | 2026-10-19 |
 | D6 | Milestone dates below are accepted as targets. | 2026-10-19 |
+| D7 | The canvas shows **one scope at a time**: the root is the main canvas, double-clicking a node opens its children in a tab with a breadcrumb, and double-clicking a node that cannot have children opens its property editor. Edges are only for ports, buses and phandle references; the parent/child edge goes away. | 2026-11-06 |
+| D8 | In a bus controller's scope (I²C, SPI, ...) the controller is drawn as a **bus bar** with generated, read-only bus edges to its children. | 2026-11-06 |
+| D9 | The menu bar is drawn **in HTML** inside the window, from the same command registry as the command palette, the toolbar and the shortcuts. | 2026-11-06 |
 
 ## Product vision
 
@@ -56,6 +59,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M2 v0.2 Real boards** | Schema validation, typed wiring, SoC templates, overlays, address map | G3 | 2027-02-26 |
 | **M3 v0.3 Productive editor** | Undo/redo, text/graph sync, board view, keyboard flow, performance | G4, G5 | 2027-03-31 |
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
+| **M5 v1.1 Workbench UX** | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | 2027-02-26 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
 following milestone. To be adjusted to the team's real capacity.
@@ -82,6 +86,20 @@ draft PR. The **model** column says which Claude model should drive it; the
 | `init` | Creating and maintaining `CLAUDE.md`. |
 | `dataviz` | Stories that draw charts or maps (address map, benchmark reports). |
 | `artifact-design` | Design mock-ups and the project landing page. |
+
+From M5 on, stories also name skills installed on the maintainer's machine (they are not
+available in cloud sessions unless installed there):
+
+| Skill | When |
+| --- | --- |
+| `refactoring-ui` | Visual hierarchy, spacing and colour of panels, tables and nodes. |
+| `top-design`, `web-typography` | Mock-ups, theme and icon set of the workbench. |
+| `ux-heuristics` | Menus, settings, navigation: check the change against usability heuristics. |
+| `design-everyday-things` | Interaction models users must learn (scopes, drill-down, boundary ports). |
+| `microinteractions` | Small interactions: collapsing panes, expanding rows, tidy animations. |
+| `software-design-philosophy` | Front-end architecture changes (command registry, scoped canvas, property table). |
+| `high-perf-browser` | Stories at risk for G5: large lists and canvases in the web view. |
+| `testing-setup` | Setting up front-end tests where a story first needs them. |
 
 Estimates are story points (Fibonacci). **Definition of Done:** acceptance
 criteria met, unit/integration tests added, CI green, `code-review` findings
@@ -208,6 +226,56 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | US-13.2 | As a new user, I want a user guide covering every feature so that I can learn on my own. | Docs site (mdBook or similar) published from CI. | 3 | Haiku 5.5 | – |
 | US-13.3 | As a product owner, I want a landing page with screenshots so that the project is easy to discover. | One page, linked from the README. | 2 | Sonnet 5.5 | artifact-design |
 | US-13.4 | As a product owner, I want a usability test with 3 users so that G4 is measured. | Script, sessions, timing and findings recorded; follow-up stories created. Kit in `docs/usability/` (script, task card, session sheet, results). | 3 | (PO) | – |
+
+## M5 · v1.1 Workbench UX
+
+Stories from the first hands-on feedback on v1.0 (19 notes, 2026-11-06). Three
+of the notes were defects and are tracked as bugs in v1.0: the library adds the
+first compatible of a schema instead of the one searched (`cortex-a7` gives
+`apm,potenza`), the zoom controls and minimap stay light in dark mode, and the
+side panel squeezes the DTS source when the inspector is long.
+
+### F15 Workbench
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-15.1 | As a user, I want the window designed as a coherent workbench, like VSCode, so that the tool looks and feels professional. | Mock-ups (light and dark) of the window: activity bar, side bar, editor area with tabs and split, bottom panel, inspector, status bar; icon set chosen; density and typography fixed; approved by the product owner before US-15.2. | 2 | Sonnet 5.5 | artifact-design, top-design, refactoring-ui, web-typography |
+| US-15.2 | As a user, I want a traditional menu bar (File, Edit, View, Insert, Tools, Help) and a toolbar with only the essential actions as icons so that commands are easy to find. | One command registry feeds menus, toolbar, command palette and shortcuts (D9); menus show each shortcut and disabled state; toolbar icons with tooltips; every current toolbar button reachable from a menu. | 5 | Sonnet 5.5 | run, code-review, software-design-philosophy, ux-heuristics, testing-setup |
+| US-15.3 | As a user, I want resizable, collapsible panes so that I can give the canvas the room it needs. | Library, inspector and bottom panel resize and collapse (button and shortcut); always-visible scrollbars in every pane; sizes and states remembered per user; problems, build, interrupts and address map move to the bottom panel; status bar with kernel, dtc and problem count. | 5 | Sonnet 5.5 | run, code-review, refactoring-ui, microinteractions |
+| US-15.4 | As a BSP maintainer, I want the DTS source as a split or alternative view of the editor so that I see more of both text and graph. | Graph / Split / DTS modes per tab (like Qt Design Studio's Design / Code / Split); selection sync of US-10.1 kept; mode remembered. | 3 | Sonnet 5.5 | run, ux-heuristics |
+| US-15.5 | As a user, I want a settings panel so that I can configure the editor in one place. | VSCode-like panel with search and sections (General, Editor, Kernel, Build, Shortcuts, Updates); kernel checkouts and dtc path move there; theme (system, light, dark); shortcuts remappable; saved as JSON in the app config directory. | 5 | Sonnet 5.5 | run, security-review, ux-heuristics |
+| US-15.6 | As a user, I want the theme and icons of the mock-ups applied to the window and the nodes so that the canvas is readable at a glance. | Theme tokens for light and dark from US-15.1; icon per node category on canvas nodes and library entries; all React Flow controls themed. | 5 | Sonnet 5.5 | run, refactoring-ui, top-design |
+
+### F16 Composition
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-16.1 | As a user, I want to compose the tree by opening nodes instead of wiring parents to children so that each canvas stays small and readable. | Root is the main canvas; double-click opens a node's children in a tab with a breadcrumb; double-click on a node that cannot have children opens its property editor (D7); a node is made a child by creating or dropping it in that scope; no parent/child edges; design files and DTS export unchanged; G5 met. | 13 | Opus 5.5 | run, code-review, simplify, software-design-philosophy, design-everyday-things, high-perf-browser |
+| US-16.2 | As a user, I want references to nodes outside the current scope shown as ports on the canvas border so that I can still wire them. | A phandle to a node in another scope appears as a boundary port named by its label (`&osc24m`); wiring to a boundary port writes the reference; clicking it jumps to the node. | 8 | Opus 5.5 | run, code-review, design-everyday-things |
+| US-16.3 | As a bring-up engineer, I want a bus controller's scope to show the controller as a bus with its devices attached so that I see the wiring of a bus. | In an I²C/SPI/other bus scope the controller is a bus bar; generated, read-only bus edges to each child (D8); unit addresses shown on the edges. | 5 | Sonnet 5.5 | run, ux-heuristics |
+| US-16.4 | As a BSP maintainer, I want a navigator tree of the whole devicetree so that I can jump to any node. | Tree in the side bar (like Qt Design Studio's Navigator); selection synced with canvas and text; opening an item opens its scope. | 3 | Sonnet 5.5 | run, ux-heuristics |
+| US-16.5 | As a new user, I want the tutorial, guide and examples to match the composition editor so that they still work step by step. | Tutorial, guide chapters and `examples/first-board-*` updated; screenshots refreshed. | 2 | Haiku 5.5 | – |
+
+### F17 Property table
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-17.1 | As a user, I want to edit properties in a table, like an Apple plist, so that every value type is edited the same way. | Key · Type · Value columns; rows expand for arrays, phandle lists and cells; type dropdown for unknown properties; enums as dropdowns, booleans as checkboxes, `dt-bindings` macros suggested in cells; replaces the typed fields and the `name = value` text box, which stays as a raw mode; round trip of every value type tested. | 8 | Opus 5.5 | run, code-review, refactoring-ui, microinteractions, software-design-philosophy |
+| US-17.2 | As a user, I want the required properties always present in the table and pre-set to their defaults so that a node is valid as early as possible. | Required rows pinned on top, cannot be deleted, reset to the schema default or a to-do placeholder; optional schema properties offered from a + row with completion. | 3 | Sonnet 5.5 | run, ux-heuristics |
+
+### F18 Library browser
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-18.1 | As a user, I want one library entry per compatible so that I find and add exactly the device I searched for. | `arm,cortex-a7` is its own entry titled from its schema; search highlights the match; the entry adds that compatible; list virtualized for 26,000 entries, results < 50 ms. | 3 | Sonnet 5.5 | run, code-review, high-perf-browser |
+| US-18.2 | As a user, I want the library grouped by category, like Qt Design Studio's components, so that I can browse it without searching. | Collapsible sections per category; grid or list view; icon per category; favorites and recents kept as sections. | 5 | Sonnet 5.5 | run, refactoring-ui |
+| US-18.3 | As a new user, I want the basic devicetree nodes in the library instead of an empty node so that I can start a board without knowing their properties. | Basic section on top with root, `cpus`, `cpu`, `memory`, `chosen`, `aliases`, `reserved-memory` from the dt-schema core schemas, with their required properties; "+ Empty node" kept as the last entry. | 3 | Sonnet 5.5 | run |
+
+### F9 Editing ergonomics (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-9.5 | As a user, I want commands that tidy the canvas so that I can reorder everything in one step. | Layout of the current scope, of the selection or of everything; align and distribute; orthogonal edge routing from the layout's bend points; fit view; all undoable. | 5 | Sonnet 5.5 | run, simplify, microinteractions |
 
 ## Ideas not yet scheduled
 
