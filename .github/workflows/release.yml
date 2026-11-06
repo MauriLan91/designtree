@@ -1,0 +1,85 @@
+name: Release
+
+# A pushed tag v<version> builds the Linux packages and attaches them to a
+# draft release, to be checked and published by hand. Windows and macOS
+# installers are not built yet (US-12.1 covers Linux first).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Check the tag against the workspace version
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          tauri_version=$(jq -r .version app/src-tauri/tauri.conf.json)
+          if [ "$version" != "$cargo_version" ] || [ "$version" != "$tauri_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, Cargo.toml $cargo_version, tauri.conf.json $tauri_version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  arch:
+    needs: version
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm git
+      - uses: actions/checkout@v4
+      - run: packaging/arch/build.sh release "${{ needs.version.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist-arch/
+
+  deb-appimage:
+    needs: version
+    # The oldest supported runner: an AppImage runs on systems with the same
+    # or a newer glibc than it was built on.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-bundles
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+
+  release:
+    needs: [version, arch, deb-appimage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: |
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          # The PKGBUILD and .SRCINFO are the AUR files, not installers.
+          find . -type f ! -name PKGBUILD ! -name .SRCINFO -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          mv .SRCINFO designtree.SRCINFO
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "DesignTree ${{ needs.version.outputs.version }}" \
+            --generate-notes assets/*

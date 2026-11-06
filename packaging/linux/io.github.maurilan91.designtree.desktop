@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DesignTree
+GenericName=Devicetree Editor
+Comment=Build Linux devicetrees on a node canvas
+Exec=designtree-app %f
+Icon=io.github.maurilan91.designtree
+Terminal=false
+Categories=Development;Electronics;
+Keywords=devicetree;dts;dtb;kernel;embedded;board;
+StartupWMClass=designtree-app

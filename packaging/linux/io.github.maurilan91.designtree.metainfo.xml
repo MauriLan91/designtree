@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.maurilan91.designtree</id>
+  <name>DesignTree</name>
+  <summary>Build Linux devicetrees on a node canvas</summary>
+  <developer id="io.github.maurilan91">
+    <name>Maurizio Lanza</name>
+  </developer>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      DesignTree is a graphical editor for Linux devicetrees. Nodes are placed
+      on a canvas and wired together; the element library comes from the
+      binding schemas of a local Linux kernel checkout. Existing board files
+      can be imported, edited and exported again as .dts or compiled to .dtb.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.maurilan91.designtree.desktop</launchable>
+  <url type="homepage">https://github.com/MauriLan91/designtree</url>
+  <url type="bugtracker">https://github.com/MauriLan91/designtree/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/MauriLan91/designtree/main/docs/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  <provides>
+    <binary>designtree-app</binary>
+    <binary>designtree</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>

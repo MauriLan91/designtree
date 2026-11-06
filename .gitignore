@@ -2,3 +2,4 @@
 **/node_modules
 *.dtb
 catalog.json
+dist-arch/
