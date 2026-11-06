@@ -1,0 +1,374 @@
+{
+  "nodes": [
+    {
+      "id": "/",
+      "name": "/",
+      "compatible": [
+        "acme,first-board"
+      ],
+      "properties": [
+        {
+          "name": "model",
+          "value": {
+            "type": "strings",
+            "value": [
+              "Acme First Board"
+            ]
+          }
+        },
+        {
+          "name": "#address-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              1
+            ]
+          }
+        },
+        {
+          "name": "#size-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              1
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 820.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/aliases",
+      "name": "aliases",
+      "properties": [
+        {
+          "name": "serial0",
+          "value": {
+            "type": "mixed",
+            "value": [
+              {
+                "type": "path",
+                "target": "uart0"
+              }
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 0.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/chosen",
+      "name": "chosen",
+      "properties": [
+        {
+          "name": "stdout-path",
+          "value": {
+            "type": "strings",
+            "value": [
+              "serial0:115200n8"
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 260.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/cpus",
+      "name": "cpus",
+      "properties": [
+        {
+          "name": "#address-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              1
+            ]
+          }
+        },
+        {
+          "name": "#size-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              0
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 560.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/cpus/cpu@0",
+      "name": "cpu",
+      "unit_address": "0",
+      "compatible": [
+        "arm,cortex-a7"
+      ],
+      "properties": [
+        {
+          "name": "device_type",
+          "value": {
+            "type": "strings",
+            "value": [
+              "cpu"
+            ]
+          }
+        },
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [
+              0
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 560.0,
+        "y": 420.0
+      }
+    },
+    {
+      "id": "/memory@40000000",
+      "name": "memory",
+      "unit_address": "40000000",
+      "properties": [
+        {
+          "name": "device_type",
+          "value": {
+            "type": "strings",
+            "value": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [
+              1073741824,
+              536870912
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 860.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/oscillator",
+      "name": "oscillator",
+      "label": "osc24m",
+      "compatible": [
+        "fixed-clock"
+      ],
+      "properties": [
+        {
+          "name": "#clock-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              0
+            ]
+          }
+        },
+        {
+          "name": "clock-frequency",
+          "value": {
+            "type": "cells",
+            "value": [
+              24000000
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 1120.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/interrupt-controller@1c81000",
+      "name": "interrupt-controller",
+      "unit_address": "1c81000",
+      "label": "gic",
+      "compatible": [
+        "arm,cortex-a7-gic"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [
+              29888512,
+              4096,
+              29892608,
+              8192
+            ]
+          }
+        },
+        {
+          "name": "interrupt-controller",
+          "value": {
+            "type": "empty"
+          }
+        },
+        {
+          "name": "#interrupt-cells",
+          "value": {
+            "type": "cells",
+            "value": [
+              3
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 1380.0,
+        "y": 210.0
+      }
+    },
+    {
+      "id": "/serial@1c28000",
+      "name": "serial",
+      "unit_address": "1c28000",
+      "label": "uart0",
+      "compatible": [
+        "ns16550a"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [
+              29523968,
+              1024
+            ]
+          }
+        },
+        {
+          "name": "interrupts",
+          "value": {
+            "type": "cells",
+            "value": [
+              0,
+              0,
+              4
+            ]
+          }
+        },
+        {
+          "name": "reg-shift",
+          "value": {
+            "type": "cells",
+            "value": [
+              2
+            ]
+          }
+        },
+        {
+          "name": "reg-io-width",
+          "value": {
+            "type": "cells",
+            "value": [
+              4
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 1640.0,
+        "y": 210.0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "/",
+      "to": "/aliases",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/chosen",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/cpus",
+      "kind": "child"
+    },
+    {
+      "from": "/cpus",
+      "to": "/cpus/cpu@0",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/memory@40000000",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/oscillator",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/interrupt-controller@1c81000",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/serial@1c28000",
+      "kind": "child"
+    },
+    {
+      "from": "/serial@1c28000",
+      "to": "/interrupt-controller@1c81000",
+      "kind": "reference",
+      "property": "interrupt-parent"
+    },
+    {
+      "from": "/serial@1c28000",
+      "to": "/oscillator",
+      "kind": "reference",
+      "property": "clocks"
+    }
+  ],
+  "groups": [
+    {
+      "id": "bus:/cpus",
+      "title": "cpus",
+      "members": [
+        "/cpus/cpu@0"
+      ],
+      "position": {
+        "x": 520.0,
+        "y": 380.0
+      },
+      "size": {
+        "width": 300.0,
+        "height": 210.0
+      }
+    }
+  ]
+}

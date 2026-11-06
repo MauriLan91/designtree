@@ -159,11 +159,13 @@ interface EditorProps {
   onOpen: (source: DesignSource) => void;
   onNew: () => void;
   onKernels: () => void;
+  /** Checks for a newer release now, and turns the daily check back on. */
+  onCheckUpdates: () => void;
 }
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
-export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, onKernels }: EditorProps) {
+export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, onKernels, onCheckUpdates }: EditorProps) {
   const initial = useMemo(() => fromDesign(emptyDesign()), []);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
@@ -1019,6 +1021,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
     { id: "dtc", title: "Set dtc path…", disabled: !inTauri, run: chooseDtc },
     { id: "fit", title: "Fit the design in view", run: () => fitView({ maxZoom: 1, duration: 300 }) },
     { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", run: () => setShowShortcuts(true) },
+    { id: "updates", title: "Check for updates now", disabled: !inTauri, run: onCheckUpdates },
   ];
   const shortcutList: [string, string][] = [
     ["Ctrl+K", "Command palette"],

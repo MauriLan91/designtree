@@ -351,3 +351,23 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .link-kinds label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .link-swatch { width: 14px; height: 3px; border-radius: 2px; background: currentColor; flex: none; }
 .link-count { margin-left: auto; color: var(--muted); font-size: 11px; }
+
+/* Update notice (US-12.2): floats over the canvas, out of the grid, under modals. */
+.update-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+.update-notice button { white-space: nowrap; }
+.update-notice .update-close { border: none; background: none; font-size: 16px; padding: 0 6px; }

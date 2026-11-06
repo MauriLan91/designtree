@@ -3,3 +3,4 @@
 *.dtb
 catalog.json
 dist-arch/
+docs/guide/book/

@@ -9,6 +9,8 @@ import { backend, inTauri } from "./backend";
 import { Editor, type DesignSource, type EditorApi, type EditorStatus, type Kernel } from "./App";
 import { KernelSettings } from "./components/KernelSettings";
 import { Palette } from "./components/Palette";
+import { UpdateNotice } from "./components/UpdateNotice";
+import { checkForUpdate, setUpdateChecks, type Update } from "./updates";
 
 interface Tab {
   id: number;
@@ -38,6 +40,19 @@ export default function Workspace() {
   const [requestedKernel, setRequestedKernel] = useState<string | null>(null);
   const [kernel, setKernel] = useState<Kernel | null>(null);
   const [showKernels, setShowKernels] = useState(false);
+  const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
+
+  useEffect(() => {
+    // A failed check at start stays quiet; offline is normal.
+    checkForUpdate().then((u) => u && setUpdate({ update: u }), () => {});
+  }, []);
+  const checkUpdatesNow = useCallback(() => {
+    setUpdateChecks(true);
+    checkForUpdate(true).then(
+      (u) => setUpdate({ update: u }),
+      (e) => setUpdate({ update: null, error: String(e?.message ?? e) }),
+    );
+  }, []);
 
   // Callbacks the editors hold on to read the latest state through this.
   const latest = useRef({ tabs, active, statuses });
@@ -211,6 +226,7 @@ export default function Workspace() {
             onOpen={open}
             onNew={newDesign}
             onKernels={() => setShowKernels(true)}
+            onCheckUpdates={checkUpdatesNow}
           />
         </ReactFlowProvider>
       ))}
@@ -224,6 +240,7 @@ export default function Workspace() {
           onClose={() => setShowKernels(false)}
         />
       )}
+      {update && <UpdateNotice {...update} onClose={() => setUpdate(null)} />}
       {closing !== null && (
         <div className="modal-backdrop">
           <div className="modal" role="dialog" aria-label="Unsaved changes">
@@ -277,6 +294,7 @@ interface TabEditorProps {
   onOpen: (source: DesignSource) => void;
   onNew: () => void;
   onKernels: () => void;
+  onCheckUpdates: () => void;
 }
 
 /** An editor with callbacks bound to its tab. */

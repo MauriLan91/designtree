@@ -1,0 +1,12 @@
+[book]
+title = "DesignTree user guide"
+authors = ["Maurizio Lanza"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://github.com/MauriLan91/designtree"
+edit-url-template = "https://github.com/MauriLan91/designtree/edit/main/docs/guide/{path}"

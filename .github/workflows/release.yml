@@ -63,6 +63,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Signed build provenance for every asset (US-12.2), checked with
+      # `gh attestation verify <file> --repo MauriLan91/designtree`.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,6 +83,12 @@ jobs:
           # The PKGBUILD and .SRCINFO are the AUR files, not installers.
           find . -type f ! -name PKGBUILD ! -name .SRCINFO -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
           mv .SRCINFO designtree.SRCINFO
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            assets/*.pkg.tar.zst
+            assets/*.deb
+            assets/*.AppImage
       - name: Release notes
         env:
           VERSION: ${{ needs.version.outputs.version }}

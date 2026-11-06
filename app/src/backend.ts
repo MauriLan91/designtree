@@ -48,6 +48,7 @@ export interface StartupArgs {
 
 export const backend = {
   startupArgs: () => invoke<StartupArgs>("startup_args"),
+  installKind: () => invoke<"pacman" | "deb" | "appimage" | "other">("install_kind"),
   loadKernelBindings: (linuxSrc: string) =>
     invoke<CatalogSummary>("load_kernel_bindings", { linuxSrc }),
   listKernels: () => invoke<KernelInfo[]>("list_kernels"),
