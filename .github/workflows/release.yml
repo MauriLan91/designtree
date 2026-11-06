@@ -22,10 +22,10 @@ jobs:
         shell: bash
         run: |
           version=${GITHUB_REF_NAME#v}
-          cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
-          tauri_version=$(jq -r .version app/src-tauri/tauri.conf.json)
-          if [ "$version" != "$cargo_version" ] || [ "$version" != "$tauri_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME, Cargo.toml $cargo_version, tauri.conf.json $tauri_version"
+          scripts/bump-version.sh --check
+          cargo_version=$(sed -n '/^\[workspace.package\]/,/^\[/ s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          if [ "$version" != "$cargo_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but the files say $cargo_version; run scripts/bump-version.sh $version first"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -65,6 +65,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # changelog.sh reads the merges since the previous tag.
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: assets
@@ -76,10 +79,19 @@ jobs:
           # The PKGBUILD and .SRCINFO are the AUR files, not installers.
           find . -type f ! -name PKGBUILD ! -name .SRCINFO -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
           mv .SRCINFO designtree.SRCINFO
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # The section scripts/bump-version.sh wrote, else the same notes
+          # generated now.
+          awk -v head="## $VERSION " 'index($0, head) == 1 { on = 1; next } /^## / { on = 0 } on' \
+            CHANGELOG.md > notes.md 2>/dev/null || true
+          grep -q . notes.md || scripts/changelog.sh > notes.md
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-            --title "DesignTree ${{ needs.version.outputs.version }}" \
-            --generate-notes assets/*
+            --title "DesignTree $VERSION" --notes-file notes.md assets/*

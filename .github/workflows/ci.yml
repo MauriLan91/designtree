@@ -20,6 +20,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # tauri::generate_context! needs the frontend dist directory to exist.
       - run: mkdir -p app/dist
+      - run: scripts/bump-version.sh --check
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all
