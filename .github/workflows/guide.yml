@@ -14,6 +14,12 @@ on:
 permissions:
   contents: read
 
+# Pages takes one deployment at a time: two quick merges to main made the
+# second deploy fail. Queue them instead, and never cancel a running one.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   MDBOOK_VERSION: 0.5.4
 
