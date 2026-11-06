@@ -112,6 +112,9 @@ describe("boundaryPorts", () => {
     // Out ports on the right of the scope's nodes, in ports on the left.
     expect(ports[1].position.x).toBeGreaterThan(100);
     expect(ports[0].position.x).toBeLessThan(0);
+    // Beside the nodes wherever they are, not beside the canvas origin.
+    const far = boundaryPorts(crossing, shown, (id) => (boxes[id] ? { ...boxes[id], x: 3000 } : undefined), title).nodes;
+    expect(far[0].position.x).toBeGreaterThan(2500);
     // The edges keep their ids and end at the ports.
     expect(rewired.map((e) => [e.id, e.source, e.target])).toEqual([
       ["r-uart-osc", "uart", "boundary:out:osc"],

@@ -141,8 +141,8 @@ export function boundaryPorts(
   if (crossing.length === 0) return { nodes: [], edges: [] };
 
   const boxes = [...shown].map(boxOf).filter((b): b is Box => b !== undefined);
-  const left = Math.min(...boxes.map((b) => b.x), 0);
-  const right = Math.max(...boxes.map((b) => b.x + b.width), 0);
+  const left = boxes.length ? Math.min(...boxes.map((b) => b.x)) : 0;
+  const right = boxes.length ? Math.max(...boxes.map((b) => b.x + b.width)) : 0;
   const centreY = (id: string) => {
     const b = boxOf(id);
     return b ? b.y + b.height / 2 : 0;
