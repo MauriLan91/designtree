@@ -4,7 +4,7 @@ import { KINDS, kindOf } from "../categories";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
 import { consumerHandle, providerHandle } from "../ports";
-import { CHILD_HANDLE, PARENT_HANDLE, PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
+import { PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
 
 const pending = new Set<string>();
 function flush(update: (ids: string[]) => void) {
@@ -14,8 +14,8 @@ function flush(update: (ids: string[]) => void) {
 }
 
 /**
- * Canvas node for a devicetree node: hierarchy handles top/bottom, phandle
- * handles left/right. Typed ports list what the node provides (left) and the
+ * Canvas node for a devicetree node: phandle handles left/right (the tree is
+ * shown by scopes, not edges: US-16.1). Typed ports list what the node provides (left) and the
  * phandle properties it consumes (right).
  */
 export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
@@ -48,7 +48,6 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
       className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}`}
       title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
     >
-      {!isRoot && <Handle type="target" id={PARENT_HANDLE} position={Position.Top} className="h-tree" />}
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
       <div className="dt-node-title">
         {!isRoot && (
@@ -106,7 +105,6 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
         </div>
       )}
       <Handle type="source" id={REF_HANDLE} position={Position.Right} className="h-ref" title="References (phandle)" />
-      <Handle type="source" id={CHILD_HANDLE} position={Position.Bottom} className="h-tree" title="Children" />
     </div>
   );
 }

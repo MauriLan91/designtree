@@ -13,7 +13,7 @@ machine, so it always matches the kernel you target.
 | On the canvas | In the devicetree |
 | --- | --- |
 | Node | A node (`serial@10000000`) with its compatible strings and properties |
-| Child edge (bottom to top handle) | The parent/child relation |
+| Scope (double-click a node) | The node's children: the parent/child relation |
 | Reference edge (right to left handle) | A phandle property, such as `clocks = <&osc24m>;` |
 | Group | Visual grouping only, like a Simulink subsystem; no effect on the output |
 

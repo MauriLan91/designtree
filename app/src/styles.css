@@ -451,7 +451,6 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .react-flow__minimap { border: 1px solid var(--border); }
 /* Its dark edge stroke is barely visible on our dark canvas. */
 .react-flow.dark { --xy-edge-stroke: #6b7280; --xy-edge-stroke-selected: #9aa0a6; }
-.react-flow__handle.h-tree { background: var(--accent); width: 9px; height: 9px; }
 .react-flow__handle.h-ref { background: var(--ref); width: 9px; height: 9px; border-radius: 2px; }
 /* Typed ports: providers on the left, consumer properties on the right. */
 .dt-node-ports { display: flex; justify-content: space-between; gap: 12px; margin: 6px -12px 0; font-size: 11px; font-family: var(--mono); }
@@ -774,3 +773,17 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .setting .shortcut.capturing { border-color: var(--accent); color: var(--accent); }
 .setting kbd { font: 12px var(--mono); color: var(--muted); }
 .check { display: flex; align-items: center; gap: 6px; }
+
+/* Scopes (US-16.1): tabs of opened nodes and the breadcrumb, over the canvas. */
+.scope-bar { position: absolute; top: 8px; left: 8px; right: 220px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.scope-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); pointer-events: auto; }
+.scope-tab { display: flex; align-items: center; border-radius: 4px; }
+.scope-tab button { border: none; background: none; height: 22px; padding: 0 8px; color: var(--muted); font: 12px var(--mono); }
+.scope-tab .scope-close { width: 20px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.scope-tab button:hover { color: var(--text); }
+.scope-tab.active { background: var(--panel); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.scope-tab.active button { color: var(--text); font-weight: 500; }
+.breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0; padding: 2px 8px; list-style: none; border-radius: 6px; background: color-mix(in srgb, var(--panel) 85%, transparent); font: 12px var(--mono); color: var(--muted); pointer-events: auto; }
+.breadcrumb li { display: flex; align-items: center; gap: 2px; }
+.breadcrumb [aria-current] { color: var(--text); }
+.scope-tab.passing button { font-style: italic; }

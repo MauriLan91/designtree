@@ -1,6 +1,8 @@
 // G5 benchmark of the canvas (US-11.1): opens a generated board in the
-// built front end, in Chromium, and measures how long until every node is
-// on screen and the frame rate while panning and zooming.
+// built front end, in Chromium, and measures how long until its largest
+// scope is on screen and the frame rate while panning and zooming it. The
+// canvas shows one scope at a time (US-16.1), so the largest one is what
+// has to stay fluid; the benchmark opens it by double-clicking down to it.
 //
 //   node bench/g5.mjs <design.json> [--out g5-canvas.json]
 //
@@ -24,7 +26,16 @@ if (!designPath) {
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
 const design = await readFile(designPath);
-const nodeCount = JSON.parse(design).nodes.length;
+const parsed = JSON.parse(design);
+const nodeCount = parsed.nodes.length;
+// The largest scope, and the path of nodes from the root down to it.
+const parentOf = new Map(parsed.edges.filter((e) => e.kind === "child").map((e) => [e.to, e.from]));
+const children = new Map();
+for (const [child, parent] of parentOf) children.set(parent, (children.get(parent) ?? 0) + 1);
+// A design without a tree (an overlay) is all one scope.
+const [scope, scopeSize] = [...children].sort((a, b) => b[1] - a[1])[0] ?? [null, nodeCount];
+const path = [];
+for (let s = scope; s !== null && parentOf.has(s); s = parentOf.get(s)) path.unshift(s);
 
 // The built app and the design, from one origin.
 const server = createServer(async (req, res) => {
@@ -36,7 +47,9 @@ const server = createServer(async (req, res) => {
   const file = join(dist, normalize(path === "/" ? "/index.html" : path));
   if (!file.startsWith(dist)) return res.writeHead(403).end();
   try {
-    res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" }).end(await readFile(file));
+    // Read first: a missing file (the favicon) must still get its 404.
+    const body = await readFile(file);
+    res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" }).end(body);
   } catch {
     res.writeHead(404).end();
   }
@@ -51,12 +64,19 @@ const browser = await chromium.launch({
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await page.goto(`${origin}/?design=/g5.json`);
-  // Time from navigation until every node is rendered and measured.
-  await page.waitForFunction(
-    (n) => document.querySelectorAll(".react-flow__node:not([style*='visibility: hidden'])").length >= n,
-    nodeCount,
-    { timeout: 60_000, polling: "raf" },
-  );
+  // Time from navigation until the largest scope is rendered and measured.
+  const drawn = (n) =>
+    page.waitForFunction(
+      (n) => document.querySelectorAll(".react-flow__node-dt:not([style*='visibility: hidden'])").length >= n,
+      n,
+      { timeout: 60_000, polling: "raf" },
+    );
+  for (const id of path) {
+    const node = page.locator(`.react-flow__node[data-id="${id}"]`);
+    await node.waitFor({ timeout: 60_000 });
+    await node.dblclick();
+  }
+  await drawn(scopeSize);
   const openMs = await page.evaluate(() => performance.now());
 
   const pane = await page.locator(".react-flow__pane").boundingBox();
@@ -93,12 +113,14 @@ try {
     return { ...result, scriptPct: share("ScriptDuration"), stylePct: share("RecalcStyleDuration"), layoutPct: share("LayoutDuration") };
   };
 
-  // Pan: drag from the pane's margin, which fitView leaves empty, in circles.
+  // Pan: drag from the pane's left margin, which fitView leaves empty, in
+  // circles; below the scope tabs at the top and above the zoom controls.
   const panOnce = async () => {
-    await page.mouse.move(pane.x + 4, pane.y + 4);
+    const start = { x: pane.x + 4, y: pane.y + pane.height * 0.25 };
+    await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     const stats = await frames(3000, (i) =>
-      page.mouse.move(pane.x + 4 + 200 * Math.sin(i / 10), pane.y + 4 + 200 * (1 - Math.cos(i / 10))),
+      page.mouse.move(start.x + 200 * Math.sin(i / 10), start.y + 200 * (1 - Math.cos(i / 10))),
     );
     await page.mouse.up();
     return stats;
@@ -124,7 +146,7 @@ try {
   // Typing in the inspector: the time from a keystroke in a node's name
   // until the next frame, median of 15 keystrokes (US-11.2). The fields
   // commit once typing pauses, so this is what typing feels like.
-  await page.locator(".react-flow__node-dt").nth(Math.floor(nodeCount / 2)).evaluate((e) => e.click());
+  await page.locator(".react-flow__node-dt").nth(Math.floor(scopeSize / 2)).evaluate((e) => e.click());
   const nameField = page.locator(".inspector input").first();
   await nameField.click();
   await page.keyboard.press("End");
@@ -160,6 +182,7 @@ try {
   const round = (x) => Math.round(x * 10) / 10;
   const report = {
     nodes: nodeCount,
+    scopeNodes: scopeSize,
     open_ms: Math.round(openMs),
     pan_fps: round(pan.fps),
     pan_worst_frame_ms: round(pan.worstFrameMs),

@@ -19,16 +19,16 @@ inspector. Everything else comes from the library search.
 
 ## 1. The root and the CPU
 
-1. **New** (Ctrl+N). Select the root node `/`.
+1. **New** (Ctrl+N). With nothing selected, the inspector shows the root node `/` (click `/` in the breadcrumb to get back to it).
 2. In the inspector, set **Compatible** to `acme,first-board` and add
    `model = "Acme First Board"` to its properties. The root already has
    `#address-cells = <1>` and `#size-cells = <1>`.
-3. **+ Empty node**, name it `cpus`, and wire it under the root (root's
-   bottom handle to its top handle). Give it `#address-cells = <1>` and
-   `#size-cells = <0>`.
-4. Search the library for `cortex-a7` and add the CPU. Wire it under `cpus`,
-   name it `cpu` with unit address `0`, and set `device_type = "cpu"` and
-   `reg = <0>`.
+3. **+ Empty node** on the main canvas, which puts it under the root. Name
+   it `cpus` and give it `#address-cells = <1>` and `#size-cells = <0>`.
+4. Double-click `cpus` to open it. Search the library for `cortex-a7` and
+   add the CPU, name it `cpu` with unit address `0`, and set
+   `device_type = "cpu"` and `reg = <0>`. Click `/` in the breadcrumb to go
+   back.
 
 Checkpoint: `first-board-1-cpu.json`.
 
@@ -78,10 +78,11 @@ Checkpoint: `first-board-4-uart.json`.
    and `reg-names = "dat", "dirout"`. `gpio-controller` is a toggle and
    `#gpio-cells` is `2`.
 2. Search for `gpio-leds` and add it under the root, named `leds`.
-3. **+ Empty node** under `leds`, named `led-0`, with
+3. Double-click `leds`, then **+ Empty node** in it, named `led-0`, with
    `default-state = "off"`.
-4. Wire the LED's right handle to the GPIO controller: the property becomes
-   `gpios`. Click the new edge and, in the specifier editor, set line `0`
+4. The GPIO controller is on the main canvas, so connect the LED from the
+   keyboard: with `led-0` selected, **Insert › Reference from selected node
+   to…** and pick `gpio@1c20800`. Rename the property to `gpios`. Click the new edge and, in the specifier editor, set line `0`
    and pick `GPIO_ACTIVE_HIGH` (the names come from the kernel's
    `dt-bindings` headers).
 
