@@ -27,7 +27,8 @@ prepare() {
 build() {
 	cd "$pkgname-$pkgver"
 	export RUSTUP_TOOLCHAIN=stable
-	export CARGO_TARGET_DIR=target
+	# Absolute: tauri runs cargo from app/src-tauri.
+	export CARGO_TARGET_DIR="$PWD/target"
 	# `tauri build` builds the frontend (beforeBuildCommand) and embeds it;
 	# a plain `cargo build` would load the dev server URL instead.
 	(cd app && ./node_modules/.bin/tauri build --no-bundle -- --frozen)
