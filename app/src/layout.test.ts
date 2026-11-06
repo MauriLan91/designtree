@@ -26,3 +26,11 @@ describe("clampSize", () => {
     expect(clampSize("panel", 50)).toBe(120);
   });
 });
+
+describe("loadEditorMode", () => {
+  it("starts in split mode without a saved choice", async () => {
+    const { loadEditorMode } = await import("./layout");
+    // No localStorage under Node: the fallback applies.
+    expect(loadEditorMode()).toBe("split");
+  });
+});

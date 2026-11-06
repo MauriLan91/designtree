@@ -242,7 +242,39 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .binding-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .binding-compat { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.canvas { grid-area: canvas; position: relative; min-height: 0; }
+.canvas { grid-area: canvas; position: relative; display: flex; min-width: 0; min-height: 0; }
+.graph { position: relative; flex: 1; min-width: 0; }
+.source-pane { flex: 1; min-width: 0; display: flex; background: var(--panel); }
+.mode-split .source-pane { border-left: 1px solid var(--border); }
+.graph[hidden], .source-pane[hidden] { display: none; }
+/* Clear of the mode switch above it. */
+.source-pane .preview { padding-top: 14px; }
+.mode-switch {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+.mode-switch button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mode-switch button:hover { color: var(--text); }
+.mode-switch button[aria-pressed="true"] { background: var(--code); color: var(--text); font-weight: 500; }
 
 .side { display: flex; flex-direction: column; }
 .inspector { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
@@ -253,9 +285,6 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .missing { font-size: 12px; color: var(--ref); }
 .missing ul { margin: 4px 0 0 16px; padding: 0; }
 .preview { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
-/* A long inspector would squeeze the source to a line or two; keep it usable
-   and let the side panel scroll instead. */
-.side .preview { flex-shrink: 0; min-height: max(320px, 45vh); }
 .preview-mode { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .preview-mode .hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .errors { color: var(--danger); padding-left: 18px; margin: 0; }

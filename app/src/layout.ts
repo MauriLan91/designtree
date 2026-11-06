@@ -75,3 +75,27 @@ export function saveLayout(layout: Layout) {
     // Storage can be blocked; the layout then lasts for this session only.
   }
 }
+
+/** How a tab shows the design: the graph, the graph beside its DTS source,
+ * or the source alone (US-15.4). */
+export type EditorMode = "graph" | "split" | "dts";
+const MODES: EditorMode[] = ["graph", "split", "dts"];
+const MODE_KEY = "designtree.editorMode";
+
+/** The mode last chosen, which new tabs start in. */
+export function loadEditorMode(): EditorMode {
+  try {
+    const raw = localStorage.getItem(MODE_KEY);
+    return MODES.includes(raw as EditorMode) ? (raw as EditorMode) : "split";
+  } catch {
+    return "split";
+  }
+}
+
+export function saveEditorMode(mode: EditorMode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // As for the layout: without storage the choice lasts for this session.
+  }
+}

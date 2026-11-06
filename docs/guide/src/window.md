@@ -17,8 +17,11 @@
   or the buttons at the bottom left; the minimap at the bottom right shows
   where you are.
 - **Inspector** (right, top): the selected node, reference or group.
-- **DTS source** (right, under the inspector): the devicetree source of the
-  design, editable, kept in sync with the canvas.
+- **DTS source**: the devicetree source of the design, editable, kept in
+  sync with the canvas. The switch at the top right of the editor shows the
+  graph, the graph and the source side by side, or the source alone
+  (Ctrl+1, Ctrl+2, Ctrl+3, also in **View**). Each tab keeps its own mode;
+  new tabs start in the last one chosen.
 - **Bottom panel** (under the canvas, Ctrl+J): **Problems** (structural
   errors and the schema check), **Build** (dtc's output), **Interrupts** and
   **Address map**. A build opens it on Build.
