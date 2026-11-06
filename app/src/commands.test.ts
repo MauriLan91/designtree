@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboOf, menusOf, pickOf, tooltipOf, type Command } from "./commands";
+import { comboOf, menusOf, pickOf, shortcutClashes, tooltipOf, withShortcuts, type Command } from "./commands";
 
 const cmd = (id: string, extra: Partial<Command> = {}): Command => ({ id, title: id, run: () => {}, ...extra });
 
@@ -37,6 +37,12 @@ describe("comboOf", () => {
     expect(comboOf(key("F1"))).toBe("F1");
   });
 
+  it("names Shift+digit and Shift+punctuation by the key, not the character", () => {
+    expect(comboOf({ ...key("!", { ctrlKey: true, shiftKey: true }), code: "Digit1" })).toBe("Ctrl+Shift+1");
+    expect(comboOf({ ...key("<", { ctrlKey: true, shiftKey: true }), code: "Comma" })).toBe("Ctrl+Shift+,");
+    expect(comboOf({ ...key("L", { ctrlKey: true, shiftKey: true }), code: "KeyL" })).toBe("Ctrl+Shift+L");
+  });
+
   it("leaves plain typing, Alt combinations and named keys alone", () => {
     expect(comboOf(key("s"))).toBeNull();
     expect(comboOf(key("f", { altKey: true }))).toBeNull();
@@ -59,5 +65,19 @@ describe("tooltipOf", () => {
     expect(tooltipOf(cmd("x", { title: "Empty node", hint: "Add a node with no binding" }))).toBe(
       "Empty node\nAdd a node with no binding",
     );
+  });
+});
+
+describe("withShortcuts", () => {
+  const commands = [cmd("save", { shortcut: "Ctrl+S" }), cmd("undo", { shortcut: "Ctrl+Z" }), cmd("fit")];
+
+  it("applies overrides, removes with an empty one, and leaves fixed commands alone", () => {
+    const out = withShortcuts(commands, { save: "", fit: "Ctrl+Shift+F", undo: "Ctrl+U" }, new Set(["undo"]));
+    expect(out.map((c) => c.shortcut)).toEqual([undefined, "Ctrl+Z", "Ctrl+Shift+F"]);
+  });
+
+  it("finds shortcuts given twice", () => {
+    const out = withShortcuts(commands, { fit: "Ctrl+S" }, new Set());
+    expect([...shortcutClashes(out)]).toEqual([["Ctrl+S", ["save", "fit"]]]);
   });
 });

@@ -52,9 +52,11 @@ import { BottomPanel } from "./components/BottomPanel";
 import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
-import { loadEditorMode, saveEditorMode, type EditorMode, type Layout, type PaneName, type PanelTab } from "./layout";
+import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
+import type { Settings } from "./settings";
+import { SettingsPanel, type Section } from "./components/SettingsPanel";
 import { ModeSwitch } from "./components/ModeSwitch";
-import { comboOf, pickOf, tooltipOf, type Command, type NodePick } from "./commands";
+import { comboOf, pickOf, tooltipOf, withShortcuts, type Command, type NodePick } from "./commands";
 import {
   FilePlus,
   FolderOpen,
@@ -177,13 +179,27 @@ interface EditorProps {
   /** Opens a design, in this tab or a new one. */
   onOpen: (source: DesignSource) => void;
   onNew: () => void;
-  onKernels: () => void;
   /** Checks for a newer release now, and turns the daily check back on. */
   onCheckUpdates: () => void;
   /** The panes, shared by every tab and remembered for the user. */
   layout: Layout;
   onLayout: (change: (l: Layout) => Layout) => void;
+  onResetLayout: () => void;
+  /** The user's settings; changes are saved by the workspace. */
+  settings: Settings;
+  settingsLoaded: boolean;
+  /** Why the last save of the settings failed, if it did. */
+  settingsError: string | null;
+  onSettings: (patch: Partial<Settings>) => void;
+  /** The settings section on show, or null when the panel is closed. */
+  settingsSection: Section | null;
+  onOpenSettings: (section: Section | null) => void;
+  onUseKernel: (path: string) => void;
 }
+
+/** Commands whose shortcuts have handlers of their own (undo knows about
+ * text fields, the palette toggles from inside itself), so they stay fixed. */
+const FIXED_SHORTCUTS: ReadonlySet<string> = new Set(["undo", "redo", "palette"]);
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
@@ -195,10 +211,17 @@ export function Editor({
   onStatus,
   onOpen,
   onNew,
-  onKernels,
   onCheckUpdates,
   layout,
   onLayout,
+  onResetLayout,
+  settings,
+  settingsLoaded,
+  settingsError,
+  onSettings,
+  settingsSection,
+  onOpenSettings,
+  onUseKernel,
 }: EditorProps) {
   const initial = useMemo(() => fromDesign(emptyDesign()), []);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
@@ -321,15 +344,22 @@ export function Editor({
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const showAddressMap = panelTab === "address-map";
   // Each tab has its own mode; the last one chosen is where new tabs start.
-  const [mode, setModeState] = useState<EditorMode>(loadEditorMode);
+  const [ownMode, setOwnMode] = useState<EditorMode | null>(() => (settingsLoaded ? settings.editorMode : null));
+  // The first tab opens before the settings are read: it follows them until then.
+  const mode = ownMode ?? settings.editorMode;
+  useEffect(() => {
+    if (settingsLoaded) setOwnMode((m) => m ?? settings.editorMode);
+    // Only once, when the settings arrive: later changes are other tabs'.
+  }, [settingsLoaded]);
   const setMode = (m: EditorMode) => {
-    setModeState(m);
-    saveEditorMode(m);
+    setOwnMode(m);
+    onSettings({ editorMode: m });
   };
   const [dtcVersion, setDtcVersion] = useState<string | null | undefined>(undefined);
+  // Only the tab on show asks, so a change does not run dtc once per tab.
   useEffect(() => {
-    if (inTauri) backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
-  }, []);
+    if (inTauri && active) backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
+  }, [settings.dtcPath, active]);
   const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
@@ -968,11 +998,6 @@ export function Editor({
 
   const view = useMemo(() => collapseView(nodes, portEdges, (id) => nodeName(id) ?? id), [nodes, portEdges]);
 
-  const chooseDtc = async () => {
-    const path = await dialogs.pickDtc();
-    if (path) await backend.setDtcPath(path);
-    backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
-  };
 
   const showPanel = (tab: PanelTab) => onLayout((l) => ({ ...l, panel: { ...l.panel, open: true, tab } }));
   /** Shows `tab`, or closes the panel when that tab is already on show. */
@@ -1029,7 +1054,7 @@ export function Editor({
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
-  const commands: Command[] = [
+  const registry: Command[] = [
     { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
     {
       id: "soc",
@@ -1060,6 +1085,7 @@ export function Editor({
       disabled: !inTauri || !dts || errors.length > 0 || sourceError !== null,
       run: exportDts,
     },
+    { id: "settings", title: "Settings…", shortcut: "Ctrl+,", menu: "File", group: 3, run: () => onOpenSettings("General") },
     { id: "undo", title: "Undo", shortcut: "Ctrl+Z", menu: "Edit", icon: Undo2, disabled: !history.canUndo, run: history.undo },
     { id: "redo", title: "Redo", shortcut: "Ctrl+Shift+Z", menu: "Edit", icon: Redo2, disabled: !history.canRedo, run: history.redo },
     {
@@ -1198,22 +1224,23 @@ export function Editor({
       title: "Kernel checkouts…",
       menu: "Tools",
       group: 1,
-      hint: "Kernel checkouts the library can be built from",
+      hint: "Kernel checkouts the library can be built from (Settings › Kernel)",
       disabled: !inTauri,
-      run: onKernels,
+      run: () => onOpenSettings("Kernel"),
     },
     {
       id: "dtc",
       title: "Set dtc path…",
       menu: "Tools",
       group: 1,
-      hint: "Use a dtc program that is not in PATH",
+      hint: "Use a dtc program that is not in PATH (Settings › Build)",
       disabled: !inTauri,
-      run: chooseDtc,
+      run: () => onOpenSettings("Build"),
     },
     { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", menu: "Help", run: () => setShowShortcuts(true) },
     { id: "updates", title: "Check for updates now", menu: "Help", disabled: !inTauri, run: onCheckUpdates },
   ];
+  const commands = withShortcuts(registry, settings.shortcuts, FIXED_SHORTCUTS);
   const byId = (id: string) => commands.find((c) => c.id === id)!;
   const shortcutList: [string, string][] = [
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
@@ -1244,10 +1271,10 @@ export function Editor({
       if (!combo || combo === "Ctrl+Z" || combo === "Ctrl+Shift+Z") return;
       const command = commandsRef.current.find((c) => c.shortcut === combo);
       if (!command) return;
-      // Ctrl+S works from a text field too; the rest belong to the canvas.
+      // Save works from a text field too; the rest belong to the canvas.
       const target = e.target as HTMLElement | null;
       const inText = !!target?.closest(`${TEXT_INPUTS}, textarea, select, [contenteditable], .cm-editor`);
-      if (inText && combo !== "Ctrl+S") return;
+      if (inText && command.id !== "save") return;
       e.preventDefault();
       if (!command.disabled) command.run();
     };
@@ -1326,6 +1353,7 @@ export function Editor({
           )}
           {boardView ? (
             <BoardView
+              colorMode={settings.theme}
               nodes={nodes}
               board={extras.board}
               designPath={designPath}
@@ -1351,7 +1379,7 @@ export function Editor({
               onConnect={onConnect}
               isValidConnection={isValidConnection}
               onBeforeDelete={onBeforeDelete}
-              colorMode="system"
+              colorMode={settings.theme}
               fitView
               fitViewOptions={{ maxZoom: 1 }}
               minZoom={0.1}
@@ -1463,8 +1491,8 @@ export function Editor({
         warnings={problemCount.warnings}
         nodes={nodes.filter(isDtNode).length}
         selected={selectedNodes.length}
-        onKernels={onKernels}
-        onDtc={chooseDtc}
+        onKernels={() => onOpenSettings("Kernel")}
+        onDtc={() => onOpenSettings("Build")}
         onProblems={() => showPanel("problems")}
       />
       {showPalette && (
@@ -1477,6 +1505,22 @@ export function Editor({
             setShowPalette(false);
             setPalettePick(null);
           }}
+        />
+      )}
+      {active && settingsSection && (
+        <SettingsPanel
+          settings={settings}
+          onChange={onSettings}
+          saveError={settingsError}
+          section={settingsSection}
+          onClose={() => onOpenSettings(null)}
+          commands={commands}
+          defaults={new Map(registry.map((c) => [c.id, c.shortcut]))}
+          fixed={FIXED_SHORTCUTS}
+          kernelPath={kernel?.path ?? null}
+          onUseKernel={onUseKernel}
+          onResetLayout={onResetLayout}
+          onCheckUpdates={onCheckUpdates}
         />
       )}
       {showShortcuts && <ShortcutSheet shortcuts={shortcutList} onClose={() => setShowShortcuts(false)} />}

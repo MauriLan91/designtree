@@ -19,8 +19,11 @@
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
 }
+/* Dark tokens: from the desktop's setting unless Settings › Theme forces
+   one (data-theme on the root). The same block twice, since a media query
+   cannot be combined with an attribute selector. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15171a;
     --panel: #1d2024;
     --border: #2e3238;
@@ -39,6 +42,26 @@
     --link-reference: #f59e0b;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #15171a;
+  --panel: #1d2024;
+  --border: #2e3238;
+  --text: #e6e6e6;
+  --muted: #9aa0a6;
+  --accent: #60a5fa;
+  --ref: #f59e0b;
+  --danger: #f87171;
+  --node: #23272d;
+  --code: #16181b;
+  --link-i2c: #a78bfa;
+  --link-spi: #22d3ee;
+  --link-gpio: #4ade80;
+  --link-interrupt: #f87171;
+  --link-bus: #9ca3af;
+  --link-reference: #f59e0b;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
 
@@ -640,3 +663,28 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .statusbar .bad { color: var(--danger); }
 .statusbar .warn { color: var(--ref); }
 .statusbar .count { display: flex; align-items: center; gap: 3px; }
+
+/* Settings (US-15.5). */
+.modal.settings { width: min(860px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); display: flex; flex-direction: column; padding: 0; }
+.settings-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.settings-head h2 { margin: 0; }
+.settings-head input { flex: 1; }
+.settings-body { flex: 1; display: flex; min-height: 0; }
+.settings-nav { display: flex; flex-direction: column; gap: 2px; width: 160px; padding: 12px 8px; border-right: 1px solid var(--border); }
+.settings-nav button { border: none; background: none; text-align: left; padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+.settings-nav button:hover { color: var(--text); background: var(--code); }
+.settings-nav button[aria-current="page"] { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 500; }
+.settings-list { flex: 1; overflow: auto; padding: 12px 20px 20px; }
+.settings-list h3 { margin: 8px 0 4px; font-size: 15px; font-weight: 600; }
+.setting { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.setting > h3 { flex-basis: 100%; }
+.setting-text { flex: 1 1 260px; display: flex; flex-direction: column; min-width: 0; }
+.setting-text .hint { margin: 2px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.setting-title { font-weight: 500; }
+.setting-control { flex: 0 1 auto; }
+.setting-control .kernel-checkouts { width: min(520px, 100%); }
+.setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.setting .shortcut { min-width: 120px; font: 12px ui-monospace, monospace; }
+.setting .shortcut.capturing { border-color: var(--accent); color: var(--accent); }
+.setting kbd { font: 12px ui-monospace, monospace; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 6px; }

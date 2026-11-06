@@ -27,10 +27,3 @@ describe("clampSize", () => {
   });
 });
 
-describe("loadEditorMode", () => {
-  it("starts in split mode without a saved choice", async () => {
-    const { loadEditorMode } = await import("./layout");
-    // No localStorage under Node: the fallback applies.
-    expect(loadEditorMode()).toBe("split");
-  });
-});
