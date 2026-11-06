@@ -1,0 +1,779 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>DesignTree user guide</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-49e3584b.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-75d916f9.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">DesignTree user guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/MauriLan91/designtree" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p>DesignTree is a graphical editor for Linux devicetrees. Instead of writing
+<code>.dts</code> files by hand, you place nodes on a canvas, wire them together and
+group them, in the style of node editors such as n8n or Simulink. The
+result is ordinary devicetree source in kernel style, and a <code>.dtb</code> built
+with <code>dtc</code>.</p>
+<p>The element library is not bundled: it is built from the binding schemas
+(<code>Documentation/devicetree/bindings</code>) of a Linux kernel checkout on your
+machine, so it always matches the kernel you target.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>On the canvas</th><th>In the devicetree</th></tr>
+</thead>
+<tbody>
+<tr><td>Node</td><td>A node (<code>serial@10000000</code>) with its compatible strings and properties</td></tr>
+<tr><td>Child edge (bottom to top handle)</td><td>The parent/child relation</td></tr>
+<tr><td>Reference edge (right to left handle)</td><td>A phandle property, such as <code>clocks = &lt;&amp;osc24m&gt;;</code></td></tr>
+<tr><td>Group</td><td>Visual grouping only, like a Simulink subsystem; no effect on the output</td></tr>
+</tbody>
+</table>
+</div>
+<p>DesignTree is made for two kinds of work:</p>
+<ul>
+<li><strong>Board bring-up</strong>: start from a SoC <code>.dtsi</code> of the kernel and describe what
+your board adds, with the board view next to the schematic.</li>
+<li><strong>BSP maintenance</strong>: open existing board files, change them on the canvas
+or in the text, and export them with small diffs: the includes stay, and
+your changes become <code>&amp;label { }</code> overrides.</li>
+</ul>
+<p>Design files are JSON (<code>.json</code>). They hold the tree, the canvas layout, the
+board view and the kernel version the design was built against. Devicetree
+source is an export, not the file you save.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="installing-designtree"><a class="header" href="#installing-designtree">Installing DesignTree</a></h1>
+<p>DesignTree is packaged for Linux first. Arch Linux and its derivatives
+(Manjaro, EndeavourOS) build it from a PKGBUILD; other distributions use the
+AppImage or the <code>.deb</code> attached to each
+<a href="https://github.com/MauriLan91/designtree/releases">GitHub release</a>.
+Windows and macOS installers are not built yet; build from source there.</p>
+<p>Every package installs the desktop app (<code>designtree-app</code>, with a menu entry)
+and needs <code>dtc</code> for <strong>Build .dtb</strong>. The Arch package also installs the
+<code>designtree</code> command line.</p>
+<h2 id="arch-linux-and-manjaro"><a class="header" href="#arch-linux-and-manjaro">Arch Linux and Manjaro</a></h2>
+<p>Two PKGBUILDs live in <code>packaging/arch/</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Package</th><th>Builds</th><th>Use it for</th></tr>
+</thead>
+<tbody>
+<tr><td><code>designtree</code></td><td>the tagged release (<code>v&lt;version&gt;</code> tarball)</td><td>normal use</td></tr>
+<tr><td><code>designtree-git</code></td><td>the latest commit on <code>main</code></td><td>trying unreleased work</td></tr>
+</tbody>
+</table>
+</div>
+<p>Build and install either with <code>makepkg</code>, from a clone of the repository:</p>
+<pre><code class="language-sh">git clone https://github.com/MauriLan91/designtree.git
+cd designtree/packaging/arch/designtree-git    # or designtree, once a release is tagged
+makepkg -si
+</code></pre>
+<p><code>makepkg -s</code> installs the build dependencies (<code>cargo</code>, <code>nodejs</code>, <code>npm</code>)
+with pacman. The build takes a few minutes; <code>check()</code> runs the core and
+bindings test suites. Remove the package with <code>sudo pacman -R designtree-git</code>.</p>
+<p>The PKGBUILD attached to each release already carries the tarball checksum
+and is the file published to the AUR (see <a href="#publishing-to-the-aur">Publishing to the AUR</a>).</p>
+<h3 id="wayland-and-nvidia"><a class="header" href="#wayland-and-nvidia">Wayland and NVIDIA</a></h3>
+<p>On some Wayland sessions, KDE Plasma with an NVIDIA GPU among them,
+WebKitGTK’s DMA-BUF renderer closes the window at start with
+<code>Error 71 (Protocol error) dispatching to Wayland display</code>. DesignTree sets
+<code>WEBKIT_DISABLE_DMABUF_RENDERER=1</code> for itself on Linux, so no setup is
+needed. To try the DMA-BUF renderer anyway, start it with
+<code>WEBKIT_DISABLE_DMABUF_RENDERER=0 designtree-app</code>.</p>
+<h2 id="appimage"><a class="header" href="#appimage">AppImage</a></h2>
+<pre><code class="language-sh">chmod +x DesignTree_&lt;version&gt;_amd64.AppImage
+./DesignTree_&lt;version&gt;_amd64.AppImage
+</code></pre>
+<p>Install <code>dtc</code> from your distribution (<code>device-tree-compiler</code> on Debian and
+Ubuntu) to build <code>.dtb</code> files. The AppImage is built on Ubuntu 22.04 and runs
+on distributions with glibc 2.35 or newer.</p>
+<h2 id="debian-and-ubuntu"><a class="header" href="#debian-and-ubuntu">Debian and Ubuntu</a></h2>
+<pre><code class="language-sh">sudo apt install ./DesignTree_&lt;version&gt;_amd64.deb
+</code></pre>
+<p>The package depends on <code>device-tree-compiler</code> and the WebKitGTK 4.1 runtime
+(Ubuntu 22.04, Debian 12 or newer).</p>
+<h2 id="verifying-a-download"><a class="header" href="#verifying-a-download">Verifying a download</a></h2>
+<p>Each release has a <code>SHA256SUMS</code> file: <code>sha256sum -c SHA256SUMS --ignore-missing</code> checks what you downloaded. The packages also carry a
+signed <a href="https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations">build provenance attestation</a>
+that ties the file to the release workflow run that built it from this
+repository:</p>
+<pre><code class="language-sh">gh attestation verify DesignTree_&lt;version&gt;_amd64.AppImage --repo MauriLan91/designtree
+</code></pre>
+<h2 id="updates"><a class="header" href="#updates">Updates</a></h2>
+<p>Once a day at start, DesignTree asks GitHub for the latest published
+release (one request to <code>api.github.com</code>, nothing else is sent). When it is
+newer than the running version, a bar at the bottom says so and how to
+update for the way it was installed: the AUR helper or PKGBUILD on Arch, a
+new <code>.deb</code> or AppImage elsewhere. The app does not replace itself; on Arch
+the package manager stays in charge. <strong>Don’t check</strong> in the bar turns the
+check off; <strong>Check for updates now</strong> in the command palette (Ctrl+K) checks
+at once and turns it back on.</p>
+<h2 id="first-start-a-kernel-checkout"><a class="header" href="#first-start-a-kernel-checkout">First start: a kernel checkout</a></h2>
+<p>The element library comes only from the binding schemas of a Linux kernel
+checkout on your machine. Without one, the canvas works but the library is
+empty and schema checks are off. A sparse checkout of the parts DesignTree
+reads is enough:</p>
+<pre><code class="language-sh">scripts/fetch-kernel-dts.sh ~/linux        # from the repository; tag v7.3 by default
+</code></pre>
+<p>or by hand:</p>
+<pre><code class="language-sh">git clone --depth 1 --filter=blob:none --sparse https://github.com/torvalds/linux.git ~/linux
+git -C ~/linux sparse-checkout set Documentation/devicetree/bindings \
+    arch/arm/boot/dts arch/arm64/boot/dts include/dt-bindings include/uapi/linux \
+    scripts/dtc/include-prefixes
+</code></pre>
+<p>Then press <strong>Kernels…</strong> in the toolbar, <strong>Add checkout…</strong>, pick <code>~/linux</code>
+and <strong>Use</strong>. DesignTree remembers the checkouts you add.
+<code>DESIGNTREE_LINUX_SRC=~/linux designtree-app</code> loads one at start instead.</p>
+<h2 id="from-source"><a class="header" href="#from-source">From source</a></h2>
+<p>Needs Rust 1.90 or newer, Node.js 20 or newer, <code>dtc</code> and the WebKitGTK 4.1
+development files (Arch: <code>webkit2gtk-4.1</code>; Debian/Ubuntu:
+<code>libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev</code>).</p>
+<pre><code class="language-sh">cd app
+npm ci
+npx tauri build --no-bundle               # target/release/designtree-app
+cargo build --release -p designtree-cli   # target/release/designtree
+</code></pre>
+<p><code>packaging/linux/install.sh &lt;destdir&gt;</code> installs both with the desktop entry,
+icons and AppStream metadata, for distribution packages.</p>
+<h2 id="publishing-to-the-aur"><a class="header" href="#publishing-to-the-aur">Publishing to the AUR</a></h2>
+<p>For the maintainer, after a release is published:</p>
+<pre><code class="language-sh">git clone ssh://aur@aur.archlinux.org/designtree.git aur-designtree
+cd aur-designtree
+cp ~/Downloads/PKGBUILD .                      # from the release assets
+cp ~/Downloads/designtree.SRCINFO .SRCINFO
+git add PKGBUILD .SRCINFO
+git commit -m "Update to &lt;version&gt;" &amp;&amp; git push
+</code></pre>
+<p><code>designtree-git</code> is published the same way from <code>packaging/arch/designtree-git</code>
+(<code>makepkg --printsrcinfo &gt; .SRCINFO</code>), once; it rebuilds from <code>main</code> on
+every install.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="tutorial-your-first-board"><a class="header" href="#tutorial-your-first-board">Tutorial: your first board</a></h1>
+<p>This tutorial builds a minimal board from an empty canvas to a <code>.dtb</code>: a
+CPU, memory, a clock, an interrupt controller with a UART, and an LED on a
+GPIO. It takes about 15 minutes. Each step ends with a checkpoint design in
+<code>examples/</code> (installed in <code>/usr/share/designtree/examples</code> by the Arch
+package); open it with <strong>Open…</strong> to compare, or to start from that step.</p>
+<p>You need a kernel checkout loaded under <strong>Kernels…</strong> (see
+<a href="#kernel-checkouts-and-the-library">Kernel checkouts</a>) and <code>dtc</code> installed.</p>
+<p>Properties that have no field of their own go in the inspector’s
+<strong>Properties</strong> box, one <code>name = value</code> per line (<code>reg = &lt;0x40000000 0x20000000&gt;</code>), or straight into the DTS source panel.</p>
+<p>Nodes the kernel’s schemas do not describe (<code>cpus</code>, <code>memory</code>, <code>chosen</code>,
+<code>aliases</code>, the LED itself) are added with <strong>+ Empty node</strong> and named in the
+inspector. Everything else comes from the library search.</p>
+<h2 id="1-the-root-and-the-cpu"><a class="header" href="#1-the-root-and-the-cpu">1. The root and the CPU</a></h2>
+<ol>
+<li><strong>New</strong> (Ctrl+N). Select the root node <code>/</code>.</li>
+<li>In the inspector, set <strong>Compatible</strong> to <code>acme,first-board</code> and add
+<code>model = "Acme First Board"</code> to its properties. The root already has
+<code>#address-cells = &lt;1&gt;</code> and <code>#size-cells = &lt;1&gt;</code>.</li>
+<li><strong>+ Empty node</strong>, name it <code>cpus</code>, and wire it under the root (root’s
+bottom handle to its top handle). Give it <code>#address-cells = &lt;1&gt;</code> and
+<code>#size-cells = &lt;0&gt;</code>.</li>
+<li>Search the library for <code>cortex-a7</code> and add the CPU. Wire it under <code>cpus</code>,
+name it <code>cpu</code> with unit address <code>0</code>, and set <code>device_type = "cpu"</code> and
+<code>reg = &lt;0&gt;</code>.</li>
+</ol>
+<p>Checkpoint: <code>first-board-1-cpu.json</code>.</p>
+<h2 id="2-memory"><a class="header" href="#2-memory">2. Memory</a></h2>
+<ol>
+<li><strong>+ Empty node</strong> under the root, named <code>memory</code>.</li>
+<li>Set the unit address to <code>40000000</code>, and the properties
+<code>device_type = "memory"</code> and <code>reg = &lt;0x40000000 0x20000000&gt;</code> (512 MiB at
+0x40000000).</li>
+</ol>
+<p>Checkpoint: <code>first-board-2-memory.json</code>.</p>
+<h2 id="3-a-clock"><a class="header" href="#3-a-clock">3. A clock</a></h2>
+<ol>
+<li>Search for <code>fixed-clock</code> and add it under the root, named <code>oscillator</code>
+with the label <code>osc24m</code>.</li>
+<li>Its required properties come pre-filled: set <code>clock-frequency</code> to
+<code>24000000</code> and keep <code>#clock-cells = &lt;0&gt;</code>.</li>
+</ol>
+<p>Checkpoint: <code>first-board-3-clock.json</code>.</p>
+<h2 id="4-interrupt-controller-and-uart"><a class="header" href="#4-interrupt-controller-and-uart">4. Interrupt controller and UART</a></h2>
+<ol>
+<li>Search for <code>cortex-a7-gic</code>, add it under the root as
+<code>interrupt-controller@1c81000</code> with the label <code>gic</code>. Set
+<code>reg = &lt;0x01c81000 0x1000&gt;, &lt;0x01c82000 0x2000&gt;</code> and
+<code>#interrupt-cells = &lt;3&gt;</code>; <code>interrupt-controller</code> is a toggle.</li>
+<li>Search for <code>ns16550a</code>, add it under the root as <code>serial@1c28000</code> with the
+label <code>uart0</code>, and set <code>reg = &lt;0x01c28000 0x400&gt;</code>, <code>reg-shift = &lt;2&gt;</code>,
+<code>reg-io-width = &lt;4&gt;</code>.</li>
+<li>Wire the UART’s <code>clocks</code> port to the oscillator, and its
+<code>interrupt-parent</code> port to the interrupt controller.</li>
+<li>Set <code>interrupts = &lt;0 0 4&gt;</code> on the UART: shared peripheral interrupt
+(<code>GIC_SPI</code> is 0) number 0, level high (<code>IRQ_TYPE_LEVEL_HIGH</code> is 4), the
+three cells <code>#interrupt-cells</code> asks for.</li>
+<li>So that the kernel prints to this UART: add empty nodes <code>aliases</code> with
+<code>serial0 = &amp;uart0</code>, and <code>chosen</code> with <code>stdout-path = "serial0:115200n8"</code>.</li>
+</ol>
+<p><strong>Interrupts</strong> in the toolbar should now show the UART under <code>gic</code>.</p>
+<p>Checkpoint: <code>first-board-4-uart.json</code>.</p>
+<h2 id="5-an-led-on-a-gpio"><a class="header" href="#5-an-led-on-a-gpio">5. An LED on a GPIO</a></h2>
+<ol>
+<li>Search for <code>opencores,gpio</code>, add it under the root as <code>gpio@1c20800</code>
+with the label <code>gpio</code>, and set <code>reg = &lt;0x01c20800 0x1&gt;, &lt;0x01c20801 0x1&gt;</code>
+and <code>reg-names = "dat", "dirout"</code>. <code>gpio-controller</code> is a toggle and
+<code>#gpio-cells</code> is <code>2</code>.</li>
+<li>Search for <code>gpio-leds</code> and add it under the root, named <code>leds</code>.</li>
+<li><strong>+ Empty node</strong> under <code>leds</code>, named <code>led-0</code>, with
+<code>default-state = "off"</code>.</li>
+<li>Wire the LED’s right handle to the GPIO controller: the property becomes
+<code>gpios</code>. Click the new edge and, in the specifier editor, set line <code>0</code>
+and pick <code>GPIO_ACTIVE_HIGH</code> (the names come from the kernel’s
+<code>dt-bindings</code> headers).</li>
+</ol>
+<p>Checkpoint: <code>first-board-5-led.json</code>.</p>
+<h2 id="6-check-and-build"><a class="header" href="#6-check-and-build">6. Check and build</a></h2>
+<ul>
+<li>The <strong>Schema check</strong> panel should be empty. If it lists something, click
+the problem to jump to the node, and compare with the checkpoint.</li>
+<li><strong>Address map</strong> shows the four devices on the root bus with no overlaps.</li>
+<li><strong>Save…</strong> the design, then <strong>Build .dtb</strong> (Ctrl+B): <code>board.dtb</code> appears
+next to <code>board.json</code>, and the Build panel shows no warnings.</li>
+</ul>
+<p>You have a devicetree that the kernel can boot with. From here, try
+<strong>Board view</strong> to place the devices on a photo of your board, or
+<strong>Export .dts…</strong> to see the source in kernel style.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="the-window"><a class="header" href="#the-window">The window</a></h1>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/window.png" alt="The DesignTree window"><span class="img-wrapper"><img src="images/window.png" alt="The DesignTree window"></span></label></p>
+<ul>
+<li><strong>Tabs</strong> at the top hold the open designs. A dot marks unsaved changes;
+closing a tab or the window with unsaved changes asks first.</li>
+<li><strong>Toolbar</strong>: New, New from SoC…, New overlay…, Open…, Import .dts…, Save…,
+Export .dts…, Build .dtb, Kernels…, dtc path…, and the views Interrupts,
+Address map and Board view. The second row has Commands… (the command
+palette), Undo, Redo, Auto layout, Group and Ungroup.</li>
+<li><strong>Library</strong> (left): the elements of the loaded kernel checkout, with
+search, categories, favorites and recent elements.</li>
+<li><strong>Canvas</strong> (middle): the devicetree as a graph. Zoom with the mouse wheel
+or the buttons at the bottom left; the minimap at the bottom right shows
+where you are.</li>
+<li><strong>Inspector</strong> (right, top): the selected node, reference or group.</li>
+<li><strong>DTS source</strong> (right, bottom): the devicetree source of the design,
+editable, kept in sync with the canvas. Under it, the Schema check and
+Build panels list problems when there are any.</li>
+</ul>
+<p>To open a design at start, pass its path: <code>designtree-app board.json</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="kernel-checkouts-and-the-library"><a class="header" href="#kernel-checkouts-and-the-library">Kernel checkouts and the library</a></h1>
+<p>The library lists every device the kernel’s binding schemas describe:
+thousands of schemas and tens of thousands of compatible strings. It comes
+only from a kernel checkout on your machine (see
+<a href="#first-start-a-kernel-checkout">First start</a> for a sparse one).</p>
+<h2 id="adding-a-checkout"><a class="header" href="#adding-a-checkout">Adding a checkout</a></h2>
+<p>Press <strong>Kernels…</strong>, then <strong>Add checkout…</strong> and pick the top directory of the
+kernel tree. The list shows each checkout with its version, read from the
+kernel’s <code>Makefile</code>. <strong>Use</strong> loads one; the first index of a checkout takes a
+few seconds and is cached, so the next start is fast. The cache is rebuilt
+when the bindings change. <strong>Load kernel bindings…</strong> in the library does the
+same for a checkout not in the list yet.</p>
+<p>The design records the kernel version it was built against. Opening it while
+a different version is loaded shows a warning above the canvas, because
+bindings may differ between kernels.</p>
+<h2 id="finding-an-element"><a class="header" href="#finding-an-element">Finding an element</a></h2>
+<p>Type in the search box: the search is fuzzy over the compatible string, the
+vendor and the schema title, ranked by match quality, so <code>bme280</code>, <code>bosch pressure</code> and <code>i2c eeprom</code> all work. Narrow it with the category list.
+The star next to an element adds it to <strong>Favorites</strong>; elements you add show
+up under <strong>Recent</strong>. Both are kept between sessions.</p>
+<h2 id="adding-a-node"><a class="header" href="#adding-a-node">Adding a node</a></h2>
+<p>Click an element, or drag it to the canvas. The new node comes with its
+<code>compatible</code>, a <code>reg</code> placeholder, <code>status = "okay"</code> and the properties its
+schema requires, filled with defaults where the schema has them. Properties
+that still need a value are marked as to-do in the inspector.</p>
+<p><strong>+ Empty node</strong> adds a node without a compatible, for nodes the schemas do
+not describe (<code>chosen</code>, <code>aliases</code>, <code>memory</code>).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="building-a-design"><a class="header" href="#building-a-design">Building a design</a></h1>
+<p><strong>New</strong> (Ctrl+N) starts an empty design with a root node <code>/</code>. Everything
+else hangs below it.</p>
+<h2 id="nodes-and-the-tree"><a class="header" href="#nodes-and-the-tree">Nodes and the tree</a></h2>
+<p>Each node shows its label and name (<code>uart0: serial@10000000</code>), its first
+compatible string and how many properties it has. To put a node under
+another one, drag from the parent’s <strong>bottom</strong> handle to the child’s <strong>top</strong>
+handle; a node has one parent. <strong>Move selected node under…</strong> in the command
+palette does the same from the keyboard.</p>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<p>Phandle properties are edges from the consumer’s <strong>right</strong> handle to the
+provider’s <strong>left</strong> handle. When the schemas know the node, its handles are
+named ports: a UART shows <code>clocks</code>, a clock controller <code>clock</code>, a GPIO
+controller <code>gpio</code>. Only matching ports connect, and the edge writes the
+property (<code>clocks = &lt;&amp;osc24m&gt;;</code>), with as many specifier cells as the
+provider’s <code>#clock-cells</code> asks for. Without a schema, the property name is
+guessed from the target’s <code>#…-cells</code> and can be edited in the inspector.</p>
+<p>Click an edge to edit it in the inspector: the property name, and the
+specifier cells with names from the kernel’s <code>dt-bindings</code> headers, such as
+<code>GPIO_ACTIVE_LOW</code> or <code>IRQ_TYPE_LEVEL_HIGH</code>.</p>
+<h2 id="groups"><a class="header" href="#groups">Groups</a></h2>
+<p>Select nodes (Shift+drag selects an area) and press <strong>Group</strong> (Ctrl+G) to
+frame them, for example “SoC peripherals”. Groups are only visual and never
+reach the devicetree. The triangle in a group’s header collapses it into a
+block, like a Simulink subsystem: edges that cross its border become ports
+on the block. <strong>Ungroup</strong> (Ctrl+Shift+G) removes the frame.</p>
+<h2 id="layout"><a class="header" href="#layout">Layout</a></h2>
+<p><strong>Auto layout</strong> (Ctrl+L) arranges the tree from the root down, with a group
+for each bus. Imported designs are laid out on import. Positions are saved in
+the design file.</p>
+<h2 id="saving"><a class="header" href="#saving">Saving</a></h2>
+<p><strong>Save…</strong> (Ctrl+S) writes the design file (<code>.json</code>). <strong>Export .dts…</strong> writes
+the devicetree source: kernel style, tabs, a blank line between properties
+and subnodes, imported nodes in their original order.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="the-inspector"><a class="header" href="#the-inspector">The inspector</a></h1>
+<p>Select a node to edit it in the inspector.</p>
+<ul>
+<li><strong>Name</strong>, <strong>Unit address</strong>, <strong>Label</strong> and <strong>Compatible</strong> (comma separated)
+come first.</li>
+<li><strong>Binding properties</strong>: with a kernel checkout loaded, the properties of
+the node’s schema, required ones first and marked with <code>*</code>. Each has an
+input for its type: a dropdown for an enum, a toggle for a boolean, a
+number list for a cell array, text for strings. Hover a property for the
+schema’s description. Required properties without a value are marked as
+to-do.</li>
+<li><strong>Other properties</strong> (or <strong>Properties</strong> without a schema): anything the schema does not describe stays
+editable as raw devicetree values, so nothing is lost.</li>
+</ul>
+<p>Select a reference edge to change its property name and specifier cells;
+select a group to rename it.</p>
+<h2 id="inherited-nodes"><a class="header" href="#inherited-nodes">Inherited nodes</a></h2>
+<p>After importing a board file, nodes defined in an included <code>.dtsi</code> have a
+dashed border and show the file they come from. They are read-only so that
+an accidental edit does not change the SoC: press <strong>Override</strong> to edit one.
+Its changes are exported as a <code>&amp;label { }</code> block in your board file, and
+deleting it exports <code>/delete-node/</code>. Inherited nodes cannot move to another
+parent.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="importing-board-files"><a class="header" href="#importing-board-files">Importing board files</a></h1>
+<p><strong>Import .dts…</strong> opens existing devicetree source: a kernel board file, a
+vendor BSP file or anything <code>dtc</code> accepts.</p>
+<ul>
+<li><code>#include</code> of <code>.dtsi</code> files and <code>dt-bindings</code> headers is resolved, and C
+macros such as <code>GPIO_ACTIVE_LOW</code> and <code>IRQ_TYPE_LEVEL_HIGH</code> are expanded.
+Inside a kernel tree the kernel’s include directories are found
+automatically.</li>
+<li>For safety, includes are only read from the file’s own directory, its
+kernel tree and the include directories you configure; nothing else on
+the disk is opened.</li>
+<li>Labels, phandle references (<code>&amp;x</code>, <code>&lt;&amp;x 1 2&gt;</code>), <code>/delete-node/</code>,
+<code>/delete-property/</code> and <code>&amp;label { }</code> overrides are all understood.
+References become reference edges.</li>
+<li>Parse errors show the file, line and column.</li>
+</ul>
+<h2 id="board-files-stay-board-files"><a class="header" href="#board-files-stay-board-files">Board files stay board files</a></h2>
+<p>A board file that includes a SoC <code>.dtsi</code> is kept as one. The included nodes
+appear as <a href="#inherited-nodes">inherited</a>, and exporting writes
+the same includes followed by only your board’s changes as overrides. An
+unmodified import compiles to the same <code>.dtb</code> as the original, and the text
+stays close to it, so your diffs stay small.</p>
+<p>When a file cannot be layered (an include inside a node, or after the board
+nodes), the design is imported flat instead.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="boards-from-a-soc-and-overlays"><a class="header" href="#boards-from-a-soc-and-overlays">Boards from a SoC and overlays</a></h1>
+<h2 id="new-board-from-a-soc"><a class="header" href="#new-board-from-a-soc">New board from a SoC</a></h2>
+<p><strong>New from SoC…</strong> lists the SoC <code>.dtsi</code> files of the loaded kernel tree,
+filterable by architecture and vendor. Pick one and the new design includes
+it: the SoC’s nodes are <a href="#inherited-nodes">inherited</a>, and you
+only add and override what your board has, as in a kernel board file.</p>
+<h2 id="overlays"><a class="header" href="#overlays">Overlays</a></h2>
+<p><strong>New overlay…</strong> starts an overlay (<code>.dtso</code>) against a base: a design file
+or a board <code>.dts</code>. Every node of the base is inherited. Add nodes and
+override base nodes as usual; the export is <code>/plugin/</code> source with one
+<code>&amp;label { }</code> fragment per changed node, and <strong>Build .dtb</strong> produces a
+<code>.dtbo</code>.</p>
+<p>The DTS source panel switches between <strong>Overlay</strong>, the overlay source, and
+<strong>Applied</strong>, the base with the overlay applied, to check the result. Some
+changes cannot be expressed by an overlay (deleting a base node, for
+example); they are reported as problems. The overlay’s source is read-only
+in the editor.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="editing-the-dts-source"><a class="header" href="#editing-the-dts-source">Editing the DTS source</a></h1>
+<p>The DTS source panel shows the design as devicetree source, with syntax
+highlighting, and you can edit it. A short pause after you type, the text is
+parsed and the canvas follows; edits on the canvas update the text. Nodes
+keep their place on the canvas when you change them in the text.</p>
+<p>Selection follows both ways: selecting a node scrolls the text to it, and
+moving the cursor into a node’s block selects the node. While the text does
+not parse, the error is shown and the canvas keeps the last valid design.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="checks-and-problems"><a class="header" href="#checks-and-problems">Checks and problems</a></h1>
+<p>DesignTree checks a design at three levels while you edit.</p>
+<ul>
+<li><strong>Structure</strong>: a missing or second root, a node with two parents or
+none, duplicate labels, references to nodes that do not exist. These block <strong>Build .dtb</strong> until fixed.</li>
+<li><strong>Schema check</strong>: with a kernel checkout loaded, every node is checked
+against its binding schemas, like <code>make dtbs_check</code>: required properties,
+types, enums and constants, properties the schema does not allow, and
+conditions on the compatible. Problems are marked on the nodes and listed
+in the <strong>Schema check</strong> panel.</li>
+<li><strong>dtc</strong>: warnings and errors from building the <code>.dtb</code> (see
+<a href="#building-the-dtb">Building the .dtb</a>).</li>
+</ul>
+<p>Click a problem in a panel to select its node on the canvas.</p>
+<p>The address map and interrupt views add their own checks: overlapping
+<code>reg</code> regions and devices with no usable interrupt parent (see
+<a href="#views-interrupts-address-map-board">Views</a>).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="building-the-dtb"><a class="header" href="#building-the-dtb">Building the .dtb</a></h1>
+<p><strong>Build .dtb</strong> (Ctrl+B) compiles the design with <code>dtc</code>. A saved design is
+built next to its file (<code>board.json</code> → <code>board.dtb</code>, an overlay to <code>.dtbo</code>);
+an unsaved one asks where to write it.</p>
+<p><code>dtc</code> is taken from <code>PATH</code>. If it is elsewhere, set it with <strong>dtc path…</strong>,
+or start the app with <code>DESIGNTREE_DTC=/path/to/dtc</code>. When <code>dtc</code> is missing,
+the Build panel says so.</p>
+<p>The <strong>Build</strong> panel lists <code>dtc</code>’s errors and warnings. Those about a node are
+attached to it on the canvas; click one to select the node. <code>dtc</code> runs
+without a shell and reads the source from standard input.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="views-interrupts-address-map-board"><a class="header" href="#views-interrupts-address-map-board">Views: interrupts, address map, board</a></h1>
+<h2 id="interrupt-tree"><a class="header" href="#interrupt-tree">Interrupt tree</a></h2>
+<p><strong>Interrupts</strong> shows each interrupt controller with the devices wired to it,
+following <code>interrupt-parent</code>, <code>interrupts</code> and <code>interrupts-extended</code>.
+Devices without an interrupt parent, and interrupt specifiers that do not
+fit their controller, are flagged.</p>
+<h2 id="address-map"><a class="header" href="#address-map">Address map</a></h2>
+<p><strong>Address map</strong> shows the <code>reg</code> regions of each bus, translated to CPU
+addresses through <code>ranges</code>, <code>#address-cells</code> and <code>#size-cells</code>. Overlapping
+regions and regions outside their bus’s ranges are highlighted.</p>
+<h2 id="board-view"><a class="header" href="#board-view">Board view</a></h2>
+<p><strong>Board view</strong> is a second canvas over the same design, for where devices
+sit on the PCB.</p>
+<ul>
+<li><strong>Background…</strong> puts a board photo or a schematic export behind the
+devices; <strong>Clear</strong> removes it.</li>
+<li>Drag devices from <strong>Not on the board</strong> onto the board and place them as on
+the PCB. Selection is shared with the graph. Positions are saved in the
+design file and never reach the devicetree.</li>
+<li><strong>Connections</strong> draws the links between placed devices: I²C and SPI buses,
+other buses, GPIOs, interrupts and other references, each with its own
+color and a checkbox to show or hide it. A link to a device that is not
+placed is drawn to its nearest placed ancestor.</li>
+<li><strong>Connectors</strong> adds pin headers: the 40-pin Raspberry Pi layout, a
+mikroBUS socket, or a single- or dual-row header with any number of pins.
+Click a pin to name it, mark it as power or ground, and map it to a SoC pad
+(a GPIO line or a pinctrl group). Two devices claiming the same pad are
+flagged as a conflict.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="editing-faster"><a class="header" href="#editing-faster">Editing faster</a></h1>
+<h2 id="undo-and-redo"><a class="header" href="#undo-and-redo">Undo and redo</a></h2>
+<p>Every change can be undone: nodes, edges, properties, groups, layout and
+text edits. Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes, at least 200 steps
+back.</p>
+<h2 id="copy-and-paste"><a class="header" href="#copy-and-paste">Copy and paste</a></h2>
+<p>Ctrl+C copies the selected nodes with their subtrees; Ctrl+V pastes them
+under the selected node, also into another tab. Labels are renamed when they
+would clash, and references between copied nodes are kept.</p>
+<h2 id="tabs"><a class="header" href="#tabs">Tabs</a></h2>
+<p>Each design has its own tab with its own undo history. Ctrl+Tab and
+Ctrl+Shift+Tab switch tabs, Ctrl+W closes one, middle-click closes the tab
+under the mouse.</p>
+<h2 id="command-palette"><a class="header" href="#command-palette">Command palette</a></h2>
+<p><strong>Commands…</strong> or Ctrl+K opens the command palette: type part of a command and
+press Enter. It has everything in the toolbar plus <strong>Add empty node</strong>,
+<strong>Connect selected node to…</strong>, <strong>Move selected node under…</strong>, <strong>Fit the
+design in view</strong> and <strong>Check for updates now</strong>.</p>
+<h2 id="keyboard-shortcuts"><a class="header" href="#keyboard-shortcuts">Keyboard shortcuts</a></h2>
+<p>F1 lists them in the app.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keys</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>Ctrl+K</td><td>Command palette</td></tr>
+<tr><td>Ctrl+N</td><td>New design</td></tr>
+<tr><td>Ctrl+O</td><td>Open design</td></tr>
+<tr><td>Ctrl+S</td><td>Save design</td></tr>
+<tr><td>Ctrl+B</td><td>Build .dtb</td></tr>
+<tr><td>Ctrl+Z</td><td>Undo</td></tr>
+<tr><td>Ctrl+Shift+Z, Ctrl+Y</td><td>Redo</td></tr>
+<tr><td>Ctrl+C / Ctrl+V</td><td>Copy / paste nodes</td></tr>
+<tr><td>Ctrl+G</td><td>Group selection</td></tr>
+<tr><td>Ctrl+Shift+G</td><td>Ungroup</td></tr>
+<tr><td>Ctrl+L</td><td>Auto layout</td></tr>
+<tr><td>Ctrl+Tab</td><td>Next tab (Ctrl+Shift+Tab: previous)</td></tr>
+<tr><td>Ctrl+W</td><td>Close the tab</td></tr>
+<tr><td>Delete</td><td>Delete the selection</td></tr>
+<tr><td>Shift+drag</td><td>Select an area</td></tr>
+<tr><td>F1</td><td>Keyboard shortcuts</td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="command-line"><a class="header" href="#command-line">Command line</a></h1>
+<p>The <code>designtree</code> command (installed with the Arch package, or
+<code>cargo build --release -p designtree-cli</code>) works on the same files as the
+app, for scripts and CI. <code>designtree &lt;command&gt; --help</code> describes the options.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Does</th></tr>
+</thead>
+<tbody>
+<tr><td><code>import board.dts -o board.json</code></td><td>Import devicetree source into a design (<code>--linux &lt;tree&gt;</code>, <code>-I &lt;dir&gt;</code> for includes)</td></tr>
+<tr><td><code>export board.json</code></td><td>Write devicetree source; a layered import becomes a board file again, <code>--flatten</code> writes the whole tree</td></tr>
+<tr><td><code>validate board.json</code></td><td>Structural checks</td></tr>
+<tr><td><code>check board.json --linux &lt;tree&gt;</code></td><td>Schema check like <code>make dtbs_check</code>; also takes <code>.dts</code> and <code>.dtb</code></td></tr>
+<tr><td><code>overlay base.json -o overlay.json</code></td><td>Start an overlay against a design or a <code>.dts</code></td></tr>
+<tr><td><code>interrupts board.json</code></td><td>Print the interrupt tree and its problems</td></tr>
+<tr><td><code>address-map board.json</code></td><td>Print the address map, overlaps and unmapped regions</td></tr>
+<tr><td><code>pins board.json</code></td><td>Print connector pins and who claims them; fails on a conflict</td></tr>
+<tr><td><code>layout board.json -o board.json</code></td><td>Auto layout</td></tr>
+<tr><td><code>index &lt;tree&gt; -o catalog.json</code></td><td>Build the element library from a kernel tree (<code>--stats</code> for counts)</td></tr>
+<tr><td><code>bench</code></td><td>Time the backend on a generated 1,000-node board</td></tr>
+</tbody>
+</table>
+</div>
+<p>A typical CI step for a board kept as a design file:</p>
+<pre><code class="language-sh">designtree validate board.json
+designtree check board.json --linux ~/linux
+designtree export board.json &gt; board.dts
+dtc -I dts -O dtb -o board.dtb board.dts
+</code></pre>
+<p>The export of a layered board file still has its <code>#include</code> lines; build
+it like the kernel does (<code>cpp</code>, then <code>dtc</code>), or export with <code>--flatten</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
+<p><strong>The window closes at start on Wayland</strong> with <code>Error 71 (Protocol error)</code>.
+DesignTree turns off WebKitGTK’s DMA-BUF renderer on Linux by itself; if you
+start it with <code>WEBKIT_DISABLE_DMABUF_RENDERER=0</code>, drop that.</p>
+<p><strong>The library is empty.</strong> No kernel checkout is loaded: see
+<a href="#kernel-checkouts-and-the-library">Kernel checkouts</a>. The checkout needs
+<code>Documentation/devicetree/bindings</code>.</p>
+<p><strong>“Bindings may differ”</strong> above the canvas: the design was made against
+another kernel version than the loaded one. Pick the matching checkout under
+<strong>Kernels…</strong>, or carry on and check the Schema check panel.</p>
+<p><strong>Build .dtb says dtc is missing.</strong> Install it (<code>dtc</code> on Arch,
+<code>device-tree-compiler</code> on Debian and Ubuntu) or point <strong>dtc path…</strong> at it.</p>
+<p><strong>Build .dtb is greyed out.</strong> The design has structural errors; the DTS
+source panel lists them.</p>
+<p><strong>An include is not found when importing.</strong> Includes are only read from the
+file’s directory, its kernel tree and the configured include directories.
+Import from inside the kernel tree, or pass <code>-I &lt;dir&gt;</code> to <code>designtree import</code>.</p>
+<p><strong>The first start with a checkout is slow.</strong> Its binding schemas are
+indexed once and cached; the next start reads the cache.</p>
+<p>Bugs and questions: <a href="https://github.com/MauriLan91/designtree/issues">GitHub issues</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
