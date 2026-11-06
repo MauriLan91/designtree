@@ -6,6 +6,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { inTauri } from "./backend";
 
 const LATEST = "https://api.github.com/repos/MauriLan91/designtree/releases/latest";
+// Only this repository's release pages are opened from the notice.
+const RELEASES = "https://github.com/MauriLan91/designtree/releases/";
 const OFF_KEY = "designtree.updates.off";
 const LAST_KEY = "designtree.updates.last";
 const SKIP_KEY = "designtree.updates.skip";
@@ -69,7 +71,7 @@ async function latestRelease(force: boolean): Promise<Update | null> {
   if (!response.ok && response.status !== 404) throw new Error(`GitHub answered ${response.status}`);
   const body = response.ok ? await response.json() : null;
   const latest: Update | null =
-    body && typeof body.tag_name === "string" && typeof body.html_url === "string"
+    body && typeof body.tag_name === "string" && typeof body.html_url === "string" && body.html_url.startsWith(RELEASES)
       ? { version: body.tag_name.replace(/^v/, ""), url: body.html_url }
       : null;
   write(LAST_KEY, { at: Date.now(), latest } satisfies LastCheck);
