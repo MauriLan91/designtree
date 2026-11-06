@@ -2,14 +2,14 @@
 
 ## Interrupt tree
 
-**View › Interrupt tree** shows each interrupt controller with the devices wired to it,
+**View › Interrupt tree** (the Interrupts tab of the bottom panel) shows each interrupt controller with the devices wired to it,
 following `interrupt-parent`, `interrupts` and `interrupts-extended`.
 Devices without an interrupt parent, and interrupt specifiers that do not
 fit their controller, are flagged.
 
 ## Address map
 
-**View › Address map** shows the `reg` regions of each bus, translated to CPU
+**View › Address map** (a tab of the bottom panel) shows the `reg` regions of each bus, translated to CPU
 addresses through `ranges`, `#address-cells` and `#size-cells`. Overlapping
 regions and regions outside their bus's ranges are highlighted.
 

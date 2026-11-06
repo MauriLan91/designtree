@@ -44,9 +44,16 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 
 .app {
   display: grid;
-  grid-template-columns: 260px 1fr 360px;
-  grid-template-rows: auto auto 1fr;
-  grid-template-areas: "bar bar bar" "tabs tabs tabs" "palette canvas side";
+  --rail-w: 28px;
+  /* --library-w, --inspector-w and --panel-h come from the saved layout. */
+  grid-template-columns: var(--library-w, 248px) minmax(0, 1fr) var(--inspector-w, 320px);
+  grid-template-rows: auto auto minmax(0, 1fr) var(--panel-h, 0px) auto;
+  grid-template-areas:
+    "bar bar bar"
+    "tabs tabs tabs"
+    "palette canvas side"
+    "palette panel side"
+    "status status status";
   height: 100%;
 }
 /* An editor's toolbar, canvas and side panel sit in the workspace grid. */
@@ -59,6 +66,8 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
   gap: 2px;
   padding: 4px 8px 0;
   overflow-x: auto;
+  /* The active tab overlaps the border by a pixel; that is no reason to scroll. */
+  overflow-y: hidden;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -195,24 +204,26 @@ textarea { font-family: ui-monospace, "JetBrains Mono", monospace; resize: verti
 /* WebKitGTK's overlay scrollbars only show on hover, so the panels looked
    like they could not scroll. Styled scrollbars are always drawn. */
 .panel::-webkit-scrollbar,
+.dts-editor .cm-scroller::-webkit-scrollbar,
 .binding-list::-webkit-scrollbar { width: 10px; height: 10px; }
 .panel::-webkit-scrollbar-track,
+.dts-editor .cm-scroller::-webkit-scrollbar-track,
 .binding-list::-webkit-scrollbar-track { background: transparent; }
 .panel::-webkit-scrollbar-thumb,
+.dts-editor .cm-scroller::-webkit-scrollbar-thumb,
 .binding-list::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--muted) 45%, transparent);
   border: 2px solid var(--panel);
   border-radius: 5px;
 }
 .panel::-webkit-scrollbar-thumb:hover,
+.dts-editor .cm-scroller::-webkit-scrollbar-thumb:hover,
 .binding-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 10px; }
 .hint { color: var(--muted); margin: 8px 0; }
 .error { color: var(--danger); }
 
 .palette {
-  grid-area: palette;
-  border-right: 1px solid var(--border);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -233,7 +244,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 
 .canvas { grid-area: canvas; position: relative; min-height: 0; }
 
-.side { grid-area: side; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.side { display: flex; flex-direction: column; }
 .inspector { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .inspector label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; flex: 1; }
 .inspector input { color: var(--text); }
@@ -488,3 +499,115 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 }
 .update-notice button { white-space: nowrap; }
 .update-notice .update-close { border: none; background: none; font-size: 16px; padding: 0 6px; }
+
+/* Panes (US-15.3): the library and inspector columns and the bottom panel
+   resize from their inner edge and collapse to a rail. */
+.pane { position: relative; display: flex; min-width: 0; min-height: 0; }
+.library-pane { grid-area: palette; border-right: 1px solid var(--border); }
+.inspector-pane { grid-area: side; border-left: 1px solid var(--border); }
+.pane-body { position: relative; flex: 1; display: flex; min-width: 0; min-height: 0; }
+.pane-body[hidden] { display: none; }
+.pane-body > .panel { flex: 1; min-width: 0; }
+.splitter { position: absolute; z-index: 6; touch-action: none; }
+.splitter-library { top: 0; bottom: 0; right: -4px; width: 7px; cursor: col-resize; }
+.splitter-inspector { top: 0; bottom: 0; left: -4px; width: 7px; cursor: col-resize; }
+.splitter-panel { left: 0; right: 0; top: -4px; height: 7px; cursor: row-resize; }
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--accent);
+  opacity: 0;
+  /* A short delay keeps the line from flashing while the pointer passes over. */
+  transition: opacity 120ms 150ms;
+}
+.splitter-library::after, .splitter-inspector::after { width: 2px; }
+.splitter-panel::after { height: 2px; }
+.splitter:hover::after, .splitter:focus-visible::after, .splitter:active::after { opacity: 1; transition-delay: 0ms; }
+.splitter:focus-visible { outline: none; }
+body.resizing-x, body.resizing-x * { cursor: col-resize !important; user-select: none; }
+body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select: none; }
+.pane-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+}
+.pane-toggle:hover { background: var(--border); color: var(--text); }
+.pane-corner { position: absolute; top: 8px; right: 8px; z-index: 5; }
+.pane-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  background: var(--bg);
+}
+.pane-rail-title {
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bottom-pane { grid-area: panel; flex-direction: column; border-top: 1px solid var(--border); background: var(--panel); }
+.panel-tabs { display: flex; align-items: stretch; gap: 16px; height: 32px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
+.panel-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.panel-tab:hover { color: var(--text); }
+.panel-tab.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.panel-tabs .pane-toggle { align-self: center; }
+.badge { min-width: 16px; padding: 0 5px; border-radius: 8px; background: var(--code); font-size: 11px; line-height: 16px; text-align: center; }
+.spacer { flex: 1; }
+.panel-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; }
+/* The tab already names the view. */
+.panel-body > section > h2:first-child { display: none; }
+.statusbar {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+}
+.statusbar button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+}
+.statusbar button:hover { background: var(--border); color: var(--text); }
+.statusbar > span:last-child { padding: 0 6px; }
+.statusbar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.statusbar .dot.ok { background: #1f8a4c; }
+.statusbar .bad { color: var(--danger); }
+.statusbar .warn { color: var(--ref); }
+.statusbar .count { display: flex; align-items: center; gap: 3px; }

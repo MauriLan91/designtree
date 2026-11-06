@@ -8,7 +8,7 @@ DesignTree checks a design at three levels while you edit.
   against its binding schemas, like `make dtbs_check`: required properties,
   types, enums and constants, properties the schema does not allow, and
   conditions on the compatible. Problems are marked on the nodes and listed
-  in the **Schema check** panel.
+  in the **Problems** tab of the bottom panel.
 - **dtc**: warnings and errors from building the `.dtb` (see
   [Building the .dtb](building.md)).
 

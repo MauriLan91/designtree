@@ -567,6 +567,22 @@ fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) {
     *state.dtc_path.write().unwrap() = path;
 }
 
+/// The dtc to run: the path set in the app, else `DESIGNTREE_DTC`, else
+/// `None` for `dtc` from `PATH`.
+fn dtc_program(state: &AppState) -> Option<PathBuf> {
+    state.dtc_path.read().unwrap().clone().or_else(|| {
+        std::env::var_os("DESIGNTREE_DTC")
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from)
+    })
+}
+
+/// The version of the dtc builds use, or `None` when it cannot be run.
+#[tauri::command(async)]
+fn dtc_version(state: State<AppState>) -> Option<String> {
+    designtree_core::dtc::dtc_version(dtc_program(&state).as_deref()).ok()
+}
+
 /// Compiles the whole tree (includes flattened, so no preprocessor is
 /// needed) to a `.dtb` at `output`, or an overlay to a `.dtbo`. A failed build is not an `Err`: dtc's
 /// errors come back as problems so the UI can show them on the nodes.
@@ -592,11 +608,7 @@ fn build_dtb(
     } else {
         designtree_core::to_dts_flat_mapped(&design).map_err(joined)?
     };
-    let dtc = state.dtc_path.read().unwrap().clone().or_else(|| {
-        std::env::var_os("DESIGNTREE_DTC")
-            .filter(|p| !p.is_empty())
-            .map(PathBuf::from)
-    });
+    let dtc = dtc_program(&state);
     match designtree_core::dtc::compile_dtb(&dts, &output, dtc.as_deref()) {
         Ok(built) => Ok(BuildResult {
             output: Some(output),
@@ -630,6 +642,7 @@ pub fn run() {
             add_kernel,
             remove_kernel,
             search_bindings,
+            dtc_version,
             get_bindings,
             bindings_for_compatibles,
             search_dt_macros,
