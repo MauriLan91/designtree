@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DesignTree</title>
+<meta name="description" content="A graphical editor for Linux devicetrees, with the element library built from your kernel's binding schemas.">
+<link rel="icon" href="images/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a split hero (claim and install command beside the editor), then
+   three feature rows alternating screenshot and text, then install steps.
+   Colors are the app's own: canvas grey, child-edge blue, phandle orange. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --line: #dfe2e8;
+  --fg: #1b1f24;
+  --muted: #5d6573;
+  --accent: #2563eb;
+  --ref: #c56a04;
+  --code-bg: #eef0f4;
+  --on-accent: #ffffff;
+  --shadow: 0 1px 2px rgb(20 30 50 / 0.06), 0 12px 32px rgb(20 30 50 / 0.10);
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418; --surface: #1b1e23; --line: #2c3038; --fg: #e7e9ec; --muted: #9aa1ad;
+    --accent: #6ea8ff; --ref: #f5a524; --code-bg: #20242a; --on-accent: #0b1220;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121418; --surface: #1b1e23; --line: #2c3038; --fg: #e7e9ec; --muted: #9aa1ad;
+  --accent: #6ea8ff; --ref: #f5a524; --code-bg: #20242a; --on-accent: #0b1220;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 17px/1.6 var(--body);
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+code, pre { font-family: var(--mono); font-size: 0.86em; }
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+
+header.top .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 20px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font: 600 20px/1 var(--display); color: var(--fg); text-decoration: none; }
+.brand img { width: 28px; height: 28px; border-radius: 6px; }
+nav.links { display: flex; gap: 22px; flex-wrap: wrap; font-size: 15px; }
+nav.links a { color: var(--muted); text-decoration: none; }
+nav.links a:hover { color: var(--fg); }
+
+.hero .wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 48px;
+  align-items: center;
+  padding-block: 40px 72px;
+}
+.hero h1 {
+  font: 600 clamp(2.3rem, 4.6vw, 3.6rem)/1.05 var(--display);
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+/* A phandle reference, drawn the way the canvas draws one. */
+.ref {
+  color: var(--ref);
+  background-image: linear-gradient(90deg, var(--ref) 60%, transparent 0);
+  background-size: 10px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  padding-bottom: 2px;
+}
+.lede { color: var(--muted); font-size: 1.12rem; max-width: 34em; margin: 0 0 28px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.button {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 18px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none;
+  border: 1px solid var(--line); color: var(--fg); background: var(--surface);
+}
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.button:hover { filter: brightness(1.06); }
+.shot {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.facts .wrap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  padding-block: 28px;
+  border-block: 1px solid var(--line);
+}
+.fact b { display: block; font: 600 1.9rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 15px; }
+
+section.feature .wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 48px;
+  align-items: center;
+  padding-block: 64px;
+}
+section.feature.flip .wrap > .shot { order: 2; }
+.eyebrow {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 12px;
+}
+h2 { font: 600 clamp(1.6rem, 2.8vw, 2.15rem)/1.15 var(--display); margin: 0 0 16px; text-wrap: balance; }
+.feature p { margin: 0 0 14px; max-width: 34em; }
+.feature p.muted { color: var(--muted); }
+
+pre.dts {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.55;
+  tab-size: 4;
+}
+.dts .l { color: var(--accent); }
+.dts .r { color: var(--ref); }
+.dts .c { color: var(--muted); }
+
+section.install { background: var(--surface); border-top: 1px solid var(--line); }
+section.install .wrap { padding-block: 64px; }
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 28px;
+  counter-reset: step;
+}
+.step { min-width: 0; }
+.step h3 { font: 600 1.1rem/1.3 var(--display); margin: 0 0 10px; }
+.step h3::before {
+  counter-increment: step;
+  content: counter(step);
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px; margin-right: 10px;
+  border: 1.5px solid var(--accent); border-radius: 50%;
+  font: 500 13px/1 var(--mono); color: var(--accent);
+}
+.step p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+.step pre { margin: 0; padding: 12px 14px; background: var(--code-bg); border-radius: 8px; overflow-x: auto; white-space: pre; }
+.note { margin-top: 28px; color: var(--muted); font-size: 15px; max-width: 48em; }
+
+footer .wrap {
+  display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between;
+  padding-block: 28px; color: var(--muted); font-size: 14px;
+}
+footer a { color: var(--muted); }
+
+@media (max-width: 860px) {
+  .hero .wrap, section.feature .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  section.feature.flip .wrap > .shot { order: 0; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .facts .wrap { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  nav.links { gap: 14px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero .shot { animation: rise 0.6s ease-out both; }
+  @keyframes rise { from { transform: translateY(10px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="images/icon.svg" alt="">DesignTree</a>
+    <nav class="links" aria-label="Site">
+      <a href="guide/tutorial.html">Tutorial</a>
+      <a href="guide/">User guide</a>
+      <a href="https://github.com/MauriLan91/designtree/releases">Releases</a>
+      <a href="https://github.com/MauriLan91/designtree">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>Draw the board. Get the <span class="ref">devicetree</span>.</h1>
+        <p class="lede">DesignTree is a node editor for Linux devicetrees. Place devices on a canvas,
+          wire clocks, interrupts and GPIOs between them, and export kernel-style <code>.dts</code>
+          or a <code>.dtb</code> built with <code>dtc</code>. The library comes from the binding
+          schemas of your own kernel checkout.</p>
+        <div class="actions">
+          <a class="button primary" href="#install">Install on Linux</a>
+          <a class="button" href="guide/tutorial.html">15-minute tutorial</a>
+        </div>
+      </div>
+      <figure class="shot" style="margin:0">
+        <img src="images/editor.png" width="1400" height="860"
+          alt="The DesignTree editor with Linux 7.3 loaded: the library on the left, an oscillator wired to a UART on the canvas with one schema error flagged, and the UART's binding properties in the inspector.">
+      </figure>
+    </div>
+  </section>
+
+  <section class="facts" aria-label="Measured on Linux 7.3">
+    <div class="wrap">
+      <div class="fact"><b>3,320 / 3,326</b><span>arm and arm64 board files of Linux 7.3 import and export to the same compiled tree</span></div>
+      <div class="fact"><b>5,715</b><span>binding schemas indexed in about a second, with 26,456 compatible strings</span></div>
+      <div class="fact"><b>38,004 / 38,013</b><span>schema properties with a resolved type, all matching dt-schema</span></div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="wrap">
+      <figure class="shot" style="margin:0">
+        <img src="images/address-map.png" width="1400" height="860" loading="lazy"
+          alt="A Radxa ROCK 5B board file opened in DesignTree, with the address map listing overlapping syscon regions and the board file's overrides in the DTS preview.">
+      </figure>
+      <div>
+        <p class="eyebrow">For BSP maintainers</p>
+        <h2>Open the board files you already have</h2>
+        <p><code>#include</code> chains and <code>dt-bindings</code> macros are resolved, the SoC's
+          <code>.dtsi</code> stays a <code>.dtsi</code>, and your changes are written back as
+          <code>&amp;label { }</code> overrides in the original order. The diff stays small.</p>
+        <pre class="dts" aria-label="Exported board file"><span class="c">#include "rk3588-rock-5b.dtsi"</span>
+
+<span class="r">&amp;sdio</span> {
+	status = "okay";
+	no-sd;
+};</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip">
+    <div class="wrap">
+      <figure class="shot" style="margin:0">
+        <img src="images/board-view.png" width="1400" height="860" loading="lazy"
+          alt="The board view: devices placed freely, with I²C, SPI, GPIO and interrupt links drawn between them and a list of connection types to show or hide.">
+      </figure>
+      <div>
+        <p class="eyebrow">For board bring-up</p>
+        <h2>Start from the SoC, add what your board has</h2>
+        <p>Pick a SoC <code>.dtsi</code> from the kernel and describe only your board. Ports know
+          what they connect to: a UART's <code>clocks</code> only takes a clock provider, and the
+          specifier cells offer names like <code>GPIO_ACTIVE_LOW</code>.</p>
+        <p class="muted">The board view places devices over a photo or schematic, draws the buses
+          between them, and maps a 40-pin header to SoC pads with conflicts flagged.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="wrap">
+      <div class="shot">
+        <pre class="dts" style="margin:0;border-radius:0" aria-label="Devicetree source"><span class="l">uart0</span>: serial@1c28000 {
+	compatible = "ns16550a";
+	reg = &lt;0x01c28000 0x400&gt;;
+	interrupt-parent = &lt;<span class="r">&amp;gic</span>&gt;;
+	interrupts = &lt;GIC_SPI 0 IRQ_TYPE_LEVEL_HIGH&gt;;
+	clocks = &lt;<span class="r">&amp;osc24m</span>&gt;;
+	reg-shift = &lt;2&gt;;
+};</pre>
+      </div>
+      <div>
+        <p class="eyebrow">Checked while you type</p>
+        <h2>Schema errors before the build, not after</h2>
+        <p>Every node is checked against its binding schema like <code>make dtbs_check</code>:
+          required properties, types, enums, conditions on the compatible. Problems sit on the
+          node that has them, next to <code>dtc</code>'s own warnings.</p>
+        <p class="muted">Edit the DTS text or the canvas; the other side follows. Undo, copy and
+          paste between tabs, and a command palette cover the rest.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="install" id="install">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2>Arch Linux and Manjaro first</h2>
+      <div class="steps">
+        <div class="step">
+          <h3>Build the package</h3>
+          <p>With <code>makepkg</code>, from the repository:</p>
+          <pre>git clone https://github.com/MauriLan91/designtree.git
+cd designtree/packaging/arch/designtree-git
+makepkg -si</pre>
+        </div>
+        <div class="step">
+          <h3>Get a kernel checkout</h3>
+          <p>The library is built from its binding schemas. A sparse clone is enough:</p>
+          <pre>designtree/scripts/fetch-kernel-dts.sh ~/linux</pre>
+        </div>
+        <div class="step">
+          <h3>Open it in the app</h3>
+          <p>Start DesignTree from the menu, press <b>Kernels…</b>, add <code>~/linux</code> and
+            follow the <a href="guide/tutorial.html">tutorial</a> to a first <code>.dtb</code>.</p>
+        </div>
+      </div>
+      <p class="note">Other distributions: an AppImage and a <code>.deb</code> come with every
+        <a href="https://github.com/MauriLan91/designtree/releases">release</a>, with checksums and
+        signed build provenance. Windows and macOS installers come later; until then, build from
+        source as described in the <a href="guide/installing.html">install guide</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>DesignTree is MIT licensed. Kernel binding schemas keep their own licenses and are read from your checkout, never bundled.</span>
+    <span><a href="guide/">User guide</a> · <a href="https://github.com/MauriLan91/designtree/issues">Issues</a></span>
+  </div>
+</footer>
+</body>
+</html>

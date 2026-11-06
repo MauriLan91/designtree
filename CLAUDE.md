@@ -20,7 +20,8 @@ repository never carries it.
 | `app/src-tauri` | Tauri shell: thin `#[tauri::command]` wrappers over the crates. Keep logic in the crates, not here. |
 | `app/src` | React + React Flow front end. `model.gen.ts` is generated; `model.ts` converts to and from the canvas. |
 | `packaging/` | Linux packages: Arch PKGBUILDs (`arch/`, built in CI by `arch/build.sh`), desktop entry, AppStream metadata and `install.sh` (`linux/`). Releases: `.github/workflows/release.yml` on a `v*` tag. |
-| `docs/` | Architecture, GUI options, backlog, install guide; `docs/guide` is the mdBook user guide, published to GitHub Pages from main. |
+| `docs/` | Architecture, GUI options, backlog, install guide; `docs/guide` is the mdBook user guide. |
+| `site/` | Landing page; published with the guide (under `guide/`) to GitHub Pages from main. |
 
 Dependencies point one way: app and cli use core and bindings; core and
 bindings never use each other or the app.
