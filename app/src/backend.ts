@@ -81,6 +81,9 @@ export const backend = {
   listSocs: () => invoke<SocDtsi[]>("list_socs"),
   newBoard: (soc: string) => invoke<Design>("new_board", { soc }),
   setDtcPath: (path: string | null) => invoke<void>("set_dtc_path", { path }),
+  /** The stored settings, or null; validated by `parseSettings`. */
+  readSettings: () => invoke<unknown>("read_settings"),
+  writeSettings: (settings: object) => invoke<void>("write_settings", { settings }),
   /** The version of the dtc builds use; null when it cannot be run. */
   dtcVersion: () => invoke<string | null>("dtc_version"),
   buildDtb: (design: Design, output: string) => invoke<BuildResult>("build_dtb", { design, output }),

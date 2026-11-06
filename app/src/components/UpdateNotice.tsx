@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { backend } from "../backend";
-import { setUpdateChecks, skipVersion, type Update } from "../updates";
+import { skipVersion, type Update } from "../updates";
 
 type InstallKind = Awaited<ReturnType<typeof backend.installKind>>;
 
@@ -18,10 +18,12 @@ interface Props {
   /** Why a check by hand failed. */
   error?: string;
   onClose: () => void;
+  /** Turns the daily check off in the settings. */
+  onTurnOff: () => void;
 }
 
 /** A floating bar: a newer release exists, and how to get it. */
-export function UpdateNotice({ update, error, onClose }: Props) {
+export function UpdateNotice({ update, error, onClose, onTurnOff }: Props) {
   const [kind, setKind] = useState<InstallKind>("other");
   useEffect(() => {
     backend.installKind().then(setKind, () => setKind("other"));
@@ -52,10 +54,10 @@ export function UpdateNotice({ update, error, onClose }: Props) {
       </button>
       <button
         onClick={() => {
-          setUpdateChecks(false);
+          onTurnOff();
           onClose();
         }}
-        title="Turn back on with “Check for updates now” in the command palette"
+        title="Turn back on in Settings › Updates"
       >
         Don't check
       </button>

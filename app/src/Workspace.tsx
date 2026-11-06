@@ -7,11 +7,12 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, inTauri } from "./backend";
 import { Editor, type DesignSource, type EditorApi, type EditorStatus, type Kernel } from "./App";
-import { KernelSettings } from "./components/KernelSettings";
 import { Palette } from "./components/Palette";
 import { UpdateNotice } from "./components/UpdateNotice";
-import { checkForUpdate, setUpdateChecks, type Update } from "./updates";
-import { loadLayout, saveLayout, type Layout } from "./layout";
+import { checkForUpdate, type Update } from "./updates";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "./settings";
+import type { Section } from "./components/SettingsPanel";
+import { DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./layout";
 import { PaneRail } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 
@@ -42,7 +43,16 @@ export default function Workspace() {
 
   const [requestedKernel, setRequestedKernel] = useState<string | null>(null);
   const [kernel, setKernel] = useState<Kernel | null>(null);
-  const [showKernels, setShowKernels] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<Section | null>(null);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const changeSettings = useCallback((patch: Partial<Settings>) => {
+    setSettings((s) => {
+      const next = { ...s, ...patch };
+      saveSettings(next).catch(() => {});
+      return next;
+    });
+  }, []);
   const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const changeLayout = useCallback((change: (l: Layout) => Layout) => {
@@ -54,16 +64,27 @@ export default function Workspace() {
   }, []);
 
   useEffect(() => {
-    // A failed check at start stays quiet; offline is normal.
-    checkForUpdate().then((u) => u && setUpdate({ update: u }), () => {});
-  }, []);
+    loadSettings().then((s) => {
+      setSettings(s);
+      setSettingsLoaded(true);
+      // The dtc path is checked again by the backend; a stale one is dropped.
+      if (inTauri && s.dtcPath) backend.setDtcPath(s.dtcPath).catch(() => changeSettings({ dtcPath: null }));
+      // A failed check at start stays quiet; offline is normal.
+      checkForUpdate(false, s.updates).then((u) => u && setUpdate({ update: u }), () => {});
+    });
+  }, [changeSettings]);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.theme === "system") delete root.dataset.theme;
+    else root.dataset.theme = settings.theme;
+  }, [settings.theme]);
   const checkUpdatesNow = useCallback(() => {
-    setUpdateChecks(true);
+    changeSettings({ updates: true });
     checkForUpdate(true).then(
       (u) => setUpdate({ update: u }),
       (e) => setUpdate({ update: null, error: String(e?.message ?? e) }),
     );
-  }, []);
+  }, [changeSettings]);
 
   // Callbacks the editors hold on to read the latest state through this.
   const latest = useRef({ tabs, active, statuses });
@@ -257,24 +278,20 @@ export default function Workspace() {
             setStatus={setStatus}
             onOpen={open}
             onNew={newDesign}
-            onKernels={() => setShowKernels(true)}
             onCheckUpdates={checkUpdatesNow}
             layout={layout}
             onLayout={changeLayout}
+            onResetLayout={() => changeLayout(() => DEFAULT_LAYOUT)}
+            settings={settings}
+            settingsLoaded={settingsLoaded}
+            onSettings={changeSettings}
+            settingsSection={settingsSection}
+            onOpenSettings={setSettingsSection}
+            onUseKernel={setRequestedKernel}
           />
         </ReactFlowProvider>
       ))}
-      {showKernels && (
-        <KernelSettings
-          active={kernel?.path ?? null}
-          onUse={(path) => {
-            setShowKernels(false);
-            setRequestedKernel(path);
-          }}
-          onClose={() => setShowKernels(false)}
-        />
-      )}
-      {update && <UpdateNotice {...update} onClose={() => setUpdate(null)} />}
+      {update && <UpdateNotice {...update} onClose={() => setUpdate(null)} onTurnOff={() => changeSettings({ updates: false })} />}
       {closing !== null && (
         <div className="modal-backdrop">
           <div className="modal" role="dialog" aria-label="Unsaved changes">
@@ -327,10 +344,16 @@ interface TabEditorProps {
   setStatus: (id: number, status: EditorStatus) => void;
   onOpen: (source: DesignSource) => void;
   onNew: () => void;
-  onKernels: () => void;
   onCheckUpdates: () => void;
   layout: Layout;
   onLayout: (change: (l: Layout) => Layout) => void;
+  onResetLayout: () => void;
+  settings: Settings;
+  settingsLoaded: boolean;
+  onSettings: (patch: Partial<Settings>) => void;
+  settingsSection: Section | null;
+  onOpenSettings: (section: Section | null) => void;
+  onUseKernel: (path: string) => void;
 }
 
 /** An editor with callbacks bound to its tab. */

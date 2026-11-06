@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboOf, menusOf, pickOf, tooltipOf, type Command } from "./commands";
+import { comboOf, menusOf, pickOf, shortcutClashes, tooltipOf, withShortcuts, type Command } from "./commands";
 
 const cmd = (id: string, extra: Partial<Command> = {}): Command => ({ id, title: id, run: () => {}, ...extra });
 
@@ -59,5 +59,19 @@ describe("tooltipOf", () => {
     expect(tooltipOf(cmd("x", { title: "Empty node", hint: "Add a node with no binding" }))).toBe(
       "Empty node\nAdd a node with no binding",
     );
+  });
+});
+
+describe("withShortcuts", () => {
+  const commands = [cmd("save", { shortcut: "Ctrl+S" }), cmd("undo", { shortcut: "Ctrl+Z" }), cmd("fit")];
+
+  it("applies overrides, removes with an empty one, and leaves fixed commands alone", () => {
+    const out = withShortcuts(commands, { save: "", fit: "Ctrl+Shift+F", undo: "Ctrl+U" }, new Set(["undo"]));
+    expect(out.map((c) => c.shortcut)).toEqual([undefined, "Ctrl+Z", "Ctrl+Shift+F"]);
+  });
+
+  it("finds shortcuts given twice", () => {
+    const out = withShortcuts(commands, { fit: "Ctrl+S" }, new Set());
+    expect([...shortcutClashes(out)]).toEqual([["Ctrl+S", ["save", "fit"]]]);
   });
 });

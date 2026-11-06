@@ -81,6 +81,50 @@ fn write_kernels(app: &AppHandle, kernels: &[PathBuf]) -> Result<(), String> {
     fs::write(file, text).map_err(|e| e.to_string())
 }
 
+/// The user's settings (US-15.5), one JSON object in the app's config
+/// directory. The front end owns their shape and validates what it reads, so
+/// the backend only checks that it stores a small JSON object.
+fn settings_file(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("settings.json"))
+}
+
+/// Far more than any real settings file; a bigger one is refused rather
+/// than written.
+const MAX_SETTINGS_BYTES: usize = 256 * 1024;
+
+/// The stored settings, or `null` when there are none or they do not parse.
+#[tauri::command]
+fn read_settings(app: AppHandle) -> serde_json::Value {
+    settings_file(&app)
+        .ok()
+        .and_then(|file| fs::read_to_string(file).ok())
+        .filter(|text| text.len() <= MAX_SETTINGS_BYTES)
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .filter(serde_json::Value::is_object)
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// Replaces the stored settings. Written to a temporary file and renamed, so
+/// a crash never leaves half a file behind.
+#[tauri::command]
+fn write_settings(settings: serde_json::Value, app: AppHandle) -> Result<(), String> {
+    if !settings.is_object() {
+        return Err("settings must be a JSON object".into());
+    }
+    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    if text.len() > MAX_SETTINGS_BYTES {
+        return Err("settings are too large".into());
+    }
+    let file = settings_file(&app)?;
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = file.with_extension("json.tmp");
+    fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &file).map_err(|e| e.to_string())
+}
+
 /// The absolute path of `path`, when it is a kernel source tree (it has
 /// binding schemas). Registered paths are always in this form, so that one
 /// checkout is not listed twice.
@@ -563,8 +607,16 @@ struct BuildResult {
 
 /// Sets the `dtc` program used by `build_dtb`; `None` goes back to `PATH`.
 #[tauri::command]
-fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) {
+fn set_dtc_path(path: Option<PathBuf>, state: State<AppState>) -> Result<(), String> {
+    // The path comes from the settings file too, so check it names a program
+    // file; it is still run without a shell, with the source on stdin.
+    if let Some(p) = &path {
+        if !p.is_absolute() || !p.is_file() {
+            return Err(format!("`{}` is not a program file", p.display()));
+        }
+    }
     *state.dtc_path.write().unwrap() = path;
+    Ok(())
 }
 
 /// The dtc to run: the path set in the app, else `DESIGNTREE_DTC`, else
@@ -643,6 +695,8 @@ pub fn run() {
             remove_kernel,
             search_bindings,
             dtc_version,
+            read_settings,
+            write_settings,
             get_bindings,
             bindings_for_compatibles,
             search_dt_macros,

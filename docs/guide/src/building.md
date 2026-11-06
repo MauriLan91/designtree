@@ -4,7 +4,7 @@
 built next to its file (`board.json` → `board.dtb`, an overlay to `.dtbo`);
 an unsaved one asks where to write it.
 
-`dtc` is taken from `PATH`. If it is elsewhere, set it with **Tools › Set dtc path…**,
+`dtc` is taken from `PATH`. If it is elsewhere, set it in **Settings › Build** (also **Tools › Set dtc path…**), where it is remembered,
 or start the app with `DESIGNTREE_DTC=/path/to/dtc`. When `dtc` is missing,
 the Build tab of the bottom panel says so.
 

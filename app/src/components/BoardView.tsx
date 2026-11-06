@@ -144,6 +144,8 @@ interface Props {
   onPlace: (positions: Map<string, XYPosition | null>) => void;
   onSelect: (ids: string[]) => void;
   onBoardChange: (board: Board) => void;
+  /** The theme setting, for React Flow's controls. */
+  colorMode: "system" | "light" | "dark";
 }
 
 export function BoardView(props: Props) {
@@ -154,7 +156,7 @@ export function BoardView(props: Props) {
   );
 }
 
-function BoardCanvas({ nodes, edges, board, pinCheck, links, designPath, onPlace, onSelect, onBoardChange }: Props) {
+function BoardCanvas({ nodes, edges, board, pinCheck, links, designPath, onPlace, onSelect, onBoardChange, colorMode }: Props) {
   const { screenToFlowPosition, getViewport } = useReactFlow();
   const devices = useMemo(() => nodes.filter(isDtNode), [nodes]);
   const connectors = board?.connectors ?? NO_CONNECTORS;
@@ -470,7 +472,7 @@ function BoardCanvas({ nodes, edges, board, pinCheck, links, designPath, onPlace
           onEdgeClick={(_, e) => onSelect([e.source, e.target])}
           onNodesChange={onNodesChange}
           nodesConnectable={false}
-          colorMode="system"
+          colorMode={colorMode}
           fitView
           fitViewOptions={{ maxZoom: 1 }}
           minZoom={0.05}

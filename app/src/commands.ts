@@ -78,3 +78,19 @@ export function tooltipOf(c: Command): string {
   const head = c.shortcut ? `${title} (${c.shortcut})` : title;
   return c.hint ? `${head}\n${c.hint}` : head;
 }
+
+/** The commands with the user's shortcut overrides applied; an empty
+ * override removes the shortcut. Commands in `fixed` keep theirs. */
+export function withShortcuts(commands: Command[], overrides: Record<string, string>, fixed: ReadonlySet<string>): Command[] {
+  return commands.map((c) => {
+    if (fixed.has(c.id) || !(c.id in overrides)) return c;
+    return { ...c, shortcut: overrides[c.id] || undefined };
+  });
+}
+
+/** Shortcuts given to more than one command, with those commands' ids. */
+export function shortcutClashes(commands: Command[]): Map<string, string[]> {
+  const by = new Map<string, string[]>();
+  for (const c of commands) if (c.shortcut) by.set(c.shortcut, [...(by.get(c.shortcut) ?? []), c.id]);
+  return new Map([...by].filter(([, ids]) => ids.length > 1));
+}

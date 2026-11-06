@@ -15,5 +15,6 @@
 - [Building the .dtb](building.md)
 - [Views: interrupts, address map, board](views.md)
 - [Editing faster](editing.md)
+- [Settings](settings.md)
 - [Command line](cli.md)
 - [Troubleshooting](troubleshooting.md)

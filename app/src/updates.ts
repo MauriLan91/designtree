@@ -1,6 +1,6 @@
 // Update notice (US-12.2): at most once a day, ask GitHub for the latest
 // published release and compare it with this build. Nothing else is sent,
-// and the check can be turned off from the notice or the command palette.
+// and the check can be turned off from the notice or in Settings › Updates.
 // Updating itself is left to the package manager (or a new AppImage).
 import { getVersion } from "@tauri-apps/api/app";
 import { inTauri } from "./backend";
@@ -8,7 +8,6 @@ import { inTauri } from "./backend";
 const LATEST = "https://api.github.com/repos/MauriLan91/designtree/releases/latest";
 // Only this repository's release pages are opened from the notice.
 const RELEASES = "https://github.com/MauriLan91/designtree/releases/";
-const OFF_KEY = "designtree.updates.off";
 const LAST_KEY = "designtree.updates.last";
 const SKIP_KEY = "designtree.updates.skip";
 const DAY = 24 * 60 * 60 * 1000;
@@ -41,8 +40,6 @@ function write(key: string, value: unknown) {
   }
 }
 
-export const updateChecksOn = () => read<boolean>(OFF_KEY) !== true;
-export const setUpdateChecks = (on: boolean) => write(OFF_KEY, on ? null : true);
 export const skipVersion = (version: string) => write(SKIP_KEY, version);
 
 /** `1.2.10` > `1.2.9`; a pre-release sorts before its release. */
@@ -82,8 +79,8 @@ async function latestRelease(force: boolean): Promise<Update | null> {
  * The newer release to tell the user about, if any. `force` skips the daily
  * limit and a skipped version (the palette's "Check for updates now").
  */
-export async function checkForUpdate(force = false): Promise<Update | null> {
-  if (!inTauri || (!force && !updateChecksOn())) return null;
+export async function checkForUpdate(force = false, enabled = true): Promise<Update | null> {
+  if (!inTauri || (!force && !enabled)) return null;
   const [current, latest] = await Promise.all([getVersion(), latestRelease(force)]);
   if (!latest || !newer(latest.version, current)) return null;
   if (!force && read<string>(SKIP_KEY) === latest.version) return null;
