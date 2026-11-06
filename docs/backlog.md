@@ -207,7 +207,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | US-13.1 | As a new user, I want a guided tutorial that builds a first board so that I reach a working `.dtb` in minutes. | Step-by-step in-app tour or docs page; sample design per step. | 3 | Sonnet 5.5 | run |
 | US-13.2 | As a new user, I want a user guide covering every feature so that I can learn on my own. | Docs site (mdBook or similar) published from CI. | 3 | Haiku 5.5 | – |
 | US-13.3 | As a product owner, I want a landing page with screenshots so that the project is easy to discover. | One page, linked from the README. | 2 | Sonnet 5.5 | artifact-design |
-| US-13.4 | As a product owner, I want a usability test with 3 users so that G4 is measured. | Script, sessions, timing and findings recorded; follow-up stories created. | 3 | (PO) | – |
+| US-13.4 | As a product owner, I want a usability test with 3 users so that G4 is measured. | Script, sessions, timing and findings recorded; follow-up stories created. Kit in `docs/usability/` (script, task card, session sheet, results). | 3 | (PO) | – |
 
 ## Ideas not yet scheduled
 
