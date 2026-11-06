@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef } from "react";
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
+import { KINDS, kindOf } from "../categories";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
 import { consumerHandle, providerHandle } from "../ports";
@@ -40,6 +41,8 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   }, [id, handleKey, updateNodeInternals]);
   const isRoot = data.name === "/";
   const fullName = data.unitAddress ? `${data.name}@${data.unitAddress}` : data.name;
+  const kind = kindOf(data.binding?.category, data.name);
+  const { Icon, title: kindTitle } = KINDS[kind];
   return (
     <div
       className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}`}
@@ -48,8 +51,15 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
       {!isRoot && <Handle type="target" id={PARENT_HANDLE} position={Position.Top} className="h-tree" />}
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
       <div className="dt-node-title">
-        {data.label && <span className="dt-node-label">{data.label}:</span>}
-        {fullName}
+        {!isRoot && (
+          <span className={`kind-chip kind-${kind}`} title={kindTitle}>
+            <Icon size={12} strokeWidth={2} aria-hidden />
+          </span>
+        )}
+        <span>
+          {data.label && <span className="dt-node-label">{data.label}:</span>}
+          {fullName}
+        </span>
       </div>
       {data.compatible.length > 0 && <div className="dt-node-compat">{data.compatible[0]}</div>}
       {data.inherited && <div className="dt-node-origin">{baseName(data.inherited.file)}</div>}
