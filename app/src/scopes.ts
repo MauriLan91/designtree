@@ -41,19 +41,32 @@ export function scopeView(
   main: string | null,
   parents: Map<string, string>,
 ): { nodes: FlowNode[]; edges: Edge[] } {
+  const shown = scopeIds(nodes, scope, main, parents);
+  return { nodes: nodes.filter((n) => shown.has(n.id)), edges: scopeEdges(edges, shown) };
+}
+
+/** The ids `scopeView` draws. */
+export function scopeIds(nodes: FlowNode[], scope: string | null, main: string | null, parents: Map<string, string>): Set<string> {
   const shown = new Set<string>();
   const byId = new Map(nodes.map((n) => [n.id, n]));
+  const framed = new Set<string>();
   for (const n of nodes) {
-    if (!isDtNode(n) || !inScope(n.id, scope, main, parents)) continue;
+    if (!isDtNode(n)) continue;
+    for (let g = n.parentId; g; g = byId.get(g)?.parentId) framed.add(g);
+    if (!inScope(n.id, scope, main, parents)) continue;
     shown.add(n.id);
     // The groups around it, out to the outermost.
     for (let g = n.parentId; g && !shown.has(g); g = byId.get(g)?.parentId) shown.add(g);
   }
-  return {
-    nodes: nodes.filter((n) => shown.has(n.id)),
-    edges: edges.filter((e) => !isTreeEdge(e) && shown.has(e.source) && shown.has(e.target)),
-  };
+  // A group with no node in it would be on no scope at all: keep it on the
+  // main canvas, where it can be deleted.
+  if (scope === main) for (const n of nodes) if (!isDtNode(n) && !framed.has(n.id) && !n.parentId) shown.add(n.id);
+  return shown;
 }
+
+/** The references between nodes that are both drawn. */
+export const scopeEdges = (edges: Edge[], shown: Set<string>) =>
+  edges.filter((e) => !isTreeEdge(e) && shown.has(e.source) && shown.has(e.target));
 
 /** The scopes from the main one down to `scope`, for the breadcrumb. */
 export function scopePath(scope: string | null, main: string | null, parents: Map<string, string>): (string | null)[] {

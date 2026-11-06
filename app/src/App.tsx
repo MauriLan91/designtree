@@ -53,7 +53,7 @@ import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
-import { canHaveChildren, inScope, mainScope, parentsOf, scopeOf, scopePath, scopeView } from "./scopes";
+import { canHaveChildren, inScope, mainScope, parentsOf, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
 import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -475,7 +475,7 @@ export function Editor({
   const onCursorNode = (id: string | null) => {
     if (!id) return;
     // The canvas follows the cursor into the node's scope.
-    if (!inScope(id, scopeRef.current, main, parents)) showScope(scopeOf(id, main, parents));
+    if (id !== scopeRef.current && !inScope(id, scopeRef.current, main, parents)) showScope(scopeOf(id, main, parents), false);
     setNodes((ns) =>
       ns.map((n) => (n.selected === (n.id === id) ? n : ({ ...n, selected: n.id === id } as FlowNode))),
     );
@@ -904,6 +904,8 @@ export function Editor({
       setShowApplied(false);
       setDesignPath(path);
       setBuild(null);
+      setOpenScopes([]);
+      setScopeTab(null);
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([String(e)]);
@@ -994,8 +996,9 @@ export function Editor({
   };
 
   const focusNode = (id: string) => {
-    // A node in another scope is shown there.
-    if (!inScope(id, scope, main, parents)) showScope(scopeOf(id, main, parents));
+    // A node in another scope is shown there; a scope's own node is its tab.
+    const away = id !== scope && !inScope(id, scope, main, parents);
+    if (away) showScope(scopeOf(id, main, parents), false);
     // A node inside a collapsed group is not drawn: open the group first.
     const closed = new Set(collapsedAncestors(nodes, id));
     setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
@@ -1005,7 +1008,8 @@ export function Editor({
         return opened.selected === (n.id === id) ? opened : ({ ...opened, selected: n.id === id } as FlowNode);
       }),
     );
-    if (closed.size || !inScope(id, scope, main, parents)) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
+    if (id === scope) return;
+    if (closed.size || away) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
     else fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
   };
 
@@ -1015,15 +1019,28 @@ export function Editor({
     return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
 
-  const view = useMemo(() => {
-    const scoped = scopeView(nodes, portEdges, scope, main, parents);
-    return collapseView(scoped.nodes, scoped.edges, (id) => nodeName(id) ?? id);
-  }, [nodes, portEdges, scope, main, parents]);
+  // Dragging changes positions, not what is shown: keep the edges array the
+  // same object then, so React Flow does not redo every edge each frame.
+  const shown = scopeIds(nodes, scope, main, parents);
+  const shownKey = [...shown].join(" ");
+  const shownEdges = useMemo(() => scopeEdges(portEdges, shown), [portEdges, shownKey]);
+  const view = useMemo(
+    () => collapseView(nodes.filter((n) => shown.has(n.id)), shownEdges, (id) => nodeName(id) ?? id),
+    [nodes, shownEdges, shownKey],
+  );
 
-  /** Shows `id`'s scope (null: the main canvas), opening a tab for it. */
-  function showScope(id: string | null) {
+  /**
+   * Shows `id`'s scope (null: the main canvas). `pin` keeps a tab for it;
+   * without, as when following the DTS cursor, the scope is shown in a
+   * passing tab that the next one replaces.
+   */
+  function showScope(id: string | null, pin = true) {
     const tab = id === main ? null : id;
-    if (tab !== null) setOpenScopes((s) => (s.includes(tab) ? s : [...s, tab]));
+    if (id === scope) {
+      if (pin && tab !== null) setOpenScopes((s) => (s.includes(tab) ? s : [...s, tab]));
+      return;
+    }
+    if (pin && tab !== null) setOpenScopes((s) => (s.includes(tab) ? s : [...s, tab]));
     setScopeTab(tab);
     // What was selected elsewhere is not on show any more.
     setNodes((ns) => ns.map((n) => (n.selected && !inScope(n.id, id, main, parents) ? ({ ...n, selected: false } as FlowNode) : n)));
@@ -1047,6 +1064,7 @@ export function Editor({
     onLayout((l) => (l.inspector.open ? l : { ...l, inspector: { ...l.inspector, open: true } }));
     setTimeout(() => document.querySelector<HTMLElement>(".inspector textarea")?.focus(), 30);
   };
+  const passing = scope !== main && scope !== null && !liveScopes.includes(scope) ? scope : null;
   const scopeTitle = (id: string | null) => (id === null ? "Top level" : id === main ? "/" : (nodeName(id) ?? id));
   const tabOf = (id: string | null) => ({ id: id === main ? null : id, title: scopeTitle(id) });
 
@@ -1149,8 +1167,11 @@ export function Editor({
       run: () =>
         pickNode(
           "New parent",
-          (parent) =>
-            onConnect({ source: parent, sourceHandle: CHILD_HANDLE, target: selectedDt[0].id, targetHandle: PARENT_HANDLE }),
+          (parent) => {
+            onConnect({ source: parent, sourceHandle: CHILD_HANDLE, target: selectedDt[0].id, targetHandle: PARENT_HANDLE });
+            // It leaves this scope: drop it from the selection rather than act on a node out of sight.
+            if (parent !== scope) selectOnly([]);
+          },
           subtreeOf(selectedDt[0].id),
         ),
     },
@@ -1420,10 +1441,11 @@ export function Editor({
           )}
           {!boardView && (
           <ScopeBar
-            tabs={[tabOf(main), ...liveScopes.map(tabOf)]}
+            tabs={[tabOf(main), ...liveScopes.map(tabOf), ...(passing ? [{ ...tabOf(passing), passing: true }] : [])]}
             active={scope === main ? null : scope}
             path={scopePath(scope, main, parents).map(tabOf)}
             onOpen={(id) => showScope(id ?? main)}
+            onSelectScope={() => scope && selectOnly([scope])}
             onClose={closeScope}
           />
         )}
@@ -1493,7 +1515,15 @@ export function Editor({
         <div className="pane-body" hidden={!layout.inspector.open}>
           <aside className="panel side">
             <Inspector
-              node={selectedNodes.length === 1 ? selectedNodes[0] : null}
+              // With nothing selected, the inspector shows the scope's own node
+              // (the root on the main canvas), which is not drawn.
+              node={
+                selectedNodes.length === 1
+                  ? selectedNodes[0]
+                  : selectedNodes.length === 0 && !selectedEdge && scope
+                    ? (nodes.find((n) => n.id === scope) ?? null)
+                    : null
+              }
               edge={selectedNodes.length === 0 ? selectedEdge : null}
               onNodeChange={updateNodeData}
               overriding={overriding}

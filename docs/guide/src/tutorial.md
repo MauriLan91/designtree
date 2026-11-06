@@ -19,7 +19,7 @@ inspector. Everything else comes from the library search.
 
 ## 1. The root and the CPU
 
-1. **New** (Ctrl+N). Select the root node `/`.
+1. **New** (Ctrl+N). With nothing selected, the inspector shows the root node `/` (click `/` in the breadcrumb to get back to it).
 2. In the inspector, set **Compatible** to `acme,first-board` and add
    `model = "Acme First Board"` to its properties. The root already has
    `#address-cells = <1>` and `#size-cells = <1>`.

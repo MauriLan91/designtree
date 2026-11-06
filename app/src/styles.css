@@ -451,7 +451,6 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .react-flow__minimap { border: 1px solid var(--border); }
 /* Its dark edge stroke is barely visible on our dark canvas. */
 .react-flow.dark { --xy-edge-stroke: #6b7280; --xy-edge-stroke-selected: #9aa0a6; }
-.react-flow__handle.h-tree { background: var(--accent); width: 9px; height: 9px; }
 .react-flow__handle.h-ref { background: var(--ref); width: 9px; height: 9px; border-radius: 2px; }
 /* Typed ports: providers on the left, consumer properties on the right. */
 .dt-node-ports { display: flex; justify-content: space-between; gap: 12px; margin: 6px -12px 0; font-size: 11px; font-family: var(--mono); }
@@ -787,3 +786,4 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0; padding: 2px 8px; list-style: none; border-radius: 6px; background: color-mix(in srgb, var(--panel) 85%, transparent); font: 12px var(--mono); color: var(--muted); pointer-events: auto; }
 .breadcrumb li { display: flex; align-items: center; gap: 2px; }
 .breadcrumb [aria-current] { color: var(--text); }
+.scope-tab.passing button { font-style: italic; }

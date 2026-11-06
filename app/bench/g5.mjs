@@ -32,9 +32,10 @@ const nodeCount = parsed.nodes.length;
 const parentOf = new Map(parsed.edges.filter((e) => e.kind === "child").map((e) => [e.to, e.from]));
 const children = new Map();
 for (const [child, parent] of parentOf) children.set(parent, (children.get(parent) ?? 0) + 1);
-const [scope, scopeSize] = [...children].sort((a, b) => b[1] - a[1])[0];
+// A design without a tree (an overlay) is all one scope.
+const [scope, scopeSize] = [...children].sort((a, b) => b[1] - a[1])[0] ?? [null, nodeCount];
 const path = [];
-for (let s = scope; parentOf.has(s); s = parentOf.get(s)) path.unshift(s);
+for (let s = scope; s !== null && parentOf.has(s); s = parentOf.get(s)) path.unshift(s);
 
 // The built app and the design, from one origin.
 const server = createServer(async (req, res) => {
