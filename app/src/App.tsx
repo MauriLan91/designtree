@@ -48,6 +48,12 @@ import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
+import { BottomPanel } from "./components/BottomPanel";
+import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
+import { Splitter } from "./components/Splitter";
+import { StatusBar } from "./components/StatusBar";
+import { loadEditorMode, saveEditorMode, type EditorMode, type Layout, type PaneName, type PanelTab } from "./layout";
+import { ModeSwitch } from "./components/ModeSwitch";
 import { comboOf, pickOf, tooltipOf, type Command, type NodePick } from "./commands";
 import {
   FilePlus,
@@ -174,11 +180,26 @@ interface EditorProps {
   onKernels: () => void;
   /** Checks for a newer release now, and turns the daily check back on. */
   onCheckUpdates: () => void;
+  /** The panes, shared by every tab and remembered for the user. */
+  layout: Layout;
+  onLayout: (change: (l: Layout) => Layout) => void;
 }
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
-export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, onKernels, onCheckUpdates }: EditorProps) {
+export function Editor({
+  active,
+  start,
+  kernel,
+  api,
+  onStatus,
+  onOpen,
+  onNew,
+  onKernels,
+  onCheckUpdates,
+  layout,
+  onLayout,
+}: EditorProps) {
   const initial = useMemo(() => fromDesign(emptyDesign()), []);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
@@ -289,19 +310,32 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
   const [build, setBuild] = useState<BuildState | null>(null);
   const [schema, setSchema] = useState<SchemaState>({ checking: false, problems: [] });
   const schemaRun = useRef(0);
-  const [showInterrupts, setShowInterrupts] = useState(false);
+  // The interrupt tree and the address map are computed only while their
+  // tab of the bottom panel is on show.
+  const panelTab = layout.panel.open ? layout.panel.tab : null;
+  const showInterrupts = panelTab === "interrupts";
   const [pickingSoc, setPickingSoc] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [palettePick, setPalettePick] = useState<NodePick | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
-  const [showAddressMap, setShowAddressMap] = useState(false);
+  const showAddressMap = panelTab === "address-map";
+  // Each tab has its own mode; the last one chosen is where new tabs start.
+  const [mode, setModeState] = useState<EditorMode>(loadEditorMode);
+  const setMode = (m: EditorMode) => {
+    setModeState(m);
+    saveEditorMode(m);
+  };
+  const [dtcVersion, setDtcVersion] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (inTauri) backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
+  }, []);
   const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
   const [boardLinks, setBoardLinks] = useState<BoardLink[] | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const canvasRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (start) loadDesign(start);
@@ -898,6 +932,7 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
       : await (extras.overlay ? dialogs.pickDtboToSave() : dialogs.pickDtbToSave());
     if (!target) return;
     setBuild({ running: true, problems: [] });
+    showPanel("build");
     try {
       const result = await backend.buildDtb(toDesign(nodes, edges, extras), target);
       setBuild({
@@ -936,7 +971,14 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
   const chooseDtc = async () => {
     const path = await dialogs.pickDtc();
     if (path) await backend.setDtcPath(path);
+    backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
   };
+
+  const showPanel = (tab: PanelTab) => onLayout((l) => ({ ...l, panel: { ...l.panel, open: true, tab } }));
+  /** Shows `tab`, or closes the panel when that tab is already on show. */
+  const togglePanel = (tab: PanelTab) =>
+    onLayout((l) => ({ ...l, panel: { ...l.panel, open: !(l.panel.open && l.panel.tab === tab), tab } }));
+  const togglePane = (pane: PaneName) => onLayout((l) => ({ ...l, [pane]: { ...l[pane], open: !l[pane].open } }));
 
   const placeOnBoard = (positions: Map<string, XYPosition | null>) =>
     setNodes((ns) =>
@@ -979,6 +1021,11 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
       }
     }
     return found;
+  };
+  // Structural errors block the build; schema problems are errors or warnings.
+  const problemCount = {
+    errors: errors.length + (schema.problems ?? []).filter((p) => p.severity === "error").length,
+    warnings: (schema.problems ?? []).filter((p) => p.severity !== "error").length,
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
@@ -1058,34 +1105,74 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
       run: autoLayout,
     },
     { id: "palette", title: "Command palette…", shortcut: "Ctrl+K", menu: "View", run: () => setShowPalette(true) },
+    { id: "mode-graph", title: "Graph", shortcut: "Ctrl+1", menu: "View", group: 1, checked: mode === "graph", run: () => setMode("graph") },
+    {
+      id: "mode-split",
+      title: "Graph and DTS source",
+      shortcut: "Ctrl+2",
+      menu: "View",
+      group: 1,
+      checked: mode === "split",
+      run: () => setMode("split"),
+    },
+    { id: "mode-dts", title: "DTS source", shortcut: "Ctrl+3", menu: "View", group: 1, checked: mode === "dts", run: () => setMode("dts") },
+    {
+      id: "library",
+      title: "Library",
+      shortcut: PANE_SHORTCUTS.library,
+      menu: "View",
+      group: 2,
+      checked: layout.library.open,
+      run: () => togglePane("library"),
+    },
+    {
+      id: "inspector",
+      title: "Inspector",
+      shortcut: PANE_SHORTCUTS.inspector,
+      menu: "View",
+      group: 2,
+      checked: layout.inspector.open,
+      run: () => togglePane("inspector"),
+    },
+    { id: "panel", title: "Bottom panel", shortcut: "Ctrl+J", menu: "View", group: 2, checked: layout.panel.open, run: () => togglePane("panel") },
+    {
+      id: "problems",
+      title: "Problems",
+      shortcut: "Ctrl+Shift+M",
+      menu: "View",
+      group: 3,
+      checked: panelTab === "problems",
+      run: () => togglePanel("problems"),
+    },
+    { id: "build-output", title: "Build output", menu: "View", group: 3, checked: panelTab === "build", run: () => togglePanel("build") },
     {
       id: "board",
       title: "Board view",
       menu: "View",
-      group: 1,
       hint: "Place devices where they sit on the board",
       checked: boardView,
+      group: 4,
       run: () => setBoardView((v) => !v),
     },
     {
       id: "interrupts",
       title: "Interrupt tree",
       menu: "View",
-      group: 1,
+      group: 3,
       checked: showInterrupts,
       disabled: !inTauri,
-      run: () => setShowInterrupts((v) => !v),
+      run: () => togglePanel("interrupts"),
     },
     {
       id: "address-map",
       title: "Address map",
       menu: "View",
-      group: 1,
+      group: 3,
       checked: showAddressMap,
       disabled: !inTauri,
-      run: () => setShowAddressMap((v) => !v),
+      run: () => togglePanel("address-map"),
     },
-    { id: "fit", title: "Fit the design in view", menu: "View", group: 2, run: () => fitView({ maxZoom: 1, duration: 300 }) },
+    { id: "fit", title: "Fit the design in view", menu: "View", group: 4, run: () => fitView({ maxZoom: 1, duration: 300 }) },
     { id: "add", title: "Empty node", menu: "Insert", icon: SquarePlus, hint: "Add a node with no binding", run: () => addNode(null) },
     {
       id: "connect",
@@ -1228,83 +1315,158 @@ export function Editor({ active, start, kernel, api, onStatus, onOpen, onNew, on
           })()}
         </div>
       </header>
-      <main ref={canvasRef} className="canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-        {kernelWarning && (
-          <div className="kernel-warning" role="alert">
-            This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
-            Bindings may differ; pick another checkout under Kernels…
-          </div>
-        )}
-        {boardView ? (
-          <BoardView
-            nodes={nodes}
-            board={extras.board}
-            designPath={designPath}
-            onPlace={placeOnBoard}
-            onSelect={selectOnly}
-            edges={edges}
-            pinCheck={pinCheck}
-            links={boardLinks}
-            onBoardChange={(board) =>
-              setExtras((x) => ({ ...x, board: board.background || board.connectors?.length ? board : undefined }))
-            }
+      <main className={`canvas mode-${mode}`}>
+        <ModeSwitch mode={mode} onMode={setMode} />
+        <div ref={canvasRef} className="graph" hidden={mode === "dts"} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+          {kernelWarning && (
+            <div className="kernel-warning" role="alert">
+              This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
+              Bindings may differ; pick another checkout under Kernels…
+            </div>
+          )}
+          {boardView ? (
+            <BoardView
+              nodes={nodes}
+              board={extras.board}
+              designPath={designPath}
+              onPlace={placeOnBoard}
+              onSelect={selectOnly}
+              edges={edges}
+              pinCheck={pinCheck}
+              links={boardLinks}
+              onBoardChange={(board) =>
+                setExtras((x) => ({ ...x, board: board.background || board.connectors?.length ? board : undefined }))
+              }
+            />
+          ) : (
+            <NodeProblems.Provider value={nodeProblems}>
+            <NodePorts.Provider value={stablePorts}>
+            <ReactFlow
+              nodes={view.nodes}
+              edges={view.edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              isValidConnection={isValidConnection}
+              onBeforeDelete={onBeforeDelete}
+              colorMode="system"
+              fitView
+              fitViewOptions={{ maxZoom: 1 }}
+              minZoom={0.1}
+              deleteKeyCode={active ? ["Backspace", "Delete"] : null}
+            >
+              <Background />
+              <Controls />
+              <MiniMap pannable zoomable />
+            </ReactFlow>
+            </NodePorts.Provider>
+            </NodeProblems.Provider>
+          )}
+        </div>
+        {/* Kept mounted in graph mode, so the cursor and scroll stay put. */}
+        <div className="source-pane" hidden={mode === "graph"}>
+          <DtsPreview
+            text={editorText.text}
+            textVersion={editorText.version}
+            spans={spans}
+            selected={selectedNodes.map((n) => n.id)}
+            sourceError={sourceError}
+            onEdit={onSourceEdit}
+            onCursorNode={onCursorNode}
+            appliedDts={appliedDts}
+            overlayBase={extras.overlay?.base}
+            showApplied={showApplied}
+            onShowApplied={setShowApplied}
+            errors={errors}
           />
-        ) : (
-          <NodeProblems.Provider value={nodeProblems}>
-          <NodePorts.Provider value={stablePorts}>
-          <ReactFlow
-            nodes={view.nodes}
-            edges={view.edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            isValidConnection={isValidConnection}
-            onBeforeDelete={onBeforeDelete}
-            colorMode="system"
-            fitView
-            fitViewOptions={{ maxZoom: 1 }}
-            minZoom={0.1}
-            deleteKeyCode={active ? ["Backspace", "Delete"] : null}
-          >
-            <Background />
-            <Controls />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
-          </NodePorts.Provider>
-          </NodeProblems.Provider>
-        )}
+        </div>
       </main>
-      <aside className="panel side">
-        <Inspector
-          node={selectedNodes.length === 1 ? selectedNodes[0] : null}
-          edge={selectedNodes.length === 0 ? selectedEdge : null}
-          onNodeChange={updateNodeData}
-          overriding={overriding}
-          onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
-          onEdgeChange={updateEdgeData}
-          providerCells={providerCells}
-        />
-        {showInterrupts && interrupts && <InterruptPanel tree={interrupts} nodeName={nodeName} onFocusNode={focusNode} />}
-        {showAddressMap && addressMap && <AddressMapPanel map={addressMap} nodeName={nodeName} onFocusNode={focusNode} />}
-        {kernel && <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />}
-        {build && <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />}
-        <DtsPreview
-          text={editorText.text}
-          textVersion={editorText.version}
-          spans={spans}
-          selected={selectedNodes.map((n) => n.id)}
-          sourceError={sourceError}
-          onEdit={onSourceEdit}
-          onCursorNode={onCursorNode}
-          appliedDts={appliedDts}
-          overlayBase={extras.overlay?.base}
-          showApplied={showApplied}
-          onShowApplied={setShowApplied}
-          errors={errors}
-        />
-      </aside>
+      <div className="pane inspector-pane">
+        <div className="pane-body" hidden={!layout.inspector.open}>
+          <aside className="panel side">
+            <Inspector
+              node={selectedNodes.length === 1 ? selectedNodes[0] : null}
+              edge={selectedNodes.length === 0 ? selectedEdge : null}
+              onNodeChange={updateNodeData}
+              overriding={overriding}
+              onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
+              onEdgeChange={updateEdgeData}
+              providerCells={providerCells}
+            />
+          </aside>
+          <Splitter
+            pane="inspector"
+            size={layout.inspector.size}
+            label="Inspector width"
+            onResize={(size) => onLayout((l) => ({ ...l, inspector: { ...l.inspector, size } }))}
+          />
+        </div>
+        <PaneRail pane="inspector" layout={layout} onLayout={onLayout} />
+      </div>
+      {layout.panel.open && (
+        <BottomPanel
+          tabs={[
+            { id: "problems", title: "Problems", count: problemCount.errors + problemCount.warnings },
+            { id: "build", title: "Build", count: build?.problems.length },
+            { id: "interrupts", title: "Interrupts" },
+            { id: "address-map", title: "Address map" },
+          ]}
+          tab={layout.panel.tab}
+          size={layout.panel.size}
+          onTab={showPanel}
+          onResize={(size) => onLayout((l) => ({ ...l, panel: { ...l.panel, size } }))}
+          onClose={() => togglePane("panel")}
+        >
+          {layout.panel.tab === "problems" && errors.length > 0 && (
+            <ul className="errors">
+              {errors.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+          )}
+          {layout.panel.tab === "problems" &&
+            (kernel ? (
+              <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />
+            ) : (
+              <p className="hint">Load a kernel checkout to check the design against its binding schemas.</p>
+            ))}
+          {layout.panel.tab === "build" &&
+            (build ? (
+              <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />
+            ) : (
+              <p className="hint">Build .dtb (Ctrl+B) to see dtc's output here.</p>
+            ))}
+          {layout.panel.tab === "interrupts" &&
+            (!inTauri ? (
+              <p className="hint">The interrupt tree needs the desktop app.</p>
+            ) : interrupts ? (
+              <InterruptPanel tree={interrupts} nodeName={nodeName} onFocusNode={focusNode} />
+            ) : (
+              <p className="hint">Working out the interrupt tree…</p>
+            ))}
+          {layout.panel.tab === "address-map" &&
+            (!inTauri ? (
+              <p className="hint">The address map needs the desktop app.</p>
+            ) : addressMap ? (
+              <AddressMapPanel map={addressMap} nodeName={nodeName} onFocusNode={focusNode} />
+            ) : (
+              <p className="hint">Working out the address map…</p>
+            ))}
+        </BottomPanel>
+      )}
+      <StatusBar
+        kernel={kernel}
+        dtcVersion={dtcVersion}
+        errors={problemCount.errors}
+        warnings={problemCount.warnings}
+        nodes={nodes.filter(isDtNode).length}
+        selected={selectedNodes.length}
+        onKernels={onKernels}
+        onDtc={chooseDtc}
+        onProblems={() => showPanel("problems")}
+      />
       {showPalette && (
         <CommandPalette
           commands={commands}

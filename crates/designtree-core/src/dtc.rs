@@ -38,6 +38,36 @@ pub struct DtcOutput {
     pub warnings: String,
 }
 
+/// The version of `dtc` from `PATH`, or of the program at `dtc` when given,
+/// as it prints it (`1.7.2`); the status bar shows it.
+pub fn dtc_version(dtc: Option<&Path>) -> Result<String, DtcError> {
+    let program: OsString = dtc.map_or_else(|| DEFAULT_DTC.into(), |p| p.as_os_str().to_owned());
+    let name = program.to_string_lossy().into_owned();
+    let out = Command::new(&program)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|source| match source.kind() {
+            io::ErrorKind::NotFound => DtcError::NotFound(name.clone()),
+            _ => DtcError::Spawn {
+                program: name.clone(),
+                source,
+            },
+        })?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    parse_version(&text).ok_or_else(|| DtcError::Failed(text.trim().to_string()))
+}
+
+/// The version in dtc's `--version` line, `Version: DTC v1.7.2` (some
+/// distributions add a suffix: `v1.7.0-g1df7b047`).
+fn parse_version(text: &str) -> Option<String> {
+    let rest = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("Version: DTC"))?;
+    let v = rest.trim().trim_start_matches('v');
+    (!v.is_empty()).then(|| v.to_string())
+}
+
 /// Compiles `dts` to a `.dtb` at `output`, using `dtc` from `PATH` or the
 /// program at `dtc` when given. The blob carries `__symbols__` (`-@`), so
 /// overlays can be applied to it.
@@ -123,6 +153,31 @@ mod tests {
             std::env::temp_dir().join(format!("designtree-dtc-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn parses_the_version_line() {
+        assert_eq!(
+            parse_version("Version: DTC v1.7.2\n").as_deref(),
+            Some("1.7.2")
+        );
+        assert_eq!(
+            parse_version("Version: DTC v1.7.0-g1df7b047\n").as_deref(),
+            Some("1.7.0-g1df7b047")
+        );
+        assert_eq!(parse_version("dtc: unknown option\n"), None);
+    }
+
+    #[test]
+    fn reports_the_installed_version() {
+        if !require_dtc() {
+            return;
+        }
+        assert!(dtc_version(None).unwrap().starts_with('1'));
+        assert!(matches!(
+            dtc_version(Some(Path::new("/nonexistent/dtc"))),
+            Err(DtcError::NotFound(_))
+        ));
     }
 
     #[test]

@@ -89,11 +89,11 @@ Checkpoint: `first-board-5-led.json`.
 
 ## 6. Check and build
 
-- The **Schema check** panel should be empty. If it lists something, click
+- The **Problems** tab of the bottom panel should be empty. If it lists something, click
   the problem to jump to the node, and compare with the checkpoint.
 - **View › Address map** shows the four devices on the root bus with no overlaps.
 - **File › Save design…** (Ctrl+S), then **Build .dtb** (Ctrl+B): `board.dtb` appears
-  next to `board.json`, and the Build panel shows no warnings.
+  next to `board.json`, and the Build tab of the bottom panel shows no warnings.
 
 You have a devicetree that the kernel can boot with. From here, try
 **View › Board view** to place the devices on a photo of your board, or

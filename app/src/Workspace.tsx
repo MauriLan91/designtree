@@ -2,7 +2,7 @@
 // editor, kept mounted while hidden so that its undo history, selection and
 // viewport survive switching. The element library is shared: the backend
 // holds one kernel index for the whole app.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, inTauri } from "./backend";
@@ -11,6 +11,9 @@ import { KernelSettings } from "./components/KernelSettings";
 import { Palette } from "./components/Palette";
 import { UpdateNotice } from "./components/UpdateNotice";
 import { checkForUpdate, setUpdateChecks, type Update } from "./updates";
+import { loadLayout, saveLayout, type Layout } from "./layout";
+import { PaneRail } from "./components/PaneRail";
+import { Splitter } from "./components/Splitter";
 
 interface Tab {
   id: number;
@@ -41,6 +44,14 @@ export default function Workspace() {
   const [kernel, setKernel] = useState<Kernel | null>(null);
   const [showKernels, setShowKernels] = useState(false);
   const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
+  const [layout, setLayout] = useState<Layout>(loadLayout);
+  const changeLayout = useCallback((change: (l: Layout) => Layout) => {
+    setLayout((l) => {
+      const next = change(l);
+      saveLayout(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     // A failed check at start stays quiet; offline is normal.
@@ -176,7 +187,16 @@ export default function Workspace() {
   const unsaved = [...statuses.values()].filter((s) => s.dirty);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={
+        {
+          "--library-w": layout.library.open ? `${layout.library.size}px` : "var(--rail-w)",
+          "--inspector-w": layout.inspector.open ? `${layout.inspector.size}px` : "var(--rail-w)",
+          "--panel-h": layout.panel.open ? `min(${layout.panel.size}px, 60vh)` : "0px",
+        } as CSSProperties
+      }
+    >
       <nav className="tabs" role="tablist" aria-label="Open designs">
         {tabs.map((t) => {
           const status = statuses.get(t.id);
@@ -209,11 +229,23 @@ export default function Workspace() {
           +
         </button>
       </nav>
-      <Palette
-        onAdd={(b) => apis.current.get(active)?.addNode(b)}
-        requestedKernel={requestedKernel}
-        onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}
-      />
+      <div className="pane library-pane">
+        {/* Kept mounted while collapsed, so the search and the loaded kernel stay. */}
+        <div className="pane-body" hidden={!layout.library.open}>
+          <Palette
+            onAdd={(b) => apis.current.get(active)?.addNode(b)}
+            requestedKernel={requestedKernel}
+            onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}
+          />
+          <Splitter
+            pane="library"
+            size={layout.library.size}
+            label="Library width"
+            onResize={(size) => changeLayout((l) => ({ ...l, library: { ...l.library, size } }))}
+          />
+        </div>
+        <PaneRail pane="library" layout={layout} onLayout={changeLayout} />
+      </div>
       {tabs.map((t) => (
         <ReactFlowProvider key={t.id}>
           <TabEditor
@@ -227,6 +259,8 @@ export default function Workspace() {
             onNew={newDesign}
             onKernels={() => setShowKernels(true)}
             onCheckUpdates={checkUpdatesNow}
+            layout={layout}
+            onLayout={changeLayout}
           />
         </ReactFlowProvider>
       ))}
@@ -295,6 +329,8 @@ interface TabEditorProps {
   onNew: () => void;
   onKernels: () => void;
   onCheckUpdates: () => void;
+  layout: Layout;
+  onLayout: (change: (l: Layout) => Layout) => void;
 }
 
 /** An editor with callbacks bound to its tab. */
