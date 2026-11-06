@@ -15,7 +15,7 @@ export const PANE_SHORTCUTS = { library: "Ctrl+Shift+L", inspector: "Ctrl+Shift+
 
 export function PaneRail({ pane, layout, onLayout }: Props) {
   const open = layout[pane].open;
-  const toggle = () => onLayout((l) => ({ ...l, [pane]: { ...l[pane], open: !open } }));
+  const toggle = () => onLayout((l) => ({ ...l, [pane]: { ...l[pane], open: !l[pane].open } }));
   const left = pane === "library";
   const Icon = open ? (left ? PanelLeftClose : PanelRightClose) : left ? PanelLeftOpen : PanelRightOpen;
   const label = `${open ? "Hide" : "Show"} the ${PANE_TITLES[pane].toLowerCase()} (${PANE_SHORTCUTS[pane]})`;
