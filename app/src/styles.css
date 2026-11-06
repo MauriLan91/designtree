@@ -9,6 +9,12 @@
   --danger: #b91c1c;
   --node: #ffffff;
   --code: #f3f4f6;
+  --link-i2c: #7c3aed;
+  --link-spi: #0891b2;
+  --link-gpio: #16a34a;
+  --link-interrupt: #dc2626;
+  --link-bus: #6b7280;
+  --link-reference: #d97706;
   color-scheme: light dark;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
@@ -25,6 +31,12 @@
     --danger: #f87171;
     --node: #23272d;
     --code: #16181b;
+    --link-i2c: #a78bfa;
+    --link-spi: #22d3ee;
+    --link-gpio: #4ade80;
+    --link-interrupt: #f87171;
+    --link-bus: #9ca3af;
+    --link-reference: #f59e0b;
   }
 }
 * { box-sizing: border-box; }
@@ -317,3 +329,25 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .shortcuts { border-collapse: collapse; }
 .shortcuts td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .shortcuts kbd { font-family: ui-monospace, monospace; font-size: 12px; background: var(--code); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+
+/* Board view links (US-14.2) */
+.board-anchor { top: 50%; left: 50%; width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; background: transparent; opacity: 0; pointer-events: none; }
+.link-i2c { color: var(--link-i2c); }
+.link-spi { color: var(--link-spi); }
+.link-gpio { color: var(--link-gpio); }
+.link-interrupt { color: var(--link-interrupt); }
+.link-bus { color: var(--link-bus); }
+.link-reference { color: var(--link-reference); }
+.link-line { stroke: currentColor; stroke-width: 1.5; fill: none; }
+.link-interrupt .link-line { stroke-dasharray: 5 3; }
+.link-reference .link-line, .link-bus .link-line { stroke-dasharray: 2 3; }
+.link-head { fill: currentColor; stroke: none; }
+.link-hit { stroke: transparent; stroke-width: 10; fill: none; cursor: pointer; }
+.link-edge.active .link-line { stroke-width: 2.5; }
+.link-edge.dimmed { opacity: 0.25; }
+.link-label { fill: currentColor; font: 600 11px ui-monospace, monospace; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.board-devices ul.link-kinds { flex: none; min-height: 0; overflow: visible; }
+.board-devices .link-kinds li { cursor: default; font-family: inherit; padding: 1px 0; }
+.link-kinds label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.link-swatch { width: 14px; height: 3px; border-radius: 2px; background: currentColor; flex: none; }
+.link-count { margin-left: auto; color: var(--muted); font-size: 11px; }

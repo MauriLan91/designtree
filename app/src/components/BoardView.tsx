@@ -5,10 +5,15 @@
 //
 // Connectors (US-14.3) sit on the same canvas. Each pin names the SoC pad
 // behind it, and the backend's pin check tells which devices claim it.
+//
+// Links (US-14.2) show which controller drives which peripheral: buses
+// from the hierarchy, GPIO lines and interrupts from the references.
 import { memo, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   Background,
   Controls,
+  Handle,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   ViewportPortal,
@@ -20,14 +25,18 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import { backend, dialogs, inTauri } from "../backend";
+import { DEFAULT_KINDS, drawnLinks, LINK_KINDS } from "../boardLinks";
 import { pinRows, templatePins, TEMPLATES } from "../connectorTemplates";
+import { LinkEdge, type LinkFlowEdge } from "./LinkEdge";
 import {
   isDtNode,
   REF_HANDLE,
   type Board,
+  type BoardLink,
   type Connector,
   type ConnectorPin,
   type DtFlowNode,
+  type LinkKind,
   type FlowNode,
   type PinCheck,
   type PinKind,
@@ -58,6 +67,10 @@ type BoardNode = DeviceNode | ConnectorNode;
 const Device = memo(function Device({ data, selected }: NodeProps<DeviceNode>) {
   return (
     <div className={`board-device${selected ? " selected" : ""}`}>
+      {/* Links are drawn border to border (LinkEdge); React Flow still
+          wants a handle at each end. */}
+      <Handle type="source" position={Position.Top} className="board-anchor" isConnectable={false} />
+      <Handle type="target" position={Position.Top} className="board-anchor" isConnectable={false} />
       <div className="board-device-title">{data.title}</div>
       {data.compatible && <div className="board-device-compatible">{data.compatible}</div>}
     </div>
@@ -101,6 +114,8 @@ const ConnectorBlock = memo(function ConnectorBlock({ data, selected }: NodeProp
 });
 
 const nodeTypes = { device: Device, connector: ConnectorBlock };
+const edgeTypes = { link: LinkEdge };
+const ALL_KINDS = new Set(LINK_KINDS.map((k) => k.kind));
 
 const title = (n: DtFlowNode) => {
   const name = n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name;
@@ -121,6 +136,8 @@ interface Props {
   board: Board | undefined;
   /** What claims each connector pin; null until checked. */
   pinCheck: PinCheck | null;
+  /** What drives what in the whole tree; null until found. */
+  links: BoardLink[] | null;
   /** The design file, against which a relative background path resolves. */
   designPath: string | null;
   /** Moves devices onto the board (a position) or off it (null). */
@@ -137,7 +154,7 @@ export function BoardView(props: Props) {
   );
 }
 
-function BoardCanvas({ nodes, edges, board, pinCheck, designPath, onPlace, onSelect, onBoardChange }: Props) {
+function BoardCanvas({ nodes, edges, board, pinCheck, links, designPath, onPlace, onSelect, onBoardChange }: Props) {
   const { screenToFlowPosition, getViewport } = useReactFlow();
   const devices = useMemo(() => nodes.filter(isDtNode), [nodes]);
   const connectors = board?.connectors ?? NO_CONNECTORS;
@@ -203,6 +220,38 @@ function BoardCanvas({ nodes, edges, board, pinCheck, designPath, onPlace, onSel
     }));
     return [...placed, ...blocks];
   }, [devices, connectors, status, measured, selectedConnector, selectedPin]);
+
+  const [kinds, setKinds] = useState(() => new Set<LinkKind>(DEFAULT_KINDS));
+  const placed = useMemo(() => new Set(devices.filter((n) => n.data.boardPosition).map((n) => n.id)), [devices]);
+  // Counted over every kind, so the filter tells what each one hides.
+  const counts = useMemo(() => {
+    const byKind = new Map<LinkKind, number>();
+    for (const l of drawnLinks(links ?? [], edges, placed, ALL_KINDS)) byKind.set(l.kind, (byKind.get(l.kind) ?? 0) + 1);
+    return byKind;
+  }, [links, edges, placed]);
+  const shown = useMemo(() => drawnLinks(links ?? [], edges, placed, kinds), [links, edges, placed, kinds]);
+  const flowEdges: LinkFlowEdge[] = useMemo(() => {
+    const selected = new Set(devices.filter((n) => n.selected && n.data.boardPosition).map((n) => n.id));
+    return shown.map((l) => {
+      const active = selected.has(l.from) || selected.has(l.to);
+      return {
+        id: `link:${l.kind}:${l.from}:${l.to}`,
+        type: "link",
+        source: l.from,
+        target: l.to,
+        selectable: false,
+        focusable: false,
+        zIndex: active ? 1 : 0,
+        data: { kind: l.kind, via: l.via, lane: l.lane, lanes: l.lanes, active, dimmed: selected.size > 0 && !active },
+      };
+    });
+  }, [shown, devices]);
+  const toggleKind = (kind: LinkKind) =>
+    setKinds((ks) => {
+      const next = new Set(ks);
+      if (!next.delete(kind)) next.add(kind);
+      return next;
+    });
 
   const [filter, setFilter] = useState("");
   const unplaced = devices.filter(
@@ -327,6 +376,19 @@ function BoardCanvas({ nodes, edges, board, pinCheck, designPath, onPlace, onSel
           )}
         </div>
         {image.error && <p className="error">{image.error}</p>}
+        <h2>Connections</h2>
+        <ul className="link-kinds">
+          {LINK_KINDS.map(({ kind, title }) => (
+            <li key={kind}>
+              <label>
+                <input type="checkbox" checked={kinds.has(kind)} onChange={() => toggleKind(kind)} />
+                <span className={`link-swatch link-${kind}`} />
+                {title}
+                <span className="link-count">{counts.get(kind) ?? 0}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
         <h2>Connectors</h2>
         <div className="board-actions">
           <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} aria-label="Connector template">
@@ -403,6 +465,9 @@ function BoardCanvas({ nodes, edges, board, pinCheck, designPath, onPlace, onSel
         <ReactFlow
           nodes={flowNodes}
           nodeTypes={nodeTypes}
+          edges={flowEdges}
+          edgeTypes={edgeTypes}
+          onEdgeClick={(_, e) => onSelect([e.source, e.target])}
           onNodesChange={onNodesChange}
           nodesConnectable={false}
           fitView

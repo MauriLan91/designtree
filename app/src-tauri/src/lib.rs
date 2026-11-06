@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
 use designtree_core::dtc::DtcError;
 use designtree_core::{
-    AddressMap, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Severity,
+    AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Severity,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -325,6 +325,12 @@ fn pin_check(design: Graph) -> PinCheck {
     designtree_core::pin_check(&design)
 }
 
+/// Which controller drives which peripheral, for the board view.
+#[tauri::command]
+fn board_links(design: Graph) -> Vec<BoardLink> {
+    designtree_core::board_links(&design)
+}
+
 /// The regions of every bus with their CPU addresses, overlaps and
 /// unreachable regions.
 #[tauri::command]
@@ -617,6 +623,7 @@ pub fn run() {
             check_schemas,
             interrupt_tree,
             pin_check,
+            board_links,
             address_map,
             auto_layout,
             save_design,
