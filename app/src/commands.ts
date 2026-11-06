@@ -65,12 +65,46 @@ export function menusOf(commands: Command[]): Menu[] {
 
 /** The shortcut a key event stands for, in the form commands declare it,
  * or null for a key no command can bind (plain letters, Alt combinations). */
-export function comboOf(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">): string | null {
+export function comboOf(
+  e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey"> & { code?: string },
+): string | null {
   if (e.altKey) return null;
   if (/^F\d{1,2}$/.test(e.key)) return e.key;
   if (!(e.ctrlKey || e.metaKey) || e.key.length !== 1) return null;
-  return `Ctrl+${e.shiftKey ? "Shift+" : ""}${e.key.toUpperCase()}`;
+  // Shift turns digits and punctuation into other characters (Shift+1 is
+  // "!"); name those by the key itself. Letters keep the layout's meaning.
+  const key = e.shiftKey && !/^[a-z]$/i.test(e.key) && e.code ? (CODE_KEYS[e.code] ?? e.key) : e.key;
+  return `Ctrl+${e.shiftKey ? "Shift+" : ""}${key.toUpperCase()}`;
 }
+
+const CODE_KEYS: Record<string, string> = {
+  ...Object.fromEntries([..."0123456789"].map((d) => [`Digit${d}`, d])),
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Semicolon: ";",
+  Quote: "'",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Equal: "=",
+  Minus: "-",
+  Backquote: "`",
+};
+
+/** Shortcuts that belong to handlers outside the registry (clipboard, tabs,
+ * undo, the palette); no command can be given one. */
+export const RESERVED_SHORTCUTS: ReadonlySet<string> = new Set([
+  "Ctrl+C",
+  "Ctrl+V",
+  "Ctrl+X",
+  "Ctrl+A",
+  "Ctrl+W",
+  "Ctrl+K",
+  "Ctrl+Z",
+  "Ctrl+Shift+Z",
+  "Ctrl+Y",
+]);
 
 /** The tooltip of a toolbar button: its title, hint and shortcut. */
 export function tooltipOf(c: Command): string {

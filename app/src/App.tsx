@@ -188,6 +188,8 @@ interface EditorProps {
   /** The user's settings; changes are saved by the workspace. */
   settings: Settings;
   settingsLoaded: boolean;
+  /** Why the last save of the settings failed, if it did. */
+  settingsError: string | null;
   onSettings: (patch: Partial<Settings>) => void;
   /** The settings section on show, or null when the panel is closed. */
   settingsSection: Section | null;
@@ -215,6 +217,7 @@ export function Editor({
   onResetLayout,
   settings,
   settingsLoaded,
+  settingsError,
   onSettings,
   settingsSection,
   onOpenSettings,
@@ -344,14 +347,19 @@ export function Editor({
   const [ownMode, setOwnMode] = useState<EditorMode | null>(() => (settingsLoaded ? settings.editorMode : null));
   // The first tab opens before the settings are read: it follows them until then.
   const mode = ownMode ?? settings.editorMode;
+  useEffect(() => {
+    if (settingsLoaded) setOwnMode((m) => m ?? settings.editorMode);
+    // Only once, when the settings arrive: later changes are other tabs'.
+  }, [settingsLoaded]);
   const setMode = (m: EditorMode) => {
     setOwnMode(m);
     onSettings({ editorMode: m });
   };
   const [dtcVersion, setDtcVersion] = useState<string | null | undefined>(undefined);
+  // Only the tab on show asks, so a change does not run dtc once per tab.
   useEffect(() => {
-    if (inTauri) backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
-  }, [settings.dtcPath]);
+    if (inTauri && active) backend.dtcVersion().then(setDtcVersion, () => setDtcVersion(null));
+  }, [settings.dtcPath, active]);
   const [boardView, setBoardView] = useState(false);
   const [addressMap, setAddressMap] = useState<AddressMap | null>(null);
   const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
@@ -1503,6 +1511,7 @@ export function Editor({
         <SettingsPanel
           settings={settings}
           onChange={onSettings}
+          saveError={settingsError}
           section={settingsSection}
           onClose={() => onOpenSettings(null)}
           commands={commands}

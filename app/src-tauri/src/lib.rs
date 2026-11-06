@@ -98,8 +98,11 @@ const MAX_SETTINGS_BYTES: usize = 256 * 1024;
 fn read_settings(app: AppHandle) -> serde_json::Value {
     settings_file(&app)
         .ok()
+        // Checked before reading, so a huge or odd file is never loaded.
+        .filter(|file| {
+            fs::metadata(file).is_ok_and(|m| m.is_file() && m.len() <= MAX_SETTINGS_BYTES as u64)
+        })
         .and_then(|file| fs::read_to_string(file).ok())
-        .filter(|text| text.len() <= MAX_SETTINGS_BYTES)
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .filter(serde_json::Value::is_object)
         .unwrap_or(serde_json::Value::Null)

@@ -3,7 +3,7 @@
 // setting by name, and changes that apply at once (there is no Save).
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { backend, dialogs, inTauri } from "../backend";
-import { comboOf, shortcutClashes, type Command } from "../commands";
+import { RESERVED_SHORTCUTS, comboOf, shortcutClashes, type Command } from "../commands";
 import type { EditorMode } from "../layout";
 import { isCombo, type Settings, type Theme } from "../settings";
 import { KernelCheckouts } from "./KernelCheckouts";
@@ -14,6 +14,7 @@ export type Section = (typeof SECTIONS)[number];
 interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
+  saveError: string | null;
   section: Section;
   onClose: () => void;
   /** The registry with the user's overrides applied, and the ids that cannot be remapped. */
@@ -43,6 +44,7 @@ export function SettingsPanel(props: Props) {
   const [capturing, setCapturing] = useState<string | null>(null);
   const [dtcVersion, setDtcVersion] = useState<string | null | undefined>(undefined);
   const [dtcError, setDtcError] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
   useEffect(() => setSection(props.section), [props.section]);
@@ -75,7 +77,9 @@ export function SettingsPanel(props: Props) {
       return setCapturing(null);
     }
     const combo = comboOf(e.nativeEvent);
+    if (combo && RESERVED_SHORTCUTS.has(combo)) return setRefused(`${combo} is taken by the clipboard, tabs or undo`);
     if (combo && isCombo(combo)) {
+      setRefused(null);
       setShortcut(id, combo);
       setCapturing(null);
     }
@@ -175,9 +179,13 @@ export function SettingsPanel(props: Props) {
           <button
             disabled={!inTauri || settings.dtcPath === null}
             onClick={async () => {
-              await backend.setDtcPath(null);
-              setDtcError(null);
-              onChange({ dtcPath: null });
+              try {
+                await backend.setDtcPath(null);
+                setDtcError(null);
+                onChange({ dtcPath: null });
+              } catch (e) {
+                setDtcError(String(e));
+              }
             }}
           >
             Use PATH
@@ -204,7 +212,10 @@ export function SettingsPanel(props: Props) {
             ) : (
               <button
                 className={capturing === c.id ? "shortcut capturing" : "shortcut"}
-                onClick={() => setCapturing(capturing === c.id ? null : c.id)}
+                onClick={() => {
+                  setRefused(null);
+                  setCapturing(capturing === c.id ? null : c.id);
+                }}
                 onKeyDown={capturing === c.id ? onCaptureKey(c.id) : undefined}
                 onBlur={() => capturing === c.id && setCapturing(null)}
                 aria-label={`Shortcut of ${c.title}: ${c.shortcut ?? "none"}. Press to change.`}
@@ -212,6 +223,7 @@ export function SettingsPanel(props: Props) {
                 {capturing === c.id ? "Press keys… (Backspace: none)" : c.shortcut || "—"}
               </button>
             )}
+            {capturing === c.id && refused && <span className="error">{refused}</span>}
             {c.id in settings.shortcuts && !fixed.has(c.id) && (
               <button className="link" onClick={() => setShortcut(c.id, null)}>
                 Reset
@@ -254,6 +266,7 @@ export function SettingsPanel(props: Props) {
           <input ref={search} type="search" placeholder="Search settings" aria-label="Search settings" value={query} onChange={(e) => setQuery(e.target.value)} />
           <button onClick={props.onClose}>Close</button>
         </div>
+        {props.saveError && <p className="error settings-error">{props.saveError}</p>}
         <div className="settings-body">
           <nav className="settings-nav" aria-label="Sections">
             {SECTIONS.map((s) => (

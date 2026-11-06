@@ -37,6 +37,12 @@ describe("comboOf", () => {
     expect(comboOf(key("F1"))).toBe("F1");
   });
 
+  it("names Shift+digit and Shift+punctuation by the key, not the character", () => {
+    expect(comboOf({ ...key("!", { ctrlKey: true, shiftKey: true }), code: "Digit1" })).toBe("Ctrl+Shift+1");
+    expect(comboOf({ ...key("<", { ctrlKey: true, shiftKey: true }), code: "Comma" })).toBe("Ctrl+Shift+,");
+    expect(comboOf({ ...key("L", { ctrlKey: true, shiftKey: true }), code: "KeyL" })).toBe("Ctrl+Shift+L");
+  });
+
   it("leaves plain typing, Alt combinations and named keys alone", () => {
     expect(comboOf(key("s"))).toBeNull();
     expect(comboOf(key("f", { altKey: true }))).toBeNull();

@@ -3,6 +3,7 @@
 // a hand edit or an older version may have written anything, so every field
 // is checked and falls back to its default.
 import { backend, inTauri } from "./backend";
+import { RESERVED_SHORTCUTS } from "./commands";
 import type { EditorMode } from "./layout";
 
 export type Theme = "system" | "light" | "dark";
@@ -40,7 +41,8 @@ export function parseSettings(raw: unknown): Settings {
   const shortcuts: Record<string, string> = {};
   if (typeof obj.shortcuts === "object" && obj.shortcuts !== null) {
     for (const [id, combo] of Object.entries(obj.shortcuts)) {
-      if (/^[a-z0-9-]{1,64}$/.test(id) && typeof combo === "string" && (combo === "" || isCombo(combo))) {
+      const valid = typeof combo === "string" && (combo === "" || (isCombo(combo) && !RESERVED_SHORTCUTS.has(combo)));
+      if (/^[a-z0-9-]{1,64}$/.test(id) && valid) {
         shortcuts[id] = combo;
       }
     }
@@ -57,11 +59,24 @@ export function parseSettings(raw: unknown): Settings {
 
 export async function loadSettings(): Promise<Settings> {
   try {
-    if (inTauri) return parseSettings(await backend.readSettings());
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return parseSettings(raw ? JSON.parse(raw) : null);
+    const raw = inTauri ? await backend.readSettings() : JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    return parseSettings(raw ?? legacySettings());
   } catch {
     return DEFAULT_SETTINGS;
+  }
+}
+
+/** What earlier versions kept in local storage, for a first start with
+ * settings: the update opt-out and the last editor mode. */
+function legacySettings(): Partial<Settings> {
+  try {
+    const legacy: Partial<Settings> = {};
+    if (localStorage.getItem("designtree.updates.off") === "true") legacy.updates = false;
+    const mode = localStorage.getItem("designtree.editorMode");
+    if (mode) legacy.editorMode = mode as EditorMode;
+    return legacy;
+  } catch {
+    return {};
   }
 }
 

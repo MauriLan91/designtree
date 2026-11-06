@@ -46,13 +46,22 @@ export default function Workspace() {
   const [settingsSection, setSettingsSection] = useState<Section | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  // Changes made before the file is read are applied on top of it, never
+  // saved over it.
+  const early = useRef<Partial<Settings>>({});
+  const latestLoaded = useRef(false);
   const changeSettings = useCallback((patch: Partial<Settings>) => {
-    setSettings((s) => {
-      const next = { ...s, ...patch };
-      saveSettings(next).catch(() => {});
-      return next;
-    });
+    if (!latestLoaded.current) early.current = { ...early.current, ...patch };
+    setSettings((s) => ({ ...s, ...patch }));
   }, []);
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    saveSettings(settings).then(
+      () => setSettingsError(null),
+      (e) => setSettingsError(`The settings could not be saved: ${e}`),
+    );
+  }, [settings, settingsLoaded]);
   const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const changeLayout = useCallback((change: (l: Layout) => Layout) => {
@@ -64,11 +73,14 @@ export default function Workspace() {
   }, []);
 
   useEffect(() => {
-    loadSettings().then((s) => {
+    loadSettings().then((loaded) => {
+      const s = { ...loaded, ...early.current };
+      latestLoaded.current = true;
       setSettings(s);
       setSettingsLoaded(true);
-      // The dtc path is checked again by the backend; a stale one is dropped.
-      if (inTauri && s.dtcPath) backend.setDtcPath(s.dtcPath).catch(() => changeSettings({ dtcPath: null }));
+      // The backend checks the dtc path again. One that is missing now (an
+      // unmounted drive) is skipped for this session but kept in the file.
+      if (inTauri && s.dtcPath) backend.setDtcPath(s.dtcPath).catch((e) => console.warn("dtc path not used:", e));
       // A failed check at start stays quiet; offline is normal.
       checkForUpdate(false, s.updates).then((u) => u && setUpdate({ update: u }), () => {});
     });
@@ -284,6 +296,7 @@ export default function Workspace() {
             onResetLayout={() => changeLayout(() => DEFAULT_LAYOUT)}
             settings={settings}
             settingsLoaded={settingsLoaded}
+            settingsError={settingsError}
             onSettings={changeSettings}
             settingsSection={settingsSection}
             onOpenSettings={setSettingsSection}
@@ -350,6 +363,7 @@ interface TabEditorProps {
   onResetLayout: () => void;
   settings: Settings;
   settingsLoaded: boolean;
+  settingsError: string | null;
   onSettings: (patch: Partial<Settings>) => void;
   settingsSection: Section | null;
   onOpenSettings: (section: Section | null) => void;

@@ -18,6 +18,8 @@ describe("parseSettings", () => {
       shortcuts: { build: "Ctrl+Shift+B", fit: "", layout: "Alt+L", "../x": "Ctrl+X", save: 5 },
     });
     expect(s.shortcuts).toEqual({ build: "Ctrl+Shift+B", fit: "" });
+    // The clipboard and tab shortcuts are not for commands.
+    expect(parseSettings({ shortcuts: { fit: "Ctrl+W", layout: "Ctrl+C" } }).shortcuts).toEqual({});
   });
 });
 
