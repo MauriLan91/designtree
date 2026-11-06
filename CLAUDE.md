@@ -51,6 +51,8 @@ CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, 
   backend; for the canvas, `npm run build` in `app`, then
   `node bench/g5.mjs <design.json>` (needs the `playwright` package; write the
   design with `designtree bench --design`). CI reports both next to the last run on main.
+- **Releases**: `scripts/bump-version.sh <version>` sets the version and writes
+  the `CHANGELOG.md` section, then tag `v<version>` (`docs/releasing.md`).
 - **Cloud sessions**: `scripts/cloud-session-setup.sh` installs the system
   packages, npm packages and crates a fresh container needs (`docs/cloud-sessions.md`).
 - Tauri on Linux needs `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev`;

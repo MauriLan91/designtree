@@ -198,7 +198,7 @@ addressed, docs updated, screenshot in the PR for UI changes.
 | --- | --- | --- | --- | --- | --- |
 | US-12.1 | As a user, I want installers for my OS so that I do not need a Rust toolchain. | GitHub Actions matrix produces AppImage, .deb, .msi, .dmg on tag; artifacts attached to the release. Linux first (decided 2026-11-06): Arch PKGBUILDs (release and `-git`) built and checked with `namcap` in CI, AppImage and .deb on tag; .msi and .dmg follow later. | 5 | Sonnet 5.5 | security-review |
 | US-12.2 | As a user, I want signed builds and in-app update notifications so that I stay current safely. | Code signing for Windows/macOS where certificates are available; Tauri updater with signature check. | 5 | Sonnet 5.5 | security-review |
-| US-12.3 | As a maintainer, I want versioning and a changelog generated from commits so that releases are cheap. | Conventional commits; release notes generated. | 2 | Haiku 5.5 | – |
+| US-12.3 | As a maintainer, I want versioning and a changelog generated from commits so that releases are cheap. | ~~Conventional commits~~ PR titles named after their story (already the convention) grouped by backlog feature; release notes generated; one version across crates, app and packages, checked in CI. | 2 | Haiku 5.5 | – |
 
 ### F13 Onboarding and docs
 
