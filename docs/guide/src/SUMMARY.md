@@ -3,6 +3,7 @@
 [Introduction](introduction.md)
 
 - [Installing](installing.md)
+- [Tutorial: your first board](tutorial.md)
 - [The window](window.md)
 - [Kernel checkouts and the library](library.md)
 - [Building a design](designing.md)
