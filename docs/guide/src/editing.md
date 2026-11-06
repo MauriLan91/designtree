@@ -1,0 +1,49 @@
+# Editing faster
+
+## Undo and redo
+
+Every change can be undone: nodes, edges, properties, groups, layout and
+text edits. Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes, at least 200 steps
+back.
+
+## Copy and paste
+
+Ctrl+C copies the selected nodes with their subtrees; Ctrl+V pastes them
+under the selected node, also into another tab. Labels are renamed when they
+would clash, and references between copied nodes are kept.
+
+## Tabs
+
+Each design has its own tab with its own undo history. Ctrl+Tab and
+Ctrl+Shift+Tab switch tabs, Ctrl+W closes one, middle-click closes the tab
+under the mouse.
+
+## Command palette
+
+**Commands…** or Ctrl+K opens the command palette: type part of a command and
+press Enter. It has everything in the toolbar plus **Add empty node**,
+**Connect selected node to…**, **Move selected node under…**, **Fit the
+design in view** and **Check for updates now**.
+
+## Keyboard shortcuts
+
+F1 lists them in the app.
+
+| Keys | Action |
+| --- | --- |
+| Ctrl+K | Command palette |
+| Ctrl+N | New design |
+| Ctrl+O | Open design |
+| Ctrl+S | Save design |
+| Ctrl+B | Build .dtb |
+| Ctrl+Z | Undo |
+| Ctrl+Shift+Z, Ctrl+Y | Redo |
+| Ctrl+C / Ctrl+V | Copy / paste nodes |
+| Ctrl+G | Group selection |
+| Ctrl+Shift+G | Ungroup |
+| Ctrl+L | Auto layout |
+| Ctrl+Tab | Next tab (Ctrl+Shift+Tab: previous) |
+| Ctrl+W | Close the tab |
+| Delete | Delete the selection |
+| Shift+drag | Select an area |
+| F1 | Keyboard shortcuts |

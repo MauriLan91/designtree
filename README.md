@@ -41,6 +41,9 @@ Arch Linux and Manjaro build the package from `packaging/arch/` with
 [docs/install.md](docs/install.md), which also covers the kernel checkout
 the element library is built from.
 
+The [user guide](https://maurilan91.github.io/designtree/) covers every
+feature; its source is in `docs/guide` (mdBook).
+
 ## Desktop app
 
 ```sh
