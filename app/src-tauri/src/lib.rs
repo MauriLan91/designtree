@@ -176,7 +176,7 @@ fn load_kernel_bindings(
 }
 
 /// Searches the loaded catalog by compatible string, title or path; best
-/// match first.
+/// match first, each with the compatible that matched listed first.
 #[tauri::command]
 fn search_bindings(
     query: String,
@@ -187,8 +187,8 @@ fn search_bindings(
     let catalog = state.catalog.read().unwrap();
     catalog
         .search(&query, category.as_deref(), limit)
-        .into_iter()
-        .cloned()
+        .iter()
+        .map(|hit| hit.to_binding())
         .collect()
 }
 
