@@ -6,10 +6,18 @@ else hangs below it.
 ## Nodes and the tree
 
 Each node shows its label and name (`uart0: serial@10000000`), its first
-compatible string and how many properties it has. To put a node under
-another one, drag from the parent's **bottom** handle to the child's **top**
-handle; a node has one parent. **Move selected node under…** in the command
-palette does the same from the keyboard.
+compatible string and how many properties it has.
+
+The canvas shows one level of the tree at a time, its **scope**. The main
+canvas holds the root's children. Double-click a node that holds others
+(`cpus`, `soc`, a bus, or any node that already has children) to open its
+children in a scope tab; the breadcrumb under the tabs shows where you are
+and takes you back up. Double-clicking any other node opens its properties
+in the inspector. **View › Open selected node** and **View › Up one scope**
+do the same from the keyboard or the command palette.
+
+A node you add, drop from the library or paste goes into the scope on show.
+**Edit › Move selected node under…** moves it elsewhere in the tree.
 
 ## References
 

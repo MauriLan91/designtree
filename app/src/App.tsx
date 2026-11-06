@@ -52,6 +52,8 @@ import { BottomPanel } from "./components/BottomPanel";
 import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
+import { ScopeBar } from "./components/ScopeBar";
+import { canHaveChildren, inScope, mainScope, parentsOf, scopeOf, scopePath, scopeView } from "./scopes";
 import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -246,6 +248,19 @@ export function Editor({
   const extrasRef = useRef(extras);
   extrasRef.current = extras;
 
+  // Scopes (US-16.1): the canvas shows one node's children at a time. The
+  // main canvas is the root's; other scopes open in tabs of their own.
+  const parents = useMemo(() => parentsOf(edges), [edges]);
+  const main = useMemo(() => mainScope(nodes, parents), [nodes, parents]);
+  const [openScopes, setOpenScopes] = useState<string[]>([]);
+  /** The active scope tab; null for the main canvas. */
+  const [scopeTab, setScopeTab] = useState<string | null>(null);
+  const exists = (id: string) => nodes.some((n) => n.id === id);
+  const liveScopes = openScopes.filter(exists);
+  const scope = scopeTab !== null && exists(scopeTab) ? scopeTab : main;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+
   // Undo and redo over everything saved in the design file (US-9.1).
   // Overrides ride along so that undoing past one locks the node again;
   // the kernel stamp is written by saving, which is not an edit.
@@ -310,8 +325,8 @@ export function Editor({
       if (!clip) return;
       e.preventDefault();
       const current = nodesRef.current;
-      const selected = current.filter((n) => n.selected && isDtNode(n));
-      const into = selected.length === 1 ? selected[0].id : null;
+      // Pasted nodes land in the scope on show, where the user can see them.
+      const into = scopeRef.current;
       const pasted = pasteClipboard(clip, current, edgesRef.current, into, newId);
       // The pasted nodes come selected, ready to move.
       setNodes((ns) => [...ns.map((n) => (n.selected ? ({ ...n, selected: false } as FlowNode) : n)), ...pasted.nodes]);
@@ -459,6 +474,8 @@ export function Editor({
 
   const onCursorNode = (id: string | null) => {
     if (!id) return;
+    // The canvas follows the cursor into the node's scope.
+    if (!inScope(id, scopeRef.current, main, parents)) showScope(scopeOf(id, main, parents));
     setNodes((ns) =>
       ns.map((n) => (n.selected === (n.id === id) ? n : ({ ...n, selected: n.id === id } as FlowNode))),
     );
@@ -770,16 +787,16 @@ export function Editor({
         },
       };
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]);
-      // New nodes hang off the root so the design stays valid; rewire as needed.
-      const root = nodes.find((n) => isDtNode(n) && n.data.name === "/");
-      if (root) {
+      // A new node is a child of the scope it is created or dropped in.
+      const parent = scopeRef.current;
+      if (parent) {
         setEdges((es) => [
           ...es,
-          { id: newId("e"), source: root.id, target: id, sourceHandle: CHILD_HANDLE, targetHandle: PARENT_HANDLE },
+          { id: newId("e"), source: parent, target: id, sourceHandle: CHILD_HANDLE, targetHandle: PARENT_HANDLE },
         ]);
       }
     },
-    [nodes, screenToFlowPosition, setNodes, setEdges],
+    [screenToFlowPosition, setNodes, setEdges],
   );
 
   const onDrop = useCallback(
@@ -977,6 +994,8 @@ export function Editor({
   };
 
   const focusNode = (id: string) => {
+    // A node in another scope is shown there.
+    if (!inScope(id, scope, main, parents)) showScope(scopeOf(id, main, parents));
     // A node inside a collapsed group is not drawn: open the group first.
     const closed = new Set(collapsedAncestors(nodes, id));
     setEdges((es) => es.map((e) => (e.selected ? { ...e, selected: false } : e)));
@@ -986,7 +1005,7 @@ export function Editor({
         return opened.selected === (n.id === id) ? opened : ({ ...opened, selected: n.id === id } as FlowNode);
       }),
     );
-    if (closed.size) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
+    if (closed.size || !inScope(id, scope, main, parents)) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
     else fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
   };
 
@@ -996,7 +1015,40 @@ export function Editor({
     return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
 
-  const view = useMemo(() => collapseView(nodes, portEdges, (id) => nodeName(id) ?? id), [nodes, portEdges]);
+  const view = useMemo(() => {
+    const scoped = scopeView(nodes, portEdges, scope, main, parents);
+    return collapseView(scoped.nodes, scoped.edges, (id) => nodeName(id) ?? id);
+  }, [nodes, portEdges, scope, main, parents]);
+
+  /** Shows `id`'s scope (null: the main canvas), opening a tab for it. */
+  function showScope(id: string | null) {
+    const tab = id === main ? null : id;
+    if (tab !== null) setOpenScopes((s) => (s.includes(tab) ? s : [...s, tab]));
+    setScopeTab(tab);
+    // What was selected elsewhere is not on show any more.
+    setNodes((ns) => ns.map((n) => (n.selected && !inScope(n.id, id, main, parents) ? ({ ...n, selected: false } as FlowNode) : n)));
+    setTimeout(() => fitView({ maxZoom: 1 }), 30);
+  }
+  const closeScope = (id: string) => {
+    setOpenScopes((s) => s.filter((x) => x !== id));
+    if (scopeTab === id) showScope(main);
+  };
+  const childCount = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const p of parents.values()) count.set(p, (count.get(p) ?? 0) + 1);
+    return count;
+  }, [parents]);
+  /** Double-click (D7): open a node that holds others, edit the rest. */
+  const openNode = (id: string) => {
+    const node = nodes.find((n) => n.id === id);
+    if (!node || !isDtNode(node)) return;
+    if (canHaveChildren(node, childCount.has(id))) return showScope(id);
+    selectOnly([id]);
+    onLayout((l) => (l.inspector.open ? l : { ...l, inspector: { ...l.inspector, open: true } }));
+    setTimeout(() => document.querySelector<HTMLElement>(".inspector textarea")?.focus(), 30);
+  };
+  const scopeTitle = (id: string | null) => (id === null ? "Top level" : id === main ? "/" : (nodeName(id) ?? id));
+  const tabOf = (id: string | null) => ({ id: id === main ? null : id, title: scopeTitle(id) });
 
 
   const showPanel = (tab: PanelTab) => onLayout((l) => ({ ...l, panel: { ...l.panel, open: true, tab } }));
@@ -1131,6 +1183,21 @@ export function Editor({
       run: autoLayout,
     },
     { id: "palette", title: "Command palette…", shortcut: "Ctrl+K", menu: "View", run: () => setShowPalette(true) },
+    {
+      id: "open-scope",
+      title: "Open selected node",
+      menu: "View",
+      hint: "Show its children (double-click does the same)",
+      disabled: selectedDt.length !== 1,
+      run: () => openNode(selectedDt[0].id),
+    },
+    {
+      id: "up-scope",
+      title: "Up one scope",
+      menu: "View",
+      disabled: scope === main,
+      run: () => showScope(scope === null ? main : scopeOf(scope, main, parents)),
+    },
     { id: "mode-graph", title: "Graph", shortcut: "Ctrl+1", menu: "View", group: 1, checked: mode === "graph", run: () => setMode("graph") },
     {
       id: "mode-split",
@@ -1246,7 +1313,7 @@ export function Editor({
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
     ["Ctrl+Y", "Redo"],
     ["Ctrl+C", "Copy the selected nodes"],
-    ["Ctrl+V", "Paste into the selected node"],
+    ["Ctrl+V", "Paste into the scope on show"],
     ["Ctrl+Tab", "Next tab (Ctrl+Shift+Tab: previous)"],
     ["Ctrl+W", "Close the tab"],
     ["Alt+letter", "Open a menu (Alt+F: File)"],
@@ -1351,7 +1418,16 @@ export function Editor({
               Bindings may differ; pick another checkout under Kernels…
             </div>
           )}
-          {boardView ? (
+          {!boardView && (
+          <ScopeBar
+            tabs={[tabOf(main), ...liveScopes.map(tabOf)]}
+            active={scope === main ? null : scope}
+            path={scopePath(scope, main, parents).map(tabOf)}
+            onOpen={(id) => showScope(id ?? main)}
+            onClose={closeScope}
+          />
+        )}
+        {boardView ? (
             <BoardView
               colorMode={settings.theme}
               nodes={nodes}
@@ -1384,6 +1460,8 @@ export function Editor({
               fitViewOptions={{ maxZoom: 1 }}
               minZoom={0.1}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
+              onNodeDoubleClick={(_, node) => openNode(node.id)}
+              zoomOnDoubleClick={false}
             >
               <Background />
               <Controls />
