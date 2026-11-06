@@ -111,6 +111,20 @@ button.wide { width: 100%; }
 textarea { font-family: ui-monospace, "JetBrains Mono", monospace; resize: vertical; width: 100%; }
 
 .panel { background: var(--panel); overflow: auto; }
+/* WebKitGTK's overlay scrollbars only show on hover, so the panels looked
+   like they could not scroll. Styled scrollbars are always drawn. */
+.panel::-webkit-scrollbar,
+.binding-list::-webkit-scrollbar { width: 10px; height: 10px; }
+.panel::-webkit-scrollbar-track,
+.binding-list::-webkit-scrollbar-track { background: transparent; }
+.panel::-webkit-scrollbar-thumb,
+.binding-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  border: 2px solid var(--panel);
+  border-radius: 5px;
+}
+.panel::-webkit-scrollbar-thumb:hover,
+.binding-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 10px; }
 .hint { color: var(--muted); margin: 8px 0; }
 .error { color: var(--danger); }
@@ -147,6 +161,9 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .missing { font-size: 12px; color: var(--ref); }
 .missing ul { margin: 4px 0 0 16px; padding: 0; }
 .preview { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* A long inspector would squeeze the source to a line or two; keep it usable
+   and let the side panel scroll instead. */
+.side .preview { flex-shrink: 0; min-height: max(320px, 45vh); }
 .preview-mode { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .preview-mode .hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .errors { color: var(--danger); padding-left: 18px; margin: 0; }
