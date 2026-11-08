@@ -1140,9 +1140,10 @@ export function Editor({
     const up = new Set<string>(main ? [main] : []);
     for (const id of ids) for (let p = parents.get(id); p; p = parents.get(p)) up.add(p);
     if ([...up].some((id) => !expanded.has(id))) setExpanded((s) => new Set([...s, ...up]));
-  }, [selectedKey, main]);
-  // Rows change with the tree, not with positions.
-  const navRows = useMemo(() => treeRows(nodes, edges, expanded), [edges, expanded, nodes.length]);
+  }, [selectedKey, main, parents]);
+  // Rows change with the tree and the names, not with positions.
+  const treeKey = nodes.map((n) => (isDtNode(n) ? `${n.id}=${n.data.name}` : "")).join(" ");
+  const navRows = useMemo(() => treeRows(nodes, edges, expanded), [edges, expanded, treeKey]);
   const navNodes = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
   /** Double-click (D7): open a node that holds others, edit the rest. */
@@ -1154,7 +1155,9 @@ export function Editor({
   };
   /** Selects `id` and puts the cursor in its properties in the inspector. */
   const editNode = (id: string) => {
-    selectOnly([id]);
+    // From the navigator the node may be elsewhere: go to it first.
+    if (id === scope || inScope(id, scope, main, parents)) selectOnly([id]);
+    else focusNode(id);
     onLayout((l) => (l.inspector.open ? l : { ...l, inspector: { ...l.inspector, open: true } }));
     setTimeout(() => document.querySelector<HTMLElement>(".inspector textarea")?.focus(), 30);
   };
@@ -1556,11 +1559,7 @@ export function Editor({
               selected={new Set(selectedKey ? selectedKey.split(" ") : [])}
               onToggle={toggleExpanded}
               onSelect={focusNode}
-              onOpen={(id) => {
-                const n = navNodes.get(id);
-                if (n && isDtNode(n) && canHaveChildren(n, childCount.has(id))) showScope(id);
-                else focusNode(id);
-              }}
+              onOpen={openNode}
             />,
             outlineSlot,
           )}
