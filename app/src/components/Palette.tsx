@@ -1,9 +1,23 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, LayoutGrid, List } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
-import { loadList, saveList, toggled, withRecent } from "../libraryHistory";
+import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from "../libraryHistory";
 import { bindingOf, entryKey, entryOfKey, highlight } from "../library";
 import type { Binding, LibraryEntry } from "../model";
 import { KINDS, kindOf } from "../categories";
+import {
+  TILE_WIDTH,
+  categorySections,
+  historySections,
+  layoutRows,
+  openByDefault,
+  rowHeight,
+  rowOffsets,
+  visibleRange,
+  type Display,
+  type Row,
+  type Section,
+} from "../libraryView";
 
 /** Drag data of a library entry: a [`LibraryEntry`] as JSON. */
 export const DRAG_MIME = "application/x-designtree-entry";
@@ -17,7 +31,8 @@ interface Props {
 }
 
 /** Element library built from the kernel binding schemas: one entry per
- * compatible (US-18.1), in a virtualized list. */
+ * compatible (US-18.1), grouped in collapsible sections by category and
+ * drawn as a list or a grid (US-18.2). Only the rows in view are drawn. */
 export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const [summary, setSummary] = useState<CatalogSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,6 +46,14 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const [recents, setRecents] = useState(() => loadList("recents"));
   const [favoriteEntries, setFavoriteEntries] = useState<LibraryEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<LibraryEntry[]>([]);
+  const [prefs, setPrefs] = useState(loadPrefs);
+  const updatePrefs = (next: typeof prefs) => {
+    setPrefs(next);
+    savePrefs(next);
+  };
+  // Stable while nothing changes, so scrolling does not lay the rows out again.
+  const isOpen = useCallback((id: string) => prefs.open[id] ?? openByDefault(id), [prefs.open]);
+  const toggleSection = (id: string) => updatePrefs({ ...prefs, open: { ...prefs.open, [id]: !isOpen(id) } });
 
   const loadKernel = async (dir: string | null) => {
     if (!dir) return;
@@ -114,41 +137,88 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     onAdd(binding);
   };
 
-  const row = (e: LibraryEntry, key: string, q = "") => {
+  const entryProps = (e: LibraryEntry) => ({
+    draggable: true,
+    tabIndex: 0,
+    onDragStart: (ev: React.DragEvent) => {
+      ev.dataTransfer.setData(DRAG_MIME, JSON.stringify(e));
+      ev.dataTransfer.effectAllowed = "move" as const;
+    },
+    onDragEnd: (ev: React.DragEvent) => ev.dataTransfer.dropEffect !== "none" && used(e),
+    onDoubleClick: () => add(e),
+    // Only the entry itself: Enter on its star toggles the favorite alone.
+    onKeyDown: (ev: React.KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && add(e),
+    title: `${e.title ?? e.path}\n${e.compatible ?? ""}\nDrag onto the canvas or double-click to add`,
+  });
+
+  const star = (e: LibraryEntry) => {
     const favorite = favorites.includes(entryKey(e));
     return (
-      <li
-        key={key}
-        draggable
-        onDragStart={(ev) => {
-          ev.dataTransfer.setData(DRAG_MIME, JSON.stringify(e));
-          ev.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={(ev) => ev.dataTransfer.dropEffect !== "none" && used(e)}
-        onDoubleClick={() => add(e)}
-        title={`${e.path}\nDrag onto the canvas or double-click to add`}
+      <button
+        className="star"
+        aria-pressed={favorite}
+        aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+        onClick={() => toggleFavorite(e)}
+        onDoubleClick={(ev) => ev.stopPropagation()}
       >
-        <div className="binding-row">
-          <EntryChip category={e.category} />
-          <div className="binding-text">
-            <div className="binding-title">
-              <Marked text={e.title ?? e.path} query={q} />
+        {favorite ? "★" : "☆"}
+      </button>
+    );
+  };
+
+  const searching = results.query.trim() !== "";
+  // Grouped once per result set; a star or an add only changes the history sections.
+  const categories = useMemo(() => (searching ? [] : categorySections(results.entries)), [searching, results]);
+  const sections: Section[] = useMemo(() => {
+    if (searching) return [{ id: "matches", title: "Matches", entries: results.entries, headless: true }];
+    // A picked category shows its elements, without the history of other ones.
+    if (category) return categories;
+    return [...historySections(favoriteEntries, recentEntries), ...categories];
+  }, [searching, results, category, categories, favoriteEntries, recentEntries]);
+
+  const renderRow = (row: Row, columns: number) => {
+    const { section } = row;
+    if (row.type === "header") {
+      const count = section.entries.length.toLocaleString();
+      return (
+        <button className="lib-header" aria-expanded={row.open} onClick={() => toggleSection(section.id)} title={section.category}>
+          {row.open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+          {section.category && <EntryChip category={section.category} small />}
+          <span className="lib-header-title">{section.title}</span>
+          <span className="lib-count">{count}</span>
+        </button>
+      );
+    }
+    const q = searching ? results.query : "";
+    if (prefs.display === "grid") {
+      return (
+        <div className="lib-tiles" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+          {row.entries.map((e) => (
+            <div key={entryKey(e)} className="lib-tile" {...entryProps(e)}>
+              <EntryChip category={e.category} />
+              <span className="lib-tile-name">
+                <Marked text={e.compatible ?? e.path} query={q} />
+              </span>
+              {star(e)}
             </div>
-            <div className="binding-compat">
-              <Marked text={e.compatible ?? e.path} query={q} />
-            </div>
-          </div>
-          <button
-            className="star"
-            aria-pressed={favorite}
-            aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-            onClick={() => toggleFavorite(e)}
-            onDoubleClick={(ev) => ev.stopPropagation()}
-          >
-            {favorite ? "★" : "☆"}
-          </button>
+          ))}
         </div>
-      </li>
+      );
+    }
+    const e = row.entries[0];
+    return (
+      <div className="lib-item binding-row" {...entryProps(e)}>
+        <EntryChip category={e.category} />
+        <div className="binding-text">
+          <div className="binding-title">
+            <Marked text={e.title ?? e.path} query={q} />
+          </div>
+          <div className="binding-compat">
+            <Marked text={e.compatible ?? e.path} query={q} />
+          </div>
+        </div>
+        {star(e)}
+      </div>
     );
   };
 
@@ -178,41 +248,49 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">All categories</option>
-            {summary.categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-          {!query.trim() && favoriteEntries.length > 0 && (
-            <>
-              <h3>Favorites</h3>
-              <ul className="binding-list short">{favoriteEntries.map((e) => row(e, `f:${entryKey(e)}`))}</ul>
-            </>
-          )}
-          {!query.trim() && recentEntries.length > 0 && (
-            <>
-              <h3>Recent</h3>
-              <ul className="binding-list short">{recentEntries.map((e) => row(e, `r:${entryKey(e)}`))}</ul>
-            </>
-          )}
-          <h3 aria-live="polite">
-            {results.entries.length.toLocaleString()}{" "}
-            {results.query.trim() ? (results.entries.length === 1 ? "match" : "matches") : "devices"}
-          </h3>
-          <VirtualList items={results.entries} render={(e) => row(e, entryKey(e), results.query)} />
+          <div className="lib-filters">
+            <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+              <option value="">All categories</option>
+              {summary.categories.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+            <div className="segmented" role="group" aria-label="Library view">
+              {(["list", "grid"] as Display[]).map((d) => (
+                <button
+                  key={d}
+                  aria-pressed={prefs.display === d}
+                  aria-label={d === "list" ? "List" : "Grid"}
+                  title={d === "list" ? "List" : "Grid"}
+                  onClick={() => updatePrefs({ ...prefs, display: d })}
+                >
+                  {d === "list" ? <List size={14} aria-hidden /> : <LayoutGrid size={14} aria-hidden />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="lib-total" aria-live="polite">
+            {results.entries.length.toLocaleString()} {searching ? (results.entries.length === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
+          </p>
+          <SectionList
+            sections={sections}
+            isOpen={searching || category ? alwaysOpen : isOpen}
+            display={prefs.display}
+            render={renderRow}
+            resetKey={results}
+          />
         </>
       )}
     </aside>
   );
 }
 
-function EntryChip({ category }: { category: string }) {
+function EntryChip({ category, small }: { category: string; small?: boolean }) {
   const kind = kindOf(category, "");
   const { Icon, title } = KINDS[kind];
   return (
-    <span className={`kind-chip large kind-${kind}`} title={title}>
-      <Icon size={16} strokeWidth={1.75} aria-hidden />
+    <span className={`kind-chip ${small ? "" : "large "}kind-${kind}`} title={title}>
+      <Icon size={small ? 12 : 16} strokeWidth={1.75} aria-hidden />
     </span>
   );
 }
@@ -226,37 +304,62 @@ function Marked({ text, query }: { text: string; query: string }) {
   );
 }
 
-/** Height of a library row, its gap included; the list draws only the rows in view. */
-const ROW_HEIGHT = 54;
-const OVERSCAN = 6;
+const alwaysOpen = () => true;
+
+/** Pixels drawn above and below the view, so fast scrolling shows no gaps. */
+const OVERSCAN = 400;
 
 /**
- * A list of thousands of entries that renders only the visible rows, with
- * spacers standing in for the rest so the scroll bar keeps its size.
+ * The sections as one scrolling column that draws only the rows in view;
+ * the rest is empty space of the right height, so the scroll bar stays true
+ * over tens of thousands of entries.
  */
-function VirtualList<T>({ items, render }: { items: T[]; render: (item: T) => ReactNode }) {
-  const list = useRef<HTMLUListElement>(null);
+function SectionList({
+  sections,
+  isOpen,
+  display,
+  render,
+  resetKey,
+}: {
+  sections: Section[];
+  isOpen: (id: string) => boolean;
+  display: Display;
+  render: (row: Row, columns: number) => ReactNode;
+  /** A new value scrolls back to the top: new results. */
+  resetKey: unknown;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
-  const [height, setHeight] = useState(800);
+  const [size, setSize] = useState({ width: 240, height: 800 });
   useEffect(() => {
-    const el = list.current;
+    const el = scroller.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setHeight(el.clientHeight));
+    // The content box: the scroller's padding holds no tiles.
+    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: el.clientHeight }));
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  // New results start from the top.
   useEffect(() => {
-    list.current?.scrollTo({ top: 0 });
+    scroller.current?.scrollTo({ top: 0 });
     setTop(0);
-  }, [items]);
-  const first = Math.max(0, Math.floor(top / ROW_HEIGHT) - OVERSCAN);
-  const last = Math.min(items.length, Math.ceil((top + height) / ROW_HEIGHT) + OVERSCAN);
+  }, [resetKey]);
+  const columns = Math.max(1, Math.floor(size.width / TILE_WIDTH));
+  const rows = useMemo(() => layoutRows(sections, isOpen, display, columns), [sections, isOpen, display, columns]);
+  const tops = useMemo(() => rowOffsets(rows, display), [rows, display]);
+  const [first, end] = visibleRange(tops, Math.max(0, top - OVERSCAN), size.height + 2 * OVERSCAN);
   return (
-    <ul className="binding-list virtual" ref={list} onScroll={(e) => setTop(e.currentTarget.scrollTop)}>
-      <li className="spacer" aria-hidden style={{ height: first * ROW_HEIGHT }} />
-      {items.slice(first, last).map(render)}
-      <li className="spacer" aria-hidden style={{ height: (items.length - last) * ROW_HEIGHT }} />
-    </ul>
+    <div className="lib-scroll" ref={scroller} onScroll={(e) => setTop(e.currentTarget.scrollTop)}>
+      <div className="lib-canvas" style={{ height: tops[rows.length] }}>
+        {rows.slice(first, end).map((row, i) => (
+          <div
+            key={row.type === "header" ? `h:${row.section.id}` : `${row.section.id}:${entryKey(row.entries[0])}`}
+            className="lib-row"
+            style={{ top: tops[first + i], height: rowHeight(row, display) }}
+          >
+            {render(row, columns)}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

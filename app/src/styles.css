@@ -303,20 +303,20 @@ textarea { font-family: var(--mono); resize: vertical; width: 100%; }
    like they could not scroll. Styled scrollbars are always drawn. */
 .panel::-webkit-scrollbar,
 .dts-editor .cm-scroller::-webkit-scrollbar,
-.binding-list::-webkit-scrollbar { width: 10px; height: 10px; }
+.lib-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
 .panel::-webkit-scrollbar-track,
 .dts-editor .cm-scroller::-webkit-scrollbar-track,
-.binding-list::-webkit-scrollbar-track { background: transparent; }
+.lib-scroll::-webkit-scrollbar-track { background: transparent; }
 .panel::-webkit-scrollbar-thumb,
 .dts-editor .cm-scroller::-webkit-scrollbar-thumb,
-.binding-list::-webkit-scrollbar-thumb {
+.lib-scroll::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--muted) 45%, transparent);
   border: 2px solid var(--panel);
   border-radius: 5px;
 }
 .panel::-webkit-scrollbar-thumb:hover,
 .dts-editor .cm-scroller::-webkit-scrollbar-thumb:hover,
-.binding-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.lib-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 10px; }
 .hint { color: var(--muted); margin: 8px 0; }
 .error { color: var(--danger); }
@@ -327,16 +327,6 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   flex-direction: column;
   gap: 8px;
 }
-.binding-list { list-style: none; padding: 0; margin: 0; overflow: auto; flex: 1; }
-.binding-list li {
-  padding: 7px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 6px;
-  cursor: grab;
-  background: var(--node);
-}
-.binding-list li:hover { border-color: var(--accent); }
 .binding-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .binding-compat { color: var(--muted); font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -516,7 +506,6 @@ button[aria-pressed="true"] { background: var(--accent); color: white; }
 .soc-list button:hover { background: var(--code); cursor: pointer; }
 .soc-list span { color: var(--muted); }
 .palette h3 { font-size: 11px; color: var(--muted); margin: 4px 0 -2px; font-weight: 600; }
-.binding-list.short { flex: none; max-height: 140px; }
 .binding-row { display: flex; align-items: center; gap: 10px; }
 .binding-text { flex: 1; min-width: 0; }
 .star { border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--muted); cursor: pointer; }
@@ -894,7 +883,25 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .missing-row .key-text { color: var(--muted); }
 .prop-table .missing-row input:not([type="checkbox"]) { border-color: var(--border); border-style: dashed; }
 .prop-table .row-hint { display: block; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 11px; font-style: italic; }
-/* Library rows have a fixed height so the list can draw only those in view (US-18.1). */
-.binding-list.virtual li:not(.spacer) { height: 48px; box-sizing: border-box; }
-.binding-list li.spacer { padding: 0; margin: 0; border: 0; background: none; cursor: default; }
-.binding-list mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
+/* Library sections (US-18.2). */
+.lib-filters { display: flex; gap: 6px; align-items: center; }
+.lib-filters select { flex: 1; min-width: 0; }
+.lib-filters .segmented button { display: flex; align-items: center; height: 22px; padding: 0 6px; }
+.lib-scroll { flex: 1; min-height: 0; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.lib-canvas { position: relative; }
+.lib-row { position: absolute; left: 0; right: 0; }
+.lib-header { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; margin: 2px 0; padding: 0 4px; border: 0; border-radius: 6px; background: none; color: var(--text); font-size: 12px; font-weight: 600; text-align: left; }
+button.lib-header:hover { background: var(--hover); }
+.lib-total { margin: 0; color: var(--muted); font-size: 11px; font-weight: 600; }
+.lib-header svg { flex: none; color: var(--muted); }
+.lib-header .kind-chip { flex: none; }
+.lib-header-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.lib-item { height: 48px; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--node); cursor: grab; }
+.lib-item:hover, .lib-tile:hover, .lib-item:focus-visible, .lib-tile:focus-visible { border-color: var(--accent); outline: none; }
+.lib-tiles { display: grid; gap: 6px; height: 90px; }
+.lib-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--node); cursor: grab; }
+.lib-tile-name { width: 100%; font-family: var(--mono); font-size: 11px; line-height: 1.3; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.lib-tile .star { position: absolute; top: 2px; right: 2px; font-size: 13px; opacity: 0; }
+.lib-tile:hover .star, .lib-tile .star[aria-pressed="true"], .lib-tile .star:focus-visible { opacity: 1; }
+.lib-scroll mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
