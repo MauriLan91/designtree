@@ -14,8 +14,14 @@ Properties that have no field of their own go in the inspector's
 0x20000000>`), or straight into the DTS source panel.
 
 Nodes the kernel's schemas do not describe (`cpus`, `memory`, `chosen`,
-`aliases`, the LED itself) are added with **+ Empty node** and named in the
-inspector. Everything else comes from the library search.
+`aliases`, the LED itself) are added with **+ Empty node** at the top of the
+library and named in the inspector. Everything else comes from the library
+search.
+
+The canvas shows one level of the tree at a time (see [Building a
+design](designing.md)). A node you add goes into the level on show: on the
+main canvas, the `/` tab, it becomes a child of the root. Unless a step says
+otherwise, work on the main canvas.
 
 ## 1. The root and the CPU
 
@@ -91,6 +97,8 @@ Checkpoint: `first-board-5-led.json`.
 
 ## 6. Check and build
 
+- **View › Outline** (Ctrl+Shift+O) shows the whole tree in the side bar:
+  `cpus` with its `cpu@0`, `leds` with `led-0`, and the rest under `/`.
 - The **Problems** tab of the bottom panel should be empty. If it lists something, click
   the problem to jump to the node, and compare with the checkpoint.
 - **View › Address map** shows the four devices on the root bus with no overlaps.
