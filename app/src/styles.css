@@ -884,7 +884,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .missing-row input:not([type="checkbox"]) { border-color: var(--border); border-style: dashed; }
 .prop-table .row-hint { display: block; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 11px; font-style: italic; }
 /* Library sections (US-18.2). */
-.lib-filters { display: flex; gap: 6px; align-items: center; }
+.lib-filters { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
 .lib-filters select { flex: 1; min-width: 0; }
 .lib-filters .segmented button { display: flex; align-items: center; height: 22px; padding: 0 6px; }
 .lib-scroll { flex: 1; min-height: 0; overflow: auto; margin: 0 -4px; padding: 0 4px; }

@@ -29,3 +29,23 @@ describe("initialProperties", () => {
     expect(todo).toEqual(["reg"]);
   });
 });
+
+describe("basic nodes", () => {
+  it("start with their one-choice properties and no status", () => {
+    const memory: Binding = {
+      path: "dtschema/memory.yaml",
+      category: "basic",
+      node_name: "memory@0",
+      properties: [
+        { name: "device_type", required: true, type: "string", enum: ["memory"] },
+        { name: "reg", required: true, type: "address", min_items: 1 },
+      ],
+    };
+    const { properties, todo } = initialProperties(memory);
+    expect(properties).toEqual([
+      { name: "reg", value: { type: "cells", value: [0] } },
+      { name: "device_type", value: { type: "strings", value: ["memory"] } },
+    ]);
+    expect(todo).toEqual(["reg"]);
+  });
+});

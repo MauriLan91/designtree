@@ -244,6 +244,19 @@ fn search_bindings(
         .collect()
 }
 
+/// The basic devicetree nodes (US-18.3), from the dt-schema core schemas
+/// built into the app, so they are there before any kernel is loaded.
+#[tauri::command]
+fn basic_bindings() -> Vec<Binding> {
+    basics().to_vec()
+}
+
+/// The basic nodes, built once.
+fn basics() -> &'static [Binding] {
+    static BASICS: std::sync::OnceLock<Vec<Binding>> = std::sync::OnceLock::new();
+    BASICS.get_or_init(designtree_bindings::basic_bindings)
+}
+
 /// The library entries matching `query`, one per compatible (US-18.1).
 /// Without a limit the whole library comes back for the virtualized list.
 #[tauri::command]
@@ -261,12 +274,22 @@ fn library_entries(
         .collect()
 }
 
-/// The bindings with the given schema paths (favorites, recents), in that
-/// order; paths the loaded kernel does not have are left out.
+/// The bindings with the given schema paths (favorites, recents, a dropped
+/// entry), in that order: the loaded kernel's or the basic nodes'; paths
+/// neither has are left out.
 #[tauri::command]
 fn get_bindings(paths: Vec<String>, state: State<AppState>) -> Vec<Binding> {
     let catalog = state.catalog.read().unwrap();
-    catalog.by_paths(&paths).into_iter().cloned().collect()
+    paths
+        .iter()
+        .filter_map(|p| {
+            catalog
+                .by_paths(std::slice::from_ref(p))
+                .first()
+                .map(|b| (*b).clone())
+                .or_else(|| basics().iter().find(|b| &b.path == p).cloned())
+        })
+        .collect()
 }
 
 /// The binding documenting each compatible string, in that order (`None`
@@ -720,6 +743,7 @@ pub fn run() {
             remove_kernel,
             search_bindings,
             library_entries,
+            basic_bindings,
             dtc_version,
             read_settings,
             write_settings,

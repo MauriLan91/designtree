@@ -48,7 +48,8 @@ export function checkValue(spec: PropertySpec, value: PropertyValue | undefined)
 
 /** The value a spec's default gives for its input, or null when it has none the input can hold. */
 function defaultValue(spec: PropertySpec, kind: EditorKind): PropertyValue | null {
-  const d = spec.default;
+  // A property allowed one value has it as its default (`device_type = "memory"`).
+  const d = spec.default ?? (spec.enum?.length === 1 ? spec.enum[0] : undefined);
   if (d === undefined || d === null) return null;
   const isCell = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffffffff;
   switch (kind) {
@@ -77,14 +78,16 @@ export function specDefault(spec: PropertySpec): PropertyValue | null {
 }
 
 /**
- * Properties a node dropped from the palette starts with (US-2.3): `status`,
+ * Properties a node dropped from the palette starts with (US-2.3): `status`
+ * (not on a basic node),
  * a `reg` placeholder when the binding has one, and required properties that
  * have a default. `todo` names the placeholders the user still has to fill in;
  * required properties without a default are left out and show as missing.
  */
 export function initialProperties(binding: Binding): { properties: Property[]; todo: string[] } {
   const specs = binding.properties ?? [];
-  const properties: Property[] = [{ name: "status", value: { type: "strings", value: ["okay"] } }];
+  // The basic nodes (US-18.3) are not devices that can be disabled.
+  const properties: Property[] = binding.node_name ? [] : [{ name: "status", value: { type: "strings", value: ["okay"] } }];
   const todo: string[] = [];
   const reg = specs.find((s) => s.name === "reg");
   if (reg) {
