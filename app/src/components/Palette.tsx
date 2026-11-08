@@ -7,7 +7,8 @@ import type { Binding, LibraryEntry } from "../model";
 import { KINDS, kindOf } from "../categories";
 import {
   TILE_WIDTH,
-  browseSections,
+  categorySections,
+  historySections,
   layoutRows,
   openByDefault,
   rowHeight,
@@ -145,7 +146,8 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     },
     onDragEnd: (ev: React.DragEvent) => ev.dataTransfer.dropEffect !== "none" && used(e),
     onDoubleClick: () => add(e),
-    onKeyDown: (ev: React.KeyboardEvent) => ev.key === "Enter" && add(e),
+    // Only the entry itself: Enter on its star toggles the favorite alone.
+    onKeyDown: (ev: React.KeyboardEvent) => ev.key === "Enter" && ev.target === ev.currentTarget && add(e),
     title: `${e.title ?? e.path}\n${e.compatible ?? ""}\nDrag onto the canvas or double-click to add`,
   });
 
@@ -165,25 +167,19 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   };
 
   const searching = results.query.trim() !== "";
-  const sections: Section[] = useMemo(
-    () =>
-      searching
-        ? [{ id: "matches", title: results.entries.length === 1 ? "match" : "matches", entries: results.entries }]
-        : browseSections(results.entries, favoriteEntries, recentEntries),
-    [searching, results, favoriteEntries, recentEntries],
-  );
+  // Grouped once per result set; a star or an add only changes the history sections.
+  const categories = useMemo(() => (searching ? [] : categorySections(results.entries)), [searching, results]);
+  const sections: Section[] = useMemo(() => {
+    if (searching) return [{ id: "matches", title: "Matches", entries: results.entries, headless: true }];
+    // A picked category shows its elements, without the history of other ones.
+    if (category) return categories;
+    return [...historySections(favoriteEntries, recentEntries), ...categories];
+  }, [searching, results, category, categories, favoriteEntries, recentEntries]);
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;
     if (row.type === "header") {
       const count = section.entries.length.toLocaleString();
-      if (section.id === "matches") {
-        return (
-          <h3 className="lib-header" aria-live="polite">
-            {count} {section.title}
-          </h3>
-        );
-      }
       return (
         <button className="lib-header" aria-expanded={row.open} onClick={() => toggleSection(section.id)} title={section.category}>
           {row.open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
@@ -273,9 +269,12 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
               ))}
             </div>
           </div>
+          <p className="lib-total" aria-live="polite">
+            {results.entries.length.toLocaleString()} {searching ? (results.entries.length === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
+          </p>
           <SectionList
             sections={sections}
-            isOpen={searching ? alwaysOpen : isOpen}
+            isOpen={searching || category ? alwaysOpen : isOpen}
             display={prefs.display}
             render={renderRow}
             resetKey={results}
@@ -335,7 +334,8 @@ function SectionList({
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setSize({ width: el.clientWidth, height: el.clientHeight }));
+    // The content box: the scroller's padding holds no tiles.
+    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: el.clientHeight }));
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -352,7 +352,7 @@ function SectionList({
       <div className="lib-canvas" style={{ height: tops[rows.length] }}>
         {rows.slice(first, end).map((row, i) => (
           <div
-            key={row.type === "header" ? `h:${row.section.id}` : `${row.section.id}:${first + i}`}
+            key={row.type === "header" ? `h:${row.section.id}` : `${row.section.id}:${entryKey(row.entries[0])}`}
             className="lib-row"
             style={{ top: tops[first + i], height: rowHeight(row, display) }}
           >

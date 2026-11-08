@@ -13,6 +13,8 @@ export interface Section {
   /** The binding category whose icon the header shows. */
   category?: string;
   entries: LibraryEntry[];
+  /** Drawn without a header row: the one list of search matches. */
+  headless?: boolean;
 }
 
 export type Row =
@@ -37,6 +39,18 @@ export function categoryTitle(category: string): string {
 
 /** The sections of the whole library, before a query is typed. */
 export function browseSections(entries: LibraryEntry[], favorites: LibraryEntry[], recents: LibraryEntry[]): Section[] {
+  return [...historySections(favorites, recents), ...categorySections(entries)];
+}
+
+export function historySections(favorites: LibraryEntry[], recents: LibraryEntry[]): Section[] {
+  return [
+    ...(favorites.length ? [{ id: "favorites", title: "Favorites", entries: favorites }] : []),
+    ...(recents.length ? [{ id: "recents", title: "Recent", entries: recents }] : []),
+  ];
+}
+
+/** One section per category, in name order. */
+export function categorySections(entries: LibraryEntry[]): Section[] {
   const byCategory = new Map<string, LibraryEntry[]>();
   for (const e of entries) {
     const list = byCategory.get(e.category);
@@ -44,11 +58,7 @@ export function browseSections(entries: LibraryEntry[], favorites: LibraryEntry[
     else byCategory.set(e.category, [e]);
   }
   const categories = [...byCategory.keys()].sort((a, b) => a.localeCompare(b));
-  return [
-    ...(favorites.length ? [{ id: "favorites", title: "Favorites", entries: favorites }] : []),
-    ...(recents.length ? [{ id: "recents", title: "Recent", entries: recents }] : []),
-    ...categories.map((c) => ({ id: `category:${c}`, title: categoryTitle(c), category: c, entries: byCategory.get(c)! })),
-  ];
+  return categories.map((c) => ({ id: `category:${c}`, title: categoryTitle(c), category: c, entries: byCategory.get(c)! }));
 }
 
 /** The rows to draw: a header per section and, for an open one, its
@@ -57,8 +67,8 @@ export function layoutRows(sections: Section[], isOpen: (id: string) => boolean,
   const per = display === "grid" ? Math.max(1, columns) : 1;
   const rows: Row[] = [];
   for (const section of sections) {
-    const open = isOpen(section.id);
-    rows.push({ type: "header", section, open });
+    const open = section.headless || isOpen(section.id);
+    if (!section.headless) rows.push({ type: "header", section, open });
     if (!open) continue;
     for (let i = 0; i < section.entries.length; i += per) {
       rows.push({ type: "entries", section, entries: section.entries.slice(i, i + per) });

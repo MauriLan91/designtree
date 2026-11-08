@@ -22,6 +22,9 @@ describe("library sections", () => {
     expect(list.map((r) => (r.type === "header" ? r.section.id : r.entries.length))).toEqual(["category:arm", 1, 1, 1, "category:serial"]);
     const grid = layoutRows(sections, open, "grid", 2);
     expect(grid.map((r) => (r.type === "header" ? r.section.id : r.entries.length))).toEqual(["category:arm", 2, 1, "category:serial"]);
+    // Search matches are one list without a header, always open.
+    const matches = layoutRows([{ id: "matches", title: "Matches", entries: all, headless: true }], () => false, "list", 1);
+    expect(matches.map((r) => r.type)).toEqual(["entries", "entries", "entries", "entries", "entries"]);
   });
 
   it("find the rows in view", () => {
