@@ -59,7 +59,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M2 v0.2 Real boards** | Schema validation, typed wiring, SoC templates, overlays, address map | G3 | 2027-02-26 |
 | **M3 v0.3 Productive editor** | Undo/redo, text/graph sync, board view, keyboard flow, performance | G4, G5 | 2027-03-31 |
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
-| **M5 v1.1 Workbench UX** | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | 2027-02-26 |
+| **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
 following milestone. To be adjusted to the team's real capacity.
