@@ -60,9 +60,10 @@ undo.
 
 - **Tidy this canvas** (Ctrl+L, also in the toolbar) lays out the level on
   show in columns along the references, left to right the way a devicetree
-  reads: a device left of the clocks and interrupt controller it uses. Its
-  references then turn at right angles in the gaps between the columns,
-  each at its own place so they stay apart. Nodes with no reference on this
+  reads: a device left of the clocks and interrupt controller it uses. A
+  reference to the next column then turns at right angles in the gap
+  between them, each at its own place, the gap widening so they stay
+  apart; one that skips a column or points back stays a curve. Nodes with no reference on this
   level go in rows below. The view then fits the result.
 - **Tidy the selection** (Ctrl+Shift+L) does the same for the selected
   nodes only, from where the selection starts, and leaves the rest alone.
@@ -73,8 +74,10 @@ undo.
   three or more evenly between the outer two.
 
 **View › Fit the design in view** frames everything on show. Positions and
-the places where references turn are saved in the design file; moving a
-node keeps its references at right angles, and tidying again redraws them.
+the places where references turn are saved in the design file. Moving a
+node keeps its references at right angles while the turn is still between
+the two ends, and draws them as curves past that; tidying again redraws
+them. Pasted references start as curves.
 
 ## Saving
 

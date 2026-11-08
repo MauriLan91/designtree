@@ -2,7 +2,7 @@
 
 ![The DesignTree window](images/window.png)
 
-- **Menu bar** at the top: File, Edit, View, Insert, Tools and Help hold
+- **Menu bar** at the top: File, Edit, View, Insert, Arrange, Tools and Help hold
   every command, each with its shortcut; greyed-out items cannot run right
   now (no selection, say). Alt and the underlined letter opens a menu, the
   arrow keys move through it.

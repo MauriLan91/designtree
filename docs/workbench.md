@@ -11,7 +11,7 @@ Top to bottom, VSCode-like:
 
 | Region | Size | Content |
 | --- | --- | --- |
-| Menu bar | 30 px | File, Edit, View, Insert, Tools, Help (US-15.2) |
+| Menu bar | 30 px | File, Edit, View, Insert, Arrange, Tools, Help (US-15.2, Arrange from US-9.5) |
 | Toolbar | 40 px | New, Open, Save · Undo, Redo · Add node, Tidy this canvas · command search (Ctrl+K, the existing palette shortcut) · Build .dtb as the one primary button |
 | Activity bar | 48 px wide | Library, Outline, Board view, Kernel schemas; Settings at the bottom |
 | Side bar | 248 px (200–480) | The active view; library search with results, recents |

@@ -27,6 +27,12 @@ export interface Tidied {
 /** Room between columns, where the references turn. */
 export const COLUMN_GAP = 160;
 export const ROW_GAP = 40;
+/** Room between the vertical runs of references that turn in one gap. */
+const RUN_SPACING = 12;
+/** Room between a gap's outermost run and the boxes beside it. */
+const GAP_MARGIN = 30;
+/** A gap grows with its references up to this, then they move closer. */
+const MAX_GAP = 600;
 
 /**
  * Lays the boxes out in columns, left to right along the references, the
@@ -90,6 +96,17 @@ export function layered(boxes: Box[], links: Link[], origin: { x: number; y: num
     }
   }
 
+  // Only a reference to the next column turns at a right angle: one that
+  // goes back or skips a column would cross the boxes on its way, and
+  // stays a curve. A gap is as wide as its references need to stay apart.
+  const routed = inside.filter((l) => rank.get(l.target) === rank.get(l.source)! + 1);
+  const perGap = new Map<number, Link[]>();
+  for (const l of routed) {
+    const c = rank.get(l.source)!;
+    perGap.set(c, [...(perGap.get(c) ?? []), l]);
+  }
+  const gapAfter = (c: number) => Math.min(MAX_GAP, Math.max(COLUMN_GAP, 2 * GAP_MARGIN + RUN_SPACING * (perGap.get(c)?.length ?? 0)));
+
   const positions = new Map<string, { x: number; y: number }>();
   const heightOf = (col: string[]) => col.reduce((h, id) => h + byId.get(id)!.height, 0) + ROW_GAP * (col.length - 1);
   const tallest = Math.max(0, ...columns.map(heightOf));
@@ -105,28 +122,23 @@ export function layered(boxes: Box[], links: Link[], origin: { x: number; y: num
       y += b.height + ROW_GAP;
     }
     right[c] = x + width;
-    x += width + COLUMN_GAP;
+    x += width + gapAfter(c);
   });
 
   // Each reference turns in the gap right of its consumer's column; those
   // sharing a gap are spread across it so their vertical runs stay apart.
   const routes = new Map<string, number>();
-  const byGap = new Map<number, Link[]>();
-  for (const l of inside) {
-    const c = rank.get(l.source)!;
-    byGap.set(c, [...(byGap.get(c) ?? []), l]);
-  }
-  for (const [c, list] of byGap) {
-    if (right[c] === undefined) continue;
+  for (const [c, list] of perGap) {
     const y = (l: Link) => positions.get(l.target)!.y;
     const sorted = [...list].sort((a, b) => y(a) - y(b));
-    const step = Math.min(14, (COLUMN_GAP - 40) / Math.max(1, sorted.length));
-    sorted.forEach((l, i) => routes.set(l.id, right[c] + COLUMN_GAP / 2 + (i - (sorted.length - 1) / 2) * step));
+    const gap = gapAfter(c);
+    const step = Math.min(RUN_SPACING, (gap - 2 * GAP_MARGIN) / Math.max(1, sorted.length));
+    sorted.forEach((l, i) => routes.set(l.id, right[c] + gap / 2 + (i - (sorted.length - 1) / 2) * step));
   }
 
   // Loose boxes in rows below, as wide as the layered part (or four boxes).
   const top = linked.length ? origin.y + tallest + ROW_GAP * 2 : origin.y;
-  const maxWidth = Math.max(x - COLUMN_GAP - origin.x, ...loose.slice(0, 4).map((b) => b.width * 4 + ROW_GAP * 3));
+  const maxWidth = Math.max(right.length ? right[right.length - 1] - origin.x : 0, ...loose.slice(0, 4).map((b) => b.width * 4 + ROW_GAP * 3));
   let lx = origin.x;
   let ly = top;
   let rowHeight = 0;
@@ -193,16 +205,16 @@ export function align(boxes: Box[], how: Alignment): Map<string, { x: number; y:
   return new Map(boxes.map((b) => [b.id, place(b)]));
 }
 
-/** The boxes spaced evenly between the first and the last, which stay. */
+/** The boxes spaced evenly from the first to the far edge of the last. */
 export function distribute(boxes: Box[], axis: "horizontal" | "vertical"): Map<string, { x: number; y: number }> {
   const h = axis === "horizontal";
   const start = (b: Box) => (h ? b.x : b.y);
   const size = (b: Box) => (h ? b.width : b.height);
   const sorted = [...boxes].sort((a, b) => start(a) - start(b));
   const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  const span = start(last) + size(last) - start(first);
-  const gap = (span - sorted.reduce((s, b) => s + size(b), 0)) / Math.max(1, sorted.length - 1);
+  const span = Math.max(...sorted.map((b) => start(b) + size(b))) - start(first);
+  // Boxes wider than the room left between them touch rather than overlap.
+  const gap = Math.max(0, (span - sorted.reduce((s, b) => s + size(b), 0)) / Math.max(1, sorted.length - 1));
   const out = new Map<string, { x: number; y: number }>();
   let at = start(first);
   for (const b of sorted) {

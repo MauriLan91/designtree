@@ -60,3 +60,30 @@ describe("align and distribute", () => {
     expect(out.get("b")).toEqual({ x: 300, y: 100 });
   });
 });
+
+describe("tidy edge cases", () => {
+  it("leaves references that skip a column or go back as curves", () => {
+    const { routes } = layered([box("a"), box("b"), box("c")], [
+      { id: "ab", source: "a", target: "b" },
+      { id: "bc", source: "b", target: "c" },
+      { id: "ac", source: "a", target: "c" },
+      { id: "ca", source: "c", target: "a" },
+    ], { x: 0, y: 0 });
+    expect([...routes.keys()].sort()).toEqual(["ab", "bc"]);
+  });
+
+  it("widens a busy gap so its runs stay apart", () => {
+    const many = Array.from({ length: 30 }, (_, i) => box(`d${i}`));
+    const { positions, routes } = layered([...many, box("gic")], many.map((d) => ({ id: d.id, source: d.id, target: "gic" })), { x: 0, y: 0 });
+    const xs = [...routes.values()].sort((a, b) => a - b);
+    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(12);
+    expect(xs[0]).toBeGreaterThan(200);
+    expect(xs[xs.length - 1]).toBeLessThan(positions.get("gic")!.x);
+  });
+
+  it("never overlaps boxes when distributing", () => {
+    const out = distribute([box("a", 0, 0, 500, 10), box("b", 100, 0, 50, 10), box("c", 200, 0, 50, 10)], "horizontal");
+    expect(out.get("b")!.x).toBeGreaterThanOrEqual(500);
+    expect(out.get("c")!.x).toBeGreaterThanOrEqual(out.get("b")!.x + 50);
+  });
+});

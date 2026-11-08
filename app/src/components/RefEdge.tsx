@@ -30,9 +30,13 @@ export function orthogonalPath(sx: number, sy: number, x: number, tx: number, ty
  * thousands of edges made panning crawl (US-11.1).
  */
 export function RefEdge(props: EdgeProps<Edge<RefData>>) {
+  // A route turns between its ends; once a node moved past it, a curve
+  // reads better than a line that doubles back.
   const route = props.data?.route;
-  const [path, labelX, labelY] =
-    route !== undefined ? orthogonalPath(props.sourceX, props.sourceY, route, props.targetX, props.targetY) : getBezierPath(props);
+  const fits = route !== undefined && props.sourceX < route && route < props.targetX;
+  const [path, labelX, labelY] = fits
+    ? orthogonalPath(props.sourceX, props.sourceY, route, props.targetX, props.targetY)
+    : getBezierPath(props);
   return (
     <BaseEdge
       path={path}

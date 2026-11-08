@@ -171,6 +171,9 @@ const sameEdges = (a: Edge[], b: Edge[]) =>
     return e.id === f.id && e.data === f.data && e.source === f.source && e.target === f.target;
   });
 
+/** Reference data drawn as a curve again. */
+const withoutRoute = ({ route: _, ...rest }: RefData): RefData => rest;
+
 let nextId = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(nextId++).toString(36)}`;
 
@@ -1009,6 +1012,8 @@ export function Editor({
       // Keep editor-only data (bindings) that the design file does not carry.
       const old = new Map(nodes.map((n) => [n.id, n]));
       setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding, todo: (old.get(n.id) as DtFlowNode | undefined)?.data.todo } } : n)));
+      // The routes were for the old places: references go back to curves.
+      setEdges((es) => es.map((e) => (e.type === "ref" && (e.data as RefData).route !== undefined ? { ...e, data: withoutRoute(e.data as RefData) } : e)));
       setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     } catch (e) {
       setErrors([String(e)]);
@@ -1036,7 +1041,7 @@ export function Editor({
    */
   const tidy = (onlySelected: boolean) => {
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    const tops = nodes.filter((n) => shown.has(n.id) && !n.parentId && (!onlySelected || n.selected));
+    const tops = onlySelected ? tidyable() : nodes.filter((n) => shown.has(n.id) && !n.parentId);
     if (tops.length < (onlySelected ? 2 : 1)) return;
     const ids = new Set(tops.map((n) => n.id));
     const links: Link[] = [];
@@ -1048,7 +1053,7 @@ export function Editor({
     }
     const boxes = tops.map(boxOf);
     const { positions, routes } = layered(boxes, links, cornerOf(boxes));
-    setNodes((ns) => ns.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)));
+    place(positions);
     // A reference into or out of what moved without a route of its own
     // would turn in the wrong place: it goes back to a curve.
     const moved = (id: string) => ids.has(topOf(id, byId)?.id ?? "");
@@ -1058,15 +1063,15 @@ export function Editor({
         const data = e.data as RefData;
         const route = routes.get(e.id);
         if (route !== undefined) return { ...e, data: { ...data, route } };
-        if (data.route !== undefined && (moved(e.source) || moved(e.target))) {
-          const { route: _, ...rest } = data;
-          return { ...e, data: rest };
-        }
+        if (data.route !== undefined && (moved(e.source) || moved(e.target))) return { ...e, data: withoutRoute(data) };
         return e;
       }),
     );
     if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
   };
+
+  /** The selected top-level nodes on show, which tidying the selection moves. */
+  const tidyable = () => nodes.filter((n) => n.selected && !n.parentId && shown.has(n.id));
 
   /** The selected nodes that share one frame, which moving them keeps. */
   const arrangeable = () => {
@@ -1365,8 +1370,11 @@ export function Editor({
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
-  // Arranging works on selected nodes that share a frame.
-  const arrangeCount = arrangeable().length;
+  // What the arrange commands would move, for their enabled state; only
+  // the selection matters, so most renders skip the scan.
+  const anySelected = nodes.some((n) => n.selected);
+  const arrangeCount = anySelected ? arrangeable().length : 0;
+  const tidyCount = anySelected ? tidyable().length : 0;
   const registry: Command[] = [
     { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
     {
@@ -1451,7 +1459,7 @@ export function Editor({
       title: "Tidy the selection",
       shortcut: "Ctrl+Shift+L",
       menu: "Arrange",
-      disabled: boardView || arrangeCount < 2,
+      disabled: boardView || tidyCount < 2,
       run: () => tidy(true),
     },
     {
