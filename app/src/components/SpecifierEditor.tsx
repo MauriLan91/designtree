@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, inTauri } from "../backend";
-import type { DtMacro } from "../model";
+import { formatCell, type DtMacro } from "../model";
 
 interface Props {
   args: number[];
   /** Cells the provider expects, when its `#...-cells` property says. */
   expected?: number;
   onChange: (args: number[]) => void;
+  disabled?: boolean;
+  /** Drops the visible label, for a row of the property table. */
+  compact?: boolean;
 }
 
 /** Number tokens as written in DTS: decimal or 0x hex. */
@@ -15,9 +18,6 @@ function parseNumber(token: string): number | undefined {
   return Number.isInteger(n) && n >= 0 && n <= 0xffffffff ? n : undefined;
 }
 
-export function formatCell(n: number): string {
-  return n < 10 ? String(n) : `0x${n.toString(16)}`;
-}
 
 /**
  * Turns the text into cells: numbers, or `dt-bindings` constants by name
@@ -52,7 +52,7 @@ async function parseSpecifier(text: string): Promise<number[]> {
   return cells;
 }
 
-export function SpecifierEditor({ args, expected, onChange }: Props) {
+export function SpecifierEditor({ args, expected, onChange, compact, disabled }: Props) {
   const shown = args.map(formatCell).join(" ");
   const [text, setText] = useState(shown);
   const [error, setError] = useState<string | null>(null);
@@ -93,18 +93,29 @@ export function SpecifierEditor({ args, expected, onChange }: Props) {
 
   const count = args.length;
   const mismatch = expected !== undefined && count !== expected;
+  const title = `Specifier cells${expected !== undefined ? ` (provider expects ${expected})` : ""}`;
+  const input = (
+    <input
+      value={text}
+      disabled={disabled}
+      placeholder="e.g. 17 GPIO_ACTIVE_LOW"
+      aria-label={compact ? title : undefined}
+      title={compact ? title : undefined}
+      onChange={(e) => edit(e.target.value)}
+      onBlur={() => commit(text)}
+      onKeyDown={(e) => e.key === "Enter" && commit(text)}
+    />
+  );
   return (
     <>
-      <label>
-        Specifier cells{expected !== undefined ? ` (provider expects ${expected})` : ""}
-        <input
-          value={text}
-          placeholder="e.g. 17 GPIO_ACTIVE_LOW"
-          onChange={(e) => edit(e.target.value)}
-          onBlur={() => commit(text)}
-          onKeyDown={(e) => e.key === "Enter" && commit(text)}
-        />
-      </label>
+      {compact ? (
+        input
+      ) : (
+        <label>
+          {title}
+          {input}
+        </label>
+      )}
       {suggestions.length > 0 && (
         <ul className="macro-suggestions">
           {suggestions.map((m) => (

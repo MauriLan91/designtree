@@ -9,9 +9,10 @@ package); open it with **File › Open design…** to compare, or to start from 
 You need a kernel checkout loaded under **Tools › Kernel checkouts…** (see
 [Kernel checkouts](library.md)) and `dtc` installed.
 
-Properties that have no field of their own go in the inspector's
-**Properties** box, one `name = value` per line (`reg = <0x40000000
-0x20000000>`), or straight into the DTS source panel.
+Properties go in the inspector's **Properties** table: type a name under
+**Add a property…**, pick its type and fill in the value (`reg` as the cells
+`0x40000000 0x20000000`). Its **Text** mode takes `name = value` lines
+instead, and the DTS source panel works too.
 
 Nodes the kernel's schemas do not describe (`cpus`, `memory`, `chosen`,
 `aliases`, the LED itself) are added with **+ Empty node** at the top of the

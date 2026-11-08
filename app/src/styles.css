@@ -854,3 +854,41 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .navigator .twisty { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: none; background: none; color: var(--muted); }
 .navigator .kind-chip { width: 16px; height: 16px; }
 .nav-name { overflow: hidden; text-overflow: ellipsis; }
+
+/* Property table (US-17.1): Key · Type · Value, plist style. */
+.props-head { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.segmented { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); }
+.segmented button { height: 20px; padding: 0 8px; border: none; border-radius: 4px; background: none; color: var(--muted); font-size: 12px; }
+.segmented button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.prop-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.prop-table thead th { padding: 4px 6px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+.prop-table thead th:nth-child(1) { width: 42%; }
+.prop-table thead th:nth-child(2) { width: 22%; }
+.prop-table thead th:nth-child(4) { width: 22px; }
+.prop-table tbody th, .prop-table tbody td { padding: 1px 2px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); vertical-align: middle; font-weight: normal; text-align: left; }
+.prop-table tr:hover > * { background: var(--hover); }
+.prop-table .key { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.prop-table .key b { color: var(--danger); font-weight: 600; }
+.prop-table .key-text { padding: 0 4px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-table .error { margin: 0; padding: 0 4px; font-size: 11px; }
+.prop-table .macro-suggestions { margin: 2px 0; }
+.prop-table input:not([type="checkbox"]), .prop-table select { width: 100%; min-width: 0; height: 24px; padding: 0 4px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: 12px var(--mono); }
+.prop-table input:not([type="checkbox"]):hover, .prop-table select:hover { border-color: var(--border); }
+.prop-table input:not([type="checkbox"]):focus, .prop-table select:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+.prop-table .type { padding: 0 4px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prop-table .twisty { display: flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; padding: 0; border: none; background: none; color: var(--muted); }
+.prop-table .item-row th { padding-left: 22px; }
+.prop-table .item-index { display: inline-block; padding: 0 4px; color: var(--muted); font-family: var(--mono); }
+.prop-table .ref-target { color: var(--ref); }
+.prop-table .ref-summary { padding: 0 4px; font-family: var(--mono); color: var(--ref); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-table .item-row td label { font-size: 11px; }
+.prop-table .row-remove { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 4px; background: none; color: var(--muted); opacity: 0; }
+.prop-table tr:hover .row-remove, .prop-table .row-remove:focus-visible { opacity: 1; }
+.prop-table .row-remove:hover { background: var(--border); color: var(--danger); }
+.prop-table .row-error { display: block; padding: 0 4px; color: var(--danger); font-size: 11px; }
+.prop-table .row-todo { display: block; padding: 0 4px; color: var(--warn); font-size: 11px; }
+.prop-table tr.todo > th { box-shadow: inset 2px 0 0 var(--warn); }
+.prop-table .add-item .link, .prop-table .add-property { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.prop-table .add-property { padding: 2px 4px; color: var(--muted); }
+.prop-table select { padding: 0 0 0 2px; font-family: inherit; font-size: 11px; color: var(--muted); text-overflow: ellipsis; }
+.prop-table .add-item td { padding-left: 4px; }

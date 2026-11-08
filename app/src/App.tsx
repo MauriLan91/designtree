@@ -1161,6 +1161,29 @@ export function Editor({
     onLayout((l) => (l.inspector.open ? l : { ...l, inspector: { ...l.inspector, open: true } }));
     setTimeout(() => document.querySelector<HTMLElement>(".inspector textarea")?.focus(), 30);
   };
+  // With nothing selected, the inspector shows the scope's own node (the
+  // root on the main canvas), which is not drawn.
+  const inspected =
+    selectedNodes.length === 1
+      ? selectedNodes[0]
+      : selectedNodes.length === 0 && !selectedEdge && scope
+        ? (nodes.find((n) => n.id === scope) ?? null)
+        : null;
+  // Its references, which its property table lists with the properties.
+  const inspectedRefs = edges
+    .filter((e) => e.type === "ref" && e.source === inspected?.id && e.data)
+    .map((e) => {
+      const data = e.data as RefData;
+      const target = nodes.find((n) => n.id === e.target);
+      const dt = target && isDtNode(target) ? target : undefined;
+      return {
+        id: e.id,
+        property: data.property,
+        target: dt?.data.label ? `&${dt.data.label}` : (nodeName(e.target) ?? e.target),
+        args: data.args ?? [],
+        expected: dt ? specifierCount(dt.data, data.property) : undefined,
+      };
+    });
   const passing = scope !== main && scope !== null && !liveScopes.includes(scope) ? scope : null;
   const scopeTitle = (id: string | null) => (id === null ? "Top level" : id === main ? "/" : (nodeName(id) ?? id));
   const tabOf = (id: string | null) => ({ id: id === main ? null : id, title: scopeTitle(id) });
@@ -1663,15 +1686,8 @@ export function Editor({
         <div className="pane-body" hidden={!layout.inspector.open}>
           <aside className="panel side">
             <Inspector
-              // With nothing selected, the inspector shows the scope's own node
-              // (the root on the main canvas), which is not drawn.
-              node={
-                selectedNodes.length === 1
-                  ? selectedNodes[0]
-                  : selectedNodes.length === 0 && !selectedEdge && scope
-                    ? (nodes.find((n) => n.id === scope) ?? null)
-                    : null
-              }
+              node={inspected}
+              references={inspectedRefs}
               edge={selectedNodes.length === 0 ? selectedEdge : null}
               onNodeChange={updateNodeData}
               overriding={overriding}

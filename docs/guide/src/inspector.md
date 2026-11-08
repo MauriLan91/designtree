@@ -4,14 +4,28 @@ Select a node to edit it in the inspector.
 
 - **Name**, **Unit address**, **Label** and **Compatible** (comma separated)
   come first.
-- **Binding properties**: with a kernel checkout loaded, the properties of
-  the node's schema, required ones first and marked with `*`. Each has an
-  input for its type: a dropdown for an enum, a toggle for a boolean, a
-  number list for a cell array, text for strings. Hover a property for the
-  schema's description. Required properties without a value are marked as
-  to-do.
-- **Other properties** (or **Properties** without a schema): anything the schema does not describe stays
-  editable as raw devicetree values, so nothing is lost.
+- **Properties**: a table with a **Key**, a **Type** and a **Value** column,
+  one row per property, edited the same way whatever the value holds.
+  Clearing a value removes the property.
+  - Rows with several parts (cell arrays such as `reg`, string lists, bytes)
+    have an arrow that opens one child row per item. Edit an item in place,
+    remove it with its ×, or add one with **Add cell**. A cell takes a number,
+    a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
+    suggested as you type when the kernel bindings are loaded.
+  - With a kernel checkout loaded, the binding fixes the type of the
+    properties it describes and lists the missing ones under **Add a
+    property…**. Required properties are marked with `*`, and those still
+    without a real value are marked as to-do. An enum is a dropdown and a
+    boolean a checkbox. Hover a key for the schema's description; values
+    outside the schema's limits get a warning under the row.
+  - For a property the schema does not describe, pick the type yourself:
+    Boolean, String, String list, Cells, Bytes or Mixed. Changing it keeps
+    what can be kept, so cells become bytes and back.
+  - References drawn on the canvas (`clocks`, `interrupt-parent`, `gpios`)
+    are rows of type **Phandle**; open one to edit the specifier cells of
+    each target.
+  - **Text** switches to the raw mode: every property as `name = value`,
+    one per line, as in the DTS. **Table** switches back.
 
 Select a reference edge to change its property name and specifier cells;
 select a group to rename it.
