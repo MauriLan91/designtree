@@ -7,6 +7,8 @@ interface Props {
   /** Cells the provider expects, when its `#...-cells` property says. */
   expected?: number;
   onChange: (args: number[]) => void;
+  /** Drops the visible label, for a row of the property table. */
+  compact?: boolean;
 }
 
 /** Number tokens as written in DTS: decimal or 0x hex. */
@@ -52,7 +54,7 @@ async function parseSpecifier(text: string): Promise<number[]> {
   return cells;
 }
 
-export function SpecifierEditor({ args, expected, onChange }: Props) {
+export function SpecifierEditor({ args, expected, onChange, compact }: Props) {
   const shown = args.map(formatCell).join(" ");
   const [text, setText] = useState(shown);
   const [error, setError] = useState<string | null>(null);
@@ -93,18 +95,28 @@ export function SpecifierEditor({ args, expected, onChange }: Props) {
 
   const count = args.length;
   const mismatch = expected !== undefined && count !== expected;
+  const title = `Specifier cells${expected !== undefined ? ` (provider expects ${expected})` : ""}`;
+  const input = (
+    <input
+      value={text}
+      placeholder="e.g. 17 GPIO_ACTIVE_LOW"
+      aria-label={compact ? title : undefined}
+      title={compact ? title : undefined}
+      onChange={(e) => edit(e.target.value)}
+      onBlur={() => commit(text)}
+      onKeyDown={(e) => e.key === "Enter" && commit(text)}
+    />
+  );
   return (
     <>
-      <label>
-        Specifier cells{expected !== undefined ? ` (provider expects ${expected})` : ""}
-        <input
-          value={text}
-          placeholder="e.g. 17 GPIO_ACTIVE_LOW"
-          onChange={(e) => edit(e.target.value)}
-          onBlur={() => commit(text)}
-          onKeyDown={(e) => e.key === "Enter" && commit(text)}
-        />
-      </label>
+      {compact ? (
+        input
+      ) : (
+        <label>
+          {title}
+          {input}
+        </label>
+      )}
       {suggestions.length > 0 && (
         <ul className="macro-suggestions">
           {suggestions.map((m) => (
