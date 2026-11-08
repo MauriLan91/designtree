@@ -54,7 +54,8 @@ import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
 import { BoundaryNode } from "./components/BoundaryNode";
-import { boundaryPorts, canHaveChildren, inScope, mainScope, parentsOf, realId, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
+import { BusBarNode } from "./components/BusBarNode";
+import { BUSBAR_PREFIX, boundaryPorts, busBar, busKind, canHaveChildren, inScope, mainScope, parentsOf, realId, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
 import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -97,7 +98,7 @@ import {
   type RefData,
 } from "./model";
 
-const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode };
+const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode, busbar: BusBarNode };
 const edgeTypes = { ref: RefEdge };
 const GROUP_PADDING = 40;
 
@@ -1064,8 +1065,18 @@ export function Editor({
       return node;
     });
     const drawn = [...nodes.filter((n) => shown.has(n.id)), ...ports];
+    // A bus controller's scope hangs its devices from a bus bar (US-16.3).
+    const controller = scope ? byId.get(scope) : undefined;
+    const kind = controller && isDtNode(controller) ? busKind(controller) : null;
+    if (controller && isDtNode(controller) && kind) {
+      const devices = drawn.filter((n): n is DtFlowNode => isDtNode(n) && inScope(n.id, scope, main, parents));
+      const name = nodeName(controller.id) ?? controller.id;
+      const title = controller.data.label ? `${name} · &${controller.data.label}` : name;
+      const bar = busBar(controller, kind, title, devices, boxOf);
+      return collapseView([...drawn, bar.node as unknown as FlowNode], [...shownEdges, ...bar.edges], (id) => nodeName(id) ?? id);
+    }
     return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
-  }, [nodes, portEdges, shownEdges, shownKey]);
+  }, [nodes, portEdges, shownEdges, shownKey, scope]);
 
   /**
    * Shows `id`'s scope (null: the main canvas). `pin` keeps a tab for it;
@@ -1521,7 +1532,11 @@ export function Editor({
               minZoom={0.1}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
               onNodeDoubleClick={(_, node) => openNode(node.id)}
-              onNodeClick={(_, node) => realId(node.id) !== node.id && focusNode(realId(node.id))}
+              onNodeClick={(_, node) => {
+                // The bar stands for the scope's controller; a port for its node elsewhere.
+                if (node.id.startsWith(BUSBAR_PREFIX)) selectOnly([node.id.slice(BUSBAR_PREFIX.length)]);
+                else if (realId(node.id) !== node.id) focusNode(realId(node.id));
+              }}
               onConnectEnd={(_, state) => {
                 // A reference dropped on empty canvas asks which node it is
                 // for, anywhere in the design: the way to reach other scopes.

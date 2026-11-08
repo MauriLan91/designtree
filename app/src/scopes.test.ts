@@ -124,3 +124,34 @@ describe("boundaryPorts", () => {
     expect(realId("uart")).toBe("uart");
   });
 });
+
+describe("busBar", () => {
+  it("knows I2C and SPI controllers, not other nodes", async () => {
+    const { busKind } = await import("./scopes");
+    expect(busKind(dt("x", "i2c"))).toBe("i2c");
+    expect(busKind(dt("x", "controller", { data: { name: "controller", compatible: ["st,stm32-spi"], properties: [] } }))).toBe("spi");
+    expect(busKind(dt("x", "soc"))).toBeNull();
+    expect(busKind(dt("x", "serial"))).toBeNull();
+  });
+
+  it("spans the devices from above with a labelled edge to each", async () => {
+    const { busBar } = await import("./scopes");
+    const devs = [
+      dt("a", "sensor", { data: { name: "sensor", unitAddress: "48", compatible: [], properties: [] } }),
+      dt("b", "eeprom", { data: { name: "eeprom", unitAddress: "50", compatible: [], properties: [] } }),
+    ];
+    const boxes: Record<string, { x: number; y: number; width: number; height: number }> = {
+      a: { x: 0, y: 200, width: 100, height: 40 },
+      b: { x: 300, y: 220, width: 100, height: 40 },
+    };
+    const { node, edges: bus } = busBar(dt("i2c", "i2c"), "i2c", "i2c@40005000", devs, (id) => boxes[id]);
+    expect(node.position.y).toBeLessThan(200);
+    expect(node.width).toBeGreaterThanOrEqual(400);
+    expect(node.data.taps.map((t) => t.x)).toEqual([90, 390]);
+    expect(bus.map((e) => [e.source, e.target, e.label])).toEqual([
+      ["busbar:i2c", "a", "@48"],
+      ["busbar:i2c", "b", "@50"],
+    ]);
+    expect(bus.every((e) => e.deletable === false && e.selectable === false)).toBe(true);
+  });
+});

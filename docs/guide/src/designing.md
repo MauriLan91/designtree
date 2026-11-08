@@ -16,6 +16,11 @@ and takes you back up. Double-clicking any other node opens its properties
 in the inspector. **View › Open selected node** and **View › Up one scope**
 do the same from the keyboard or the command palette.
 
+In the scope of an I²C, SPI or other bus controller, the controller is a
+**bus bar** above its devices, with an edge to each labelled with its unit
+address (`@48`). The bar and its edges are drawn from the tree: click the bar
+to edit the controller, and change a device's address in the inspector.
+
 A node you add, drop from the library or paste goes into the scope on show.
 **Edit › Move selected node under…** moves it elsewhere in the tree.
 
