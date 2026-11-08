@@ -1,8 +1,10 @@
 // The property table (US-17.1): Key · Type · Value rows, plist style. Each
 // property is one row; values with parts (string lists, cells, bytes, mixed
 // chunks, the references of a phandle list) expand into one row per part.
-// The rows are drawn from the model in propertyTable.ts.
-import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+// The rows are drawn from the model in propertyTable.ts. The binding's
+// required properties are pinned on top and never go away (US-17.2): one
+// without a value is an empty to-do row until it gets one.
+import { ChevronDown, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
 import type { DtMacro, Property, PropertySpec, PropertyValue } from "../model";
@@ -21,7 +23,7 @@ import {
   withoutItem,
   type ValueKind,
 } from "../propertyTable";
-import { checkValue } from "../schemaProps";
+import { checkValue, specDefault } from "../schemaProps";
 import { SpecifierEditor } from "./SpecifierEditor";
 
 /** A phandle reference of the node, drawn on the canvas as an edge. */
@@ -108,7 +110,24 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
 
   const refGroups = new Map<string, Reference[]>();
   for (const r of references) refGroups.set(r.property, [...(refGroups.get(r.property) ?? []), r]);
-  const unused = specs.filter((s) => s.name !== "compatible" && !properties.some((p) => p.name === s.name) && !refGroups.has(s.name));
+  const unused = specs.filter((s) => !s.required && s.name !== "compatible" && !properties.some((p) => p.name === s.name) && !refGroups.has(s.name));
+
+  // Required first, in binding order, then the rest in their own order.
+  const pinned = specs
+    .filter((s, i) => s.required && s.name !== "compatible" && !refGroups.has(s.name) && specs.findIndex((t) => t.name === s.name) === i)
+    .map((s) => s.name);
+  const rows: { name: string; prop?: Property }[] = [
+    ...pinned.map((name) => ({ name, prop: properties.find((p) => p.name === name) })),
+    ...properties.filter((p) => !pinned.includes(p.name)).map((p) => ({ name: p.name, prop: p })),
+  ];
+
+  /** A required property back to its default, or to an empty to-do row. */
+  const reset = (name: string) => {
+    const value = specDefault(specOf(name)!);
+    const rest = properties.filter((p) => p.name !== name);
+    if (!value) return onChange(rest);
+    onChange(properties.some((p) => p.name === name) ? properties.map((p) => (p.name === name ? { name, value } : p)) : [...rest, { name, value }]);
+  };
 
   return (
     <table className="prop-table">
@@ -121,8 +140,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
         </tr>
       </thead>
       <tbody>
-        {properties.map((p) => {
-          const spec = specOf(p.name);
+        {rows.map(({ name, prop: p }) => {
+          const spec = specOf(name);
+          if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
           const items = itemsOf(p.value, kind);
@@ -189,18 +209,24 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     spec={spec}
                     disabled={locked}
                     // Clearing a value removes the property, as deleting its line in the DTS would.
-                    onCommit={(text) => attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null))}
+                    onCommit={(text) => {
+                      if (!text.trim() && spec?.required) reset(p.name);
+                      else attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
+                    }}
                     onSet={(value) => attempt(p.name, () => value)}
                   />
                   {warning && <span className="row-error">{warning}</span>}
                   {isTodo && !warning && <span className="row-todo">to do</span>}
                 </td>
                 <td>
-                  {!locked && !spec?.required && (
-                    <button className="row-remove" aria-label={`Remove ${p.name}`} onClick={() => attempt(p.name, () => null)}>
-                      <X size={12} aria-hidden />
-                    </button>
-                  )}
+                  {!locked &&
+                    (spec?.required ? (
+                      <ResetButton spec={spec} onReset={() => reset(p.name)} />
+                    ) : (
+                      <button className="row-remove" aria-label={`Remove ${p.name}`} onClick={() => attempt(p.name, () => null)}>
+                        <X size={12} aria-hidden />
+                      </button>
+                    ))}
                 </td>
               </tr>
               {expanded &&
@@ -302,12 +328,84 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
         {!locked && (
           <tr className="add-row">
             <td colSpan={4}>
-              <AddProperty names={unused.map((s) => s.name)} onAdd={add} />
+              <AddProperty specs={unused} onAdd={add} />
             </td>
           </tr>
         )}
       </tbody>
     </table>
+  );
+}
+
+/** Required rows reset instead of going away: to the default, else to empty. */
+function ResetButton({ spec, onReset }: { spec: PropertySpec; onReset: () => void }) {
+  const value = specDefault(spec);
+  const title = value ? `Reset to the default, ${summaryOf(value) || "present"}` : "Clear: a required property stays as a to-do";
+  return (
+    <button className="row-remove" aria-label={`Reset ${spec.name}`} title={title} onClick={onReset}>
+      <RotateCcw size={12} aria-hidden />
+    </button>
+  );
+}
+
+/** A required property the node does not have yet: typing a value adds it. */
+function MissingRow({
+  spec,
+  locked,
+  onSet,
+  onReset,
+}: {
+  spec: PropertySpec;
+  locked: boolean;
+  onSet: (value: PropertyValue) => void;
+  onReset: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const kind = specKind(spec);
+  // A phandle is a reference, which the canvas draws as an edge.
+  const reference = spec.type === "phandle" || spec.type === "phandle-array";
+  const hasDefault = specDefault(spec) !== null;
+  const commit = (text: string) => {
+    if (!text.trim()) return;
+    try {
+      onSet(parseSummary(kind ?? "mixed", text));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <tr className="todo missing-row">
+      <th scope="row" title={spec.description ?? undefined}>
+        <div className="key">
+          <span className="twisty" aria-hidden />
+          <span className="key-text">{spec.name}</span>
+          <b title="Required by the binding">*</b>
+        </div>
+      </th>
+      <td>
+        <span className="type">{spec.type ?? "Any"}</span>
+      </td>
+      <td>
+        {reference ? (
+          <span className="row-hint" title="A phandle is drawn as a reference: connect this node to its target on the canvas">
+            Connect on canvas
+          </span>
+        ) : kind === "flag" ? (
+          <input type="checkbox" aria-label={spec.name} checked={false} disabled={locked} onChange={() => onSet({ type: "empty" })} />
+        ) : (
+          <CommitInput value="" label={spec.name} placeholder={hasDefault ? "default available" : "required"} disabled={locked} onCommit={commit} />
+        )}
+        {error && <span className="row-error">{error}</span>}
+      </td>
+      <td>
+        {!locked && hasDefault && (
+          <button className="row-remove" aria-label={`Set ${spec.name} to its default`} title="Set to the default" onClick={onReset}>
+            <RotateCcw size={12} aria-hidden />
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -377,9 +475,11 @@ function CommitInput({
   onCommit,
   list,
   onInput,
+  placeholder,
 }: {
   value: string;
   label: string;
+  placeholder?: string;
   disabled?: boolean;
   onCommit: (text: string) => void;
   list?: string;
@@ -399,6 +499,7 @@ function CommitInput({
       value={text}
       disabled={disabled}
       list={list}
+      placeholder={placeholder}
       spellCheck={false}
       onChange={(e) => {
         setText(e.target.value);
@@ -457,8 +558,8 @@ function CellInput({ value, label, disabled, onCommit }: { value: string; label:
   );
 }
 
-/** The last row: a property name, with the binding's unused ones offered. */
-function AddProperty({ names, onAdd }: { names: string[]; onAdd: (name: string) => void }) {
+/** The last row: a property name, with the binding's optional ones offered. */
+function AddProperty({ specs, onAdd }: { specs: PropertySpec[]; onAdd: (name: string) => void }) {
   const [text, setText] = useState("");
   const id = useId();
   const add = () => {
@@ -479,8 +580,8 @@ function AddProperty({ names, onAdd }: { names: string[]; onAdd: (name: string) 
         onBlur={() => text.trim() && add()}
       />
       <datalist id={id}>
-        {names.map((n) => (
-          <option key={n} value={n} />
+        {specs.map((s) => (
+          <option key={s.name} value={s.name} label={[s.type, s.description?.split("\n")[0]].filter(Boolean).join(" · ")} />
         ))}
       </datalist>
     </div>

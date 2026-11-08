@@ -13,11 +13,17 @@ Select a node to edit it in the inspector.
     a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
     suggested as you type when the kernel bindings are loaded.
   - With a kernel checkout loaded, the binding fixes the type of the
-    properties it describes and lists the missing ones under **Add a
-    property…**. Required properties are marked with `*`, and those still
-    without a real value are marked as to-do. An enum is a dropdown and a
-    boolean a checkbox. Hover a key for the schema's description; values
-    outside the schema's limits get a warning under the row.
+    properties it describes. An enum is a dropdown and a boolean a
+    checkbox. Hover a key for the schema's description; values outside the
+    schema's limits get a warning under the row.
+  - The binding's required properties, marked with `*`, are always on top
+    and cannot be removed. One without a value is an empty to-do row: type
+    its value to add it, or press ↺ to take the binding's default. ↺ on a
+    filled one resets it to the default, or empties it when there is none.
+    A required phandle, such as `resets`, is set by connecting the node on
+    the canvas.
+  - **Add a property…** offers the binding's optional properties as you
+    type, with their type and description.
   - For a property the schema does not describe, pick the type yourself:
     Boolean, String, String list, Cells, Bytes or Mixed. Changing it keeps
     what can be kept, so cells become bytes and back.

@@ -120,8 +120,6 @@ function NodeInspector({
     }
   };
 
-  const present = new Set(["compatible", ...data.properties.map((p) => p.name), ...references.map((r) => r.property)]);
-  const missing = binding?.properties?.filter((p) => p.required && p.name !== "compatible" && !present.has(p.name)) ?? [];
   const isRoot = data.name === "/";
   // Inherited nodes are read-only until the user chooses to override them.
   const locked = data.inherited !== undefined && !overriding;
@@ -215,16 +213,6 @@ function NodeInspector({
           onChange={setProps}
           onReferenceChange={onReferenceChange}
         />
-      )}
-      {missing.length > 0 && (
-        <div className="missing">
-          <strong>Required by the binding:</strong>
-          <ul>
-            {missing.map((p) => (
-              <li key={p.name} title={p.description ?? undefined}>{p.name}</li>
-            ))}
-          </ul>
-        </div>
       )}
     </section>
   );

@@ -70,6 +70,12 @@ function defaultValue(spec: PropertySpec, kind: EditorKind): PropertyValue | nul
   }
 }
 
+/** The value the binding gives a property by default, or null when it has none. */
+export function specDefault(spec: PropertySpec): PropertyValue | null {
+  const kind = editorKind(spec);
+  return kind && defaultValue(spec, kind);
+}
+
 /**
  * Properties a node dropped from the palette starts with (US-2.3): `status`,
  * a `reg` placeholder when the binding has one, and required properties that
@@ -88,8 +94,7 @@ export function initialProperties(binding: Binding): { properties: Property[]; t
   }
   for (const spec of specs) {
     if (!spec.required || properties.some((p) => p.name === spec.name) || spec.name === "compatible") continue;
-    const kind = editorKind(spec);
-    const value = kind && defaultValue(spec, kind);
+    const value = specDefault(spec);
     if (value) properties.push({ name: spec.name, value });
   }
   return { properties, todo };
