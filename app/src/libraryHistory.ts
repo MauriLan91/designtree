@@ -30,3 +30,34 @@ export const toggled = (list: string[], path: string) =>
 /** `path` moved to the front, the list cut to [`MAX_RECENTS`]. */
 export const withRecent = (list: string[], path: string) =>
   [path, ...list.filter((p) => p !== path)].slice(0, MAX_RECENTS);
+
+/** How the library is shown (US-18.2): list or grid, and which sections
+ * the user opened or closed (the rest keep their default). */
+export interface LibraryPrefs {
+  display: "list" | "grid";
+  open: Record<string, boolean>;
+}
+
+const PREFS_KEY = "designtree.library";
+
+export function loadPrefs(): LibraryPrefs {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "null");
+    const obj = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+    const open = typeof obj.open === "object" && obj.open !== null ? (obj.open as Record<string, unknown>) : {};
+    return {
+      display: obj.display === "grid" ? "grid" : "list",
+      open: Object.fromEntries(Object.entries(open).filter((e): e is [string, boolean] => typeof e[1] === "boolean")),
+    };
+  } catch {
+    return { display: "list", open: {} };
+  }
+}
+
+export function savePrefs(prefs: LibraryPrefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // As for the lists: blocked storage keeps the choice for this session.
+  }
+}

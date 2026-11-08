@@ -25,13 +25,26 @@ that documents it: `arm,cortex-a7` and `arm,cortex-a9` are two elements
 named "ARM CPUs". The list holds all of them and scrolls through the whole
 library.
 
+## Browsing by category
+
+Before you search, the library is grouped like a component palette:
+**Favorites** and **Recent** first, then one section per category (the
+directory of the schema in the kernel, such as *Serial* or *Interrupt
+controller*), each with its icon and the number of elements. Click a
+section header to open or close it; categories start closed so the whole
+library reads as one short list of headers. The two buttons next to the
+category list switch between a **list**, with the schema title of each
+element, and a **grid** of compact tiles that fits more at once. The view
+and the open sections are remembered.
+
 Type in the search box: the search is fuzzy over the compatible string, the
 vendor and the schema title, ranked by match quality, so `bme280`, `bosch
 pressure` and `i2c eeprom` all work. The words you typed are highlighted
 and the count above the list says how many elements match. Narrow it with
 the category list.
 The star next to an element adds it to **Favorites**; elements you add show
-up under **Recent**. Both are kept between sessions.
+up under **Recent**. Both are kept between sessions. While a search is
+typed, the sections give way to one list of matches, best first.
 
 ## Adding a node
 
