@@ -809,3 +809,28 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .boundary-port span { overflow: hidden; text-overflow: ellipsis; }
 .boundary-port.in { justify-content: flex-end; }
 .boundary-port.selected { border-style: solid; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* Bus bars (US-16.3): the controller of an I²C, SPI or other bus scope. */
+.bus-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 14px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bus-color) 14%, var(--panel));
+  border: 2px solid var(--bus-color);
+  color: var(--text);
+  font: 12px var(--mono);
+  cursor: pointer;
+}
+.bus-i2c { --bus-color: var(--link-i2c); }
+.bus-spi { --bus-color: var(--link-spi); }
+.bus-bus { --bus-color: var(--link-bus); }
+.bus-bar-kind { font: 600 11px "Inter Variable", Inter, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bus-color); }
+.bus-bar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Taps and the devices' bus handle only anchor the generated edges. */
+.react-flow__handle.bus-tap, .react-flow__handle.h-bus { opacity: 0; width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; pointer-events: none; }
+.react-flow__edge.bus-edge path { stroke: var(--bus-color); stroke-width: 2; }
+.react-flow__edge.bus-edge .react-flow__edge-textbg { fill: var(--panel); }
+.react-flow__edge.bus-edge .react-flow__edge-text { fill: var(--bus-color); font: 11px var(--mono); }

@@ -187,3 +187,84 @@ export function boundaryPorts(
   }
   return { nodes, edges: rewired };
 }
+
+/** Bus bars (US-16.3, D8): in a bus controller's scope the controller is
+ * drawn as a bar above its devices, with a read-only edge to each. */
+export type BusKind = "i2c" | "spi" | "bus";
+export interface BusBarData extends Record<string, unknown> {
+  /** The controller, whose scope this is. */
+  node: string;
+  title: string;
+  kind: BusKind;
+  /** Where each device's edge leaves the bar, from its left end. */
+  taps: { id: string; x: number }[];
+}
+export type BusBarNode = Node<BusBarData, "busbar">;
+
+export const BUSBAR_PREFIX = "busbar:";
+/** The handle on a device that bus edges arrive at. */
+export const BUS_IN_HANDLE = "bus-in";
+const BAR_HEIGHT = 32;
+const BAR_GAP = 90;
+const BAR_PAD = 40;
+
+/** The kind of bus a controller drives, or null when it is not one: an
+ * I²C, SPI or other serial bus whose devices sit at unit addresses. */
+export function busKind(node: DtFlowNode): BusKind | null {
+  const name = node.data.name;
+  const category = node.data.binding?.category;
+  const compatible = node.data.compatible.join(" ");
+  if (category === "i2c" || category === "i3c" || /^i[23]c$/.test(name) || /\bi2c\b|-i2c\b|i2c-/.test(compatible)) return "i2c";
+  if (category === "spi" || /^q?spi$/.test(name) || /\bspi\b|-spi\b|spi-/.test(compatible)) return "spi";
+  if (/^(mdio|spmi|w1|can|serial-bus|onewire)$/.test(name)) return "bus";
+  return null;
+}
+
+/**
+ * The bar for a bus scope and its edges, one per device, labelled with the
+ * device's unit address. The bar spans the devices with some margin and sits
+ * above them; `boxOf` places the devices on the canvas.
+ */
+export function busBar(
+  controller: DtFlowNode,
+  kind: BusKind,
+  title: string,
+  devices: DtFlowNode[],
+  boxOf: (id: string) => Box | undefined,
+): { node: BusBarNode; edges: Edge[] } {
+  const placed = devices.map((d) => ({ d, b: boxOf(d.id) })).filter((x): x is { d: DtFlowNode; b: Box } => !!x.b);
+  const minX = placed.length ? Math.min(...placed.map((p) => p.b.x)) : 0;
+  const maxX = placed.length ? Math.max(...placed.map((p) => p.b.x + p.b.width)) : 240;
+  const top = placed.length ? Math.min(...placed.map((p) => p.b.y)) : 0;
+  const x = minX - BAR_PAD;
+  const width = Math.max(maxX - minX + 2 * BAR_PAD, 240);
+  const id = `${BUSBAR_PREFIX}${controller.id}`;
+  const taps = placed.map((p) => ({ id: p.d.id, x: p.b.x + p.b.width / 2 - x }));
+  const node: BusBarNode = {
+    id,
+    type: "busbar",
+    position: { x, y: top - BAR_GAP - BAR_HEIGHT },
+    data: { node: controller.id, title, kind, taps },
+    width,
+    height: BAR_HEIGHT,
+    measured: { width, height: BAR_HEIGHT },
+    draggable: false,
+    deletable: false,
+    selectable: false,
+    connectable: false,
+  };
+  const edges: Edge[] = placed.map((p) => ({
+    id: `bus:${p.d.id}`,
+    type: "step",
+    source: id,
+    sourceHandle: `tap:${p.d.id}`,
+    target: p.d.id,
+    targetHandle: BUS_IN_HANDLE,
+    label: p.d.data.unitAddress ? `@${p.d.data.unitAddress}` : undefined,
+    className: `bus-edge bus-${kind}`,
+    selectable: false,
+    deletable: false,
+    focusable: false,
+  }));
+  return { node, edges };
+}

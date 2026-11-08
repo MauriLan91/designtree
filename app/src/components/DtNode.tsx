@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef } from "react";
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { KINDS, kindOf } from "../categories";
+import { BUS_IN_HANDLE } from "../scopes";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
 import { consumerHandle, providerHandle } from "../ports";
@@ -49,6 +50,8 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
       title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
     >
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
+      {/* Where a bus bar's edge arrives in a bus scope (US-16.3); never wired by hand. */}
+      <Handle type="target" id={BUS_IN_HANDLE} position={Position.Top} isConnectable={false} className="h-bus" />
       <div className="dt-node-title">
         {!isRoot && (
           <span className={`kind-chip kind-${kind}`} title={kindTitle}>
