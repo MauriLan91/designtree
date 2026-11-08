@@ -21,7 +21,8 @@ Select a node to edit it in the inspector.
     its value to add it, or press ↺ to take the binding's default. ↺ on a
     filled one resets it to the default, or empties it when there is none.
     A required phandle, such as `resets`, is set by connecting the node on
-    the canvas.
+    the canvas. The **Text** mode lists the required properties not set yet
+    under the text.
   - **Add a property…** offers the binding's optional properties as you
     type, with their type and description.
   - For a property the schema does not describe, pick the type yourself:

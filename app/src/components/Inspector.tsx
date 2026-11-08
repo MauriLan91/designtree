@@ -120,6 +120,8 @@ function NodeInspector({
     }
   };
 
+  const have = new Set(["compatible", ...data.properties.map((p) => p.name), ...references.map((r) => r.property)]);
+  const missing = [...new Set(binding?.properties?.filter((p) => p.required && !have.has(p.name)).map((p) => p.name))];
   const isRoot = data.name === "/";
   // Inherited nodes are read-only until the user chooses to override them.
   const locked = data.inherited !== undefined && !overriding;
@@ -201,6 +203,7 @@ function NodeInspector({
             onBlur={commitProps}
           />
           {references.length > 0 && <p className="hint">References are edited in the table or on the canvas.</p>}
+          {missing.length > 0 && <p className="hint">Required, not set yet: {missing.join(", ")}</p>}
           {propsError && <p className="error">{propsError}</p>}
         </>
       ) : (

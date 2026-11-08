@@ -112,21 +112,71 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
   for (const r of references) refGroups.set(r.property, [...(refGroups.get(r.property) ?? []), r]);
   const unused = specs.filter((s) => !s.required && s.name !== "compatible" && !properties.some((p) => p.name === s.name) && !refGroups.has(s.name));
 
-  // Required first, in binding order, then the rest in their own order.
-  const pinned = specs
-    .filter((s, i) => s.required && s.name !== "compatible" && !refGroups.has(s.name) && specs.findIndex((t) => t.name === s.name) === i)
-    .map((s) => s.name);
-  const rows: { name: string; prop?: Property }[] = [
-    ...pinned.map((name) => ({ name, prop: properties.find((p) => p.name === name) })),
-    ...properties.filter((p) => !pinned.includes(p.name)).map((p) => ({ name: p.name, prop: p })),
+  // Required first, in binding order, then the properties and references
+  // in their own order. A row is a property, a reference group, or a
+  // required property the node lacks.
+  const pinned = [...new Set(specs.filter((s) => s.required && s.name !== "compatible").map((s) => s.name))];
+  const isPinned = new Set(pinned);
+  type Row = { name: string; prop?: Property; refs?: Reference[] };
+  const row = (name: string): Row => ({ name, prop: properties.find((p) => p.name === name), refs: refGroups.get(name) });
+  const rows: Row[] = [
+    ...pinned.map(row),
+    ...properties.filter((p) => !isPinned.has(p.name)).map((p) => row(p.name)),
+    ...[...refGroups.keys()].filter((n) => !isPinned.has(n) && !properties.some((p) => p.name === n)).map(row),
   ];
 
-  /** A required property back to its default, or to an empty to-do row. */
+  /** A required property back to its binding default, or to its to-do row. */
   const reset = (name: string) => {
     const value = specDefault(specOf(name)!);
-    const rest = properties.filter((p) => p.name !== name);
-    if (!value) return onChange(rest);
-    onChange(properties.some((p) => p.name === name) ? properties.map((p) => (p.name === name ? { name, value } : p)) : [...rest, { name, value }]);
+    if (!value) return attempt(name, () => null);
+    if (properties.some((p) => p.name === name)) attempt(name, () => value);
+    else onChange([...properties, { name, value }]);
+  };
+
+  /** A reference property: one row, with a child row per target for its specifier cells. */
+  const refRows = (property: string, refs: Reference[], required: boolean) => {
+    const key = `ref:${property}`;
+    // A reference to a provider that takes no specifier cells has nothing to edit.
+    const editable = refs.some((r) => r.args.length > 0 || r.expected !== 0);
+    const expanded = editable && open.has(key);
+    return (
+      <Fragment key={key}>
+        <tr className="ref-row">
+          <th scope="row" title="Drawn on the canvas as a reference">
+            <div className="key">
+              <button
+                className="twisty"
+                aria-label={expanded ? `Collapse ${property}` : `Expand ${property}`}
+                aria-expanded={editable ? expanded : undefined}
+                style={{ visibility: editable ? "visible" : "hidden" }}
+                onClick={() => toggle(key)}
+              >
+                {expanded ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
+              </button>
+              <span className="key-text" title={property}>
+                {property}
+              </span>
+              {required && <b title="Required by the binding">*</b>}
+            </div>
+          </th>
+          <td className="type">{refs.length > 1 ? "Phandle list" : "Phandle"}</td>
+          <td className="ref-summary">{refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map(formatNumber).join(" ")}` : ""}`).join(", ")}</td>
+          <td />
+        </tr>
+        {expanded &&
+          refs.map((r) => (
+            <tr key={r.id} className="item-row">
+              <th scope="row">
+                <span className="item-index ref-target">{r.target}</span>
+              </th>
+              <td className="type">Cells</td>
+              <td colSpan={2}>
+                <SpecifierEditor compact disabled={locked} args={r.args} expected={r.expected} onChange={(args) => onReferenceChange(r.id, args)} />
+              </td>
+            </tr>
+          ))}
+      </Fragment>
+    );
   };
 
   return (
@@ -140,8 +190,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
         </tr>
       </thead>
       <tbody>
-        {rows.map(({ name, prop: p }) => {
+        {rows.map(({ name, prop: p, refs }) => {
           const spec = specOf(name);
+          if (refs && !p) return refRows(name, refs, spec?.required ?? false);
           if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
@@ -208,10 +259,10 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     kind={kind}
                     spec={spec}
                     disabled={locked}
-                    // Clearing a value removes the property, as deleting its line in the DTS would.
+                    // Clearing a value removes the property, as deleting its line in the DTS
+                    // would; a required one goes back to its to-do row.
                     onCommit={(text) => {
-                      if (!text.trim() && spec?.required) reset(p.name);
-                      else attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
+                      attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
                     }}
                     onSet={(value) => attempt(p.name, () => value)}
                   />
@@ -282,49 +333,6 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
             </Fragment>
           );
         })}
-        {[...refGroups].map(([property, refs]) => {
-          const key = `ref:${property}`;
-          // A reference to a provider that takes no specifier cells has nothing to edit.
-          const editable = refs.some((r) => r.args.length > 0 || r.expected !== 0);
-          const expanded = editable && open.has(key);
-          return (
-            <Fragment key={key}>
-              <tr className="ref-row">
-                <th scope="row" title="Drawn on the canvas as a reference">
-                  <div className="key">
-                    <button
-                      className="twisty"
-                      aria-label={expanded ? `Collapse ${property}` : `Expand ${property}`}
-                      aria-expanded={editable ? expanded : undefined}
-                      style={{ visibility: editable ? "visible" : "hidden" }}
-                      onClick={() => toggle(key)}
-                    >
-                      {expanded ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
-                    </button>
-                    <span className="key-text" title={property}>
-                      {property}
-                    </span>
-                  </div>
-                </th>
-                <td className="type">{refs.length > 1 ? "Phandle list" : "Phandle"}</td>
-                <td className="ref-summary">{refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map(formatNumber).join(" ")}` : ""}`).join(", ")}</td>
-                <td />
-              </tr>
-              {expanded &&
-                refs.map((r) => (
-                  <tr key={r.id} className="item-row">
-                    <th scope="row">
-                      <span className="item-index ref-target">{r.target}</span>
-                    </th>
-                    <td className="type">Cells</td>
-                    <td colSpan={2}>
-                      <SpecifierEditor compact disabled={locked} args={r.args} expected={r.expected} onChange={(args) => onReferenceChange(r.id, args)} />
-                    </td>
-                  </tr>
-                ))}
-            </Fragment>
-          );
-        })}
         {!locked && (
           <tr className="add-row">
             <td colSpan={4}>
@@ -368,7 +376,8 @@ function MissingRow({
   const commit = (text: string) => {
     if (!text.trim()) return;
     try {
-      onSet(parseSummary(kind ?? "mixed", text));
+      // Without a schema type, a value is DTS chunks or a bare cell list.
+      onSet(kind ? parseSummary(kind, text) : parseUntyped(text));
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -393,20 +402,40 @@ function MissingRow({
           </span>
         ) : kind === "flag" ? (
           <input type="checkbox" aria-label={spec.name} checked={false} disabled={locked} onChange={() => onSet({ type: "empty" })} />
+        ) : spec.enum?.length && (kind === "string" || kind === "cells") ? (
+          <select aria-label={spec.name} value="" disabled={locked} onChange={(e) => commit(e.target.value)}>
+            <option value="">(select)</option>
+            {spec.enum.map((v) => (
+              <option key={String(v)} value={typeof v === "number" ? formatNumber(v) : String(v)}>
+                {String(v)}
+              </option>
+            ))}
+          </select>
         ) : (
-          <CommitInput value="" label={spec.name} placeholder={hasDefault ? "default available" : "required"} disabled={locked} onCommit={commit} />
+          <CommitInput
+            value=""
+            label={spec.name}
+            placeholder={hasDefault ? "default available" : "required"}
+            disabled={locked}
+            onInput={() => setError(null)}
+            onCommit={commit}
+          />
         )}
         {error && <span className="row-error">{error}</span>}
       </td>
       <td>
-        {!locked && hasDefault && (
-          <button className="row-remove" aria-label={`Set ${spec.name} to its default`} title="Set to the default" onClick={onReset}>
-            <RotateCcw size={12} aria-hidden />
-          </button>
-        )}
+        {!locked && hasDefault && <ResetButton spec={spec} onReset={onReset} />}
       </td>
     </tr>
   );
+}
+
+function parseUntyped(text: string): PropertyValue {
+  try {
+    return parseSummary("mixed", text);
+  } catch {
+    return parseSummary("cells", text);
+  }
 }
 
 const isCellList = (v: PropertyValue) =>
