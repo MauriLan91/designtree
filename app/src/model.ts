@@ -331,7 +331,7 @@ export function parseProperties(text: string, previous: Property[] = []): Proper
   return props;
 }
 
-function formatCell(c: number): string {
+export function formatCell(c: number): string {
   return c < 10 ? String(c) : `0x${c.toString(16)}`;
 }
 

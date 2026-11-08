@@ -3,7 +3,7 @@
 // chunks, the references of a phandle list) expand into one row per part.
 // The rows are drawn from the model in propertyTable.ts.
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
 import type { DtMacro, Property, PropertySpec, PropertyValue } from "../model";
 import {
@@ -63,6 +63,10 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
 export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // One-string values the user made a list; the binding says so for its own.
+  const [lists, setLists] = useState<ReadonlySet<string>>(new Set());
+  // Errors are keyed by row; any change of the properties can shift the rows.
+  useEffect(() => setErrors({}), [properties]);
   const specOf = (name: string) => specs.find((s) => s.name === name);
   const toggle = (key: string) =>
     setOpen((s) => {
@@ -96,7 +100,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
 
   const add = (name: string) => {
     const n = name.trim();
-    if (!n || properties.some((p) => p.name === n)) return;
+    if (!n || properties.some((p) => p.name === n) || references.some((r) => r.property === n)) return;
     const kind = specKind(specOf(n)) ?? "flag";
     onChange([...properties, { name: n, value: blank(kind) }]);
     if (kind !== "flag") setOpen((s) => new Set(s).add(n));
@@ -119,9 +123,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
       <tbody>
         {properties.map((p) => {
           const spec = specOf(p.name);
-          const kind = kindOf(p.value);
           const fixed = specKind(spec);
-          const items = itemsOf(p.value);
+          const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
+          const items = itemsOf(p.value, kind);
           const expanded = open.has(p.name) && items !== null;
           const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value);
           const isTodo = todo?.includes(p.name);
@@ -158,7 +162,16 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       aria-label={`Type of ${p.name}`}
                       value={kind}
                       disabled={locked}
-                      onChange={(e) => attempt(p.name, () => convert(p.value, e.target.value as ValueKind))}
+                      onChange={(e) => {
+                        const to = e.target.value as ValueKind;
+                        setLists((s) => {
+                          const next = new Set(s);
+                          if (to === "strings") next.add(p.name);
+                          else next.delete(p.name);
+                          return next;
+                        });
+                        attempt(p.name, () => convert(p.value, to));
+                      }}
                     >
                       {KINDS.map((k) => (
                         <option key={k} value={k}>
@@ -172,9 +185,11 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                   <ValueCell
                     name={p.name}
                     value={p.value}
+                    kind={kind}
                     spec={spec}
                     disabled={locked}
-                    onCommit={(text) => attempt(p.name, () => parseSummary(kind, text))}
+                    // Clearing a value removes the property, as deleting its line in the DTS would.
+                    onCommit={(text) => attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null))}
                     onSet={(value) => attempt(p.name, () => value)}
                   />
                   {warning && <span className="row-error">{warning}</span>}
@@ -277,7 +292,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     </th>
                     <td className="type">Cells</td>
                     <td colSpan={2}>
-                      <SpecifierEditor compact args={r.args} expected={r.expected} onChange={(args) => onReferenceChange(r.id, args)} />
+                      <SpecifierEditor compact disabled={locked} args={r.args} expected={r.expected} onChange={(args) => onReferenceChange(r.id, args)} />
                     </td>
                   </tr>
                 ))}
@@ -310,6 +325,7 @@ function itemKind(v: PropertyValue): string {
 function ValueCell({
   name,
   value,
+  kind,
   spec,
   disabled,
   onCommit,
@@ -317,12 +333,12 @@ function ValueCell({
 }: {
   name: string;
   value: PropertyValue;
+  kind: ValueKind;
   spec: PropertySpec | undefined;
   disabled: boolean;
   onCommit: (text: string) => void;
   onSet: (value: PropertyValue) => void;
 }): ReactNode {
-  const kind = kindOf(value);
   if (kind === "flag") return <input type="checkbox" aria-label={name} checked disabled readOnly title="Present: remove the row to clear it" />;
   if (kind === "string" && spec?.enum?.length && spec.enum.every((v) => typeof v === "string")) {
     const current = summaryOf(value);
@@ -350,7 +366,7 @@ function ValueCell({
       </select>
     );
   }
-  return <CommitInput value={summaryOf(value)} label={name} disabled={disabled} onCommit={onCommit} />;
+  return <CommitInput value={summaryOf(value, kind)} label={name} disabled={disabled} onCommit={onCommit} />;
 }
 
 /** A text input that applies its value on Enter or when it loses focus. */
@@ -397,8 +413,6 @@ function CommitInput({
   );
 }
 
-let cellListId = 0;
-
 /**
  * A cell: a number, a reference, or a `dt-bindings` constant, suggested as
  * it is typed. A constant becomes its number when the loaded kernel knows it,
@@ -406,7 +420,7 @@ let cellListId = 0;
  */
 function CellInput({ value, label, disabled, onCommit }: { value: string; label: string; disabled?: boolean; onCommit: (text: string) => void }) {
   const [suggestions, setSuggestions] = useState<DtMacro[]>([]);
-  const [id] = useState(() => `cell-macros-${cellListId++}`);
+  const id = useId();
   const latest = useRef(0);
   const search = (text: string) => {
     const word = /^[A-Za-z_][A-Za-z0-9_]*$/.exec(text.trim())?.[0];
@@ -446,7 +460,7 @@ function CellInput({ value, label, disabled, onCommit }: { value: string; label:
 /** The last row: a property name, with the binding's unused ones offered. */
 function AddProperty({ names, onAdd }: { names: string[]; onAdd: (name: string) => void }) {
   const [text, setText] = useState("");
-  const [id] = useState(() => `prop-names-${cellListId++}`);
+  const id = useId();
   const add = () => {
     onAdd(text);
     setText("");

@@ -6,6 +6,7 @@ Select a node to edit it in the inspector.
   come first.
 - **Properties**: a table with a **Key**, a **Type** and a **Value** column,
   one row per property, edited the same way whatever the value holds.
+  Clearing a value removes the property.
   - Rows with several parts (cell arrays such as `reg`, string lists, bytes)
     have an arrow that opens one child row per item. Edit an item in place,
     remove it with its ×, or add one with **Add cell**. A cell takes a number,

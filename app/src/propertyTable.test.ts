@@ -60,7 +60,33 @@ describe("items", () => {
     expect(withoutItem(withoutItem(values.macroCells, 0), 1)).toEqual({ type: "cells", value: [37] });
   });
 
+  it("keeps a single macro or reference a cell, not a path", () => {
+    const key: PropertyValue = { type: "mixed", value: [{ type: "cells", bits: 32, cells: ["KEY_POWER"] }] };
+    expect(parseSummary("mixed", "KEY_VOLUMEUP", key)).toEqual({ type: "mixed", value: [{ type: "cells", bits: 32, cells: ["KEY_VOLUMEUP"] }] });
+    const phy: PropertyValue = { type: "mixed", value: [{ type: "cells", bits: 32, cells: [{ phandle: "phy0" }] }] };
+    expect(parseSummary("mixed", "&phy1", phy)).toEqual({ type: "mixed", value: [{ type: "cells", bits: 32, cells: [{ phandle: "phy1" }] }] });
+  });
+
+  it("keeps the width of /bits/ cells across edits", () => {
+    const opp: PropertyValue = { type: "mixed", value: [{ type: "cells", bits: 64, cells: [0x4786, 0x8c00] }] };
+    const wide = (cells: number[]) => ({ type: "mixed", value: [{ type: "cells", bits: 64, cells }] });
+    expect(withItem(opp, 0, "0")).toEqual(wide([0, 0x8c00]));
+    expect(withoutItem(opp, 0)).toEqual(wide([0x8c00]));
+    expect(parseSummary("mixed", "5", opp)).toEqual(wide([5]));
+  });
+
+  it("shows a one-string list as a list when asked", () => {
+    const one: PropertyValue = { type: "strings", value: ["apb"] };
+    expect(kindOf(one)).toBe("string");
+    expect(kindOf(one, true)).toBe("strings");
+    expect(itemsOf(one, "strings")).toEqual(["apb"]);
+    expect(summaryOf(one, "strings")).toBe('"apb"');
+    expect(withItem(one, 1, "ahb")).toEqual({ type: "strings", value: ["apb", "ahb"] });
+  });
+
   it("refuses text that is not a cell, byte or chunk", () => {
+    expect(() => parseCellText("1e3")).toThrow();
+    expect(() => parseCellText("0b11")).toThrow();
     expect(() => withItem(values.cells, 0, "twelve")).toThrow();
     expect(() => withItem(values.bytes, 0, "100")).toThrow();
     expect(() => parseChunkText("oops")).toThrow();

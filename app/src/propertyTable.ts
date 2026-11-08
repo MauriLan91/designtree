@@ -4,7 +4,7 @@
 // into one child row per item, each edited the same way. This module is the
 // table's model: what a value looks like as rows and how an edit of one row
 // changes the value. The component only draws it.
-import type { Cell, PropertyValue, ValueChunk } from "./model";
+import { formatCell, type Cell, type PropertyValue, type ValueChunk } from "./model";
 
 /** The types the table offers for a property. */
 export type ValueKind = "flag" | "string" | "strings" | "cells" | "bytes" | "mixed";
@@ -18,13 +18,17 @@ export const KIND_TITLES: Record<ValueKind, string> = {
   mixed: "Mixed",
 };
 
-/** The table type of a value. A one-string list is a plain string. */
-export function kindOf(value: PropertyValue): ValueKind {
+/**
+ * The table type of a value. A one-string list is a plain string unless
+ * `list` says it is a list (the binding, or the type the user picked), since
+ * the two are the same bytes.
+ */
+export function kindOf(value: PropertyValue, list = false): ValueKind {
   switch (value.type) {
     case "empty":
       return "flag";
     case "strings":
-      return value.value.length === 1 ? "string" : "strings";
+      return value.value.length === 1 && !list ? "string" : "strings";
     case "cells":
       return "cells";
     case "bytes":
@@ -37,7 +41,7 @@ export function kindOf(value: PropertyValue): ValueKind {
 // ---------------------------------------------------------------------------
 // Text of single items
 
-export const formatNumber = (n: number) => (n < 10 ? String(n) : `0x${n.toString(16)}`);
+export const formatNumber = formatCell;
 const formatByte = (b: number) => b.toString(16).padStart(2, "0");
 const formatRef = (target: string) => (target.startsWith("/") ? `&{${target}}` : `&${target}`);
 
@@ -54,8 +58,8 @@ export function parseCellText(text: string): Cell {
   const ref = /^&\{(\/[^}]*)\}$/.exec(t) ?? /^&([A-Za-z_][\w-]*)$/.exec(t);
   if (ref) return { phandle: ref[1] };
   if (/^[A-Z_][A-Z0-9_]*$/.test(t)) return t;
-  const n = Number(t);
-  if (t !== "" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff) return n;
+  const n = /^(0x[0-9a-f]+|\d+)$/i.test(t) ? Number(t) : NaN;
+  if (n <= 0xffffffff) return n;
   throw new Error(`"${t}" is not a number, macro or &reference`);
 }
 
@@ -65,11 +69,18 @@ function parseByte(text: string): number {
   return parseInt(t, 16);
 }
 
-/** Cells as one list, or the mixed value they need when one is not a number. */
-function cellsValue(cells: Cell[]): PropertyValue {
-  return cells.every((c): c is number => typeof c === "number")
+/** Cells as one list, or the mixed value they need when one is not a
+ * number or they are not 32 bits wide. */
+function cellsValue(cells: Cell[], bits = 32): PropertyValue {
+  return bits === 32 && cells.every((c): c is number => typeof c === "number")
     ? { type: "cells", value: cells }
-    : { type: "mixed", value: [{ type: "cells", bits: 32, cells }] };
+    : { type: "mixed", value: [{ type: "cells", bits, cells }] };
+}
+
+/** The one chunk of a mixed value that is a single cell list, shown and
+ * edited as its cells. */
+function cellChunk(value: PropertyValue): (ValueChunk & { type: "cells" }) | null {
+  return value.type === "mixed" && value.value.length === 1 && value.value[0].type === "cells" ? value.value[0] : null;
 }
 
 function chunkText(chunk: ValueChunk): string {
@@ -107,21 +118,19 @@ export function parseChunkText(text: string): ValueChunk {
 
 /** The child rows of a value, as the text each one edits; null when the
  * value has no parts (a flag, or a plain string). */
-export function itemsOf(value: PropertyValue): string[] | null {
+export function itemsOf(value: PropertyValue, kind = kindOf(value)): string[] | null {
   switch (value.type) {
     case "empty":
       return null;
     case "strings":
-      return value.value.length === 1 ? null : value.value;
+      return kind === "string" ? null : value.value;
     case "cells":
       return value.value.map(formatNumber);
     case "bytes":
       return value.value.map(formatByte);
     case "mixed":
       // One chunk of cells is shown as its cells, like a plain cell list.
-      return value.value.length === 1 && value.value[0].type === "cells"
-        ? value.value[0].cells.map(cellText)
-        : value.value.map(chunkText);
+      return cellChunk(value)?.cells.map(cellText) ?? value.value.map(chunkText);
   }
 }
 
@@ -142,11 +151,11 @@ export function withItem(value: PropertyValue, index: number, text: string): Pro
       return cellsValue(put<Cell>(value.value, parseCellText(text)));
     case "bytes":
       return { type: "bytes", value: put(value.value, parseByte(text)) };
-    case "mixed":
-      if (value.value.length === 1 && value.value[0].type === "cells") {
-        return cellsValue(put(value.value[0].cells, parseCellText(text)));
-      }
+    case "mixed": {
+      const chunk = cellChunk(value);
+      if (chunk) return cellsValue(put(chunk.cells, parseCellText(text)), chunk.bits);
       return { type: "mixed", value: put(value.value, parseChunkText(text)) };
+    }
   }
 }
 
@@ -162,9 +171,10 @@ export function withoutItem(value: PropertyValue, index: number): PropertyValue 
       return { type: "cells", value: drop(value.value) };
     case "bytes":
       return { type: "bytes", value: drop(value.value) };
-    case "mixed":
-      if (value.value.length === 1 && value.value[0].type === "cells") return cellsValue(drop(value.value[0].cells));
-      return { type: "mixed", value: drop(value.value) };
+    case "mixed": {
+      const chunk = cellChunk(value);
+      return chunk ? cellsValue(drop(chunk.cells), chunk.bits) : { type: "mixed", value: drop(value.value) };
+    }
   }
 }
 
@@ -176,33 +186,32 @@ export function blankItem(value: PropertyValue): string {
     case "bytes":
       return "00";
     case "mixed":
-      return value.value.length === 1 && value.value[0].type === "cells" ? "0" : "<0>";
+      return cellChunk(value) ? "0" : "<0>";
     default:
       return "0";
   }
 }
 
 /** The one-line text of a value, as the row shows and edits it. */
-export function summaryOf(value: PropertyValue): string {
+export function summaryOf(value: PropertyValue, kind = kindOf(value)): string {
   switch (value.type) {
     case "empty":
       return "";
     case "strings":
-      return value.value.length === 1 ? value.value[0] : value.value.map((s) => JSON.stringify(s)).join(", ");
+      return kind === "string" ? value.value[0] : value.value.map((s) => JSON.stringify(s)).join(", ");
     case "cells":
       return value.value.map(formatNumber).join(" ");
     case "bytes":
       return value.value.map(formatByte).join(" ");
     case "mixed":
-      return value.value.length === 1 && value.value[0].type === "cells"
-        ? value.value[0].cells.map(cellText).join(" ")
-        : value.value.map(chunkText).join(", ");
+      return cellChunk(value)?.cells.map(cellText).join(" ") ?? value.value.map(chunkText).join(", ");
   }
 }
 
 /** The value of a row typed in one go: space-separated cells or bytes, a
- * string as is, comma-separated chunks for a mixed value. */
-export function parseSummary(kind: ValueKind, text: string): PropertyValue {
+ * string as is, comma-separated chunks for a mixed value. `current` is the
+ * value the text replaces, which tells how a mixed row reads it. */
+export function parseSummary(kind: ValueKind, text: string, current?: PropertyValue): PropertyValue {
   const words = text.trim() ? text.trim().split(/\s+/) : [];
   switch (kind) {
     case "flag":
@@ -219,8 +228,9 @@ export function parseSummary(kind: ValueKind, text: string): PropertyValue {
       // A bare list of cells (`GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH`) is how a
       // one-chunk cell value reads in the row; anything else is chunks.
       const parts = splitList(text);
-      if (parts.length === 1 && !/^[<"[]|^\/bits\//.test(parts[0]) && /\s/.test(parts[0].trim())) {
-        return cellsValue(words.map(parseCellText));
+      const chunk = current && cellChunk(current);
+      if (parts.length === 1 && !/^[<"[]|^\/bits\//.test(parts[0]) && (chunk || /\s/.test(parts[0].trim()))) {
+        return cellsValue(words.map(parseCellText), chunk?.bits);
       }
       return { type: "mixed", value: parts.map(parseChunkText) };
     }
