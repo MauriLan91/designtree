@@ -2,12 +2,12 @@
 
 ![The DesignTree window](images/window.png)
 
-- **Menu bar** at the top: File, Edit, View, Insert, Tools and Help hold
+- **Menu bar** at the top: File, Edit, View, Insert, Arrange, Tools and Help hold
   every command, each with its shortcut; greyed-out items cannot run right
   now (no selection, say). Alt and the underlined letter opens a menu, the
   arrow keys move through it.
 - **Toolbar** under it: New, Open and Save; Undo and Redo; Add empty node and
-  Auto layout; the command search (Ctrl+K); and **Build .dtb** on the right.
+  Tidy this canvas; the command search (Ctrl+K); and **Build .dtb** on the right.
   Hover a button for its name and shortcut.
 - **Tabs** hold the open designs. A dot marks unsaved changes; closing a tab
   or the window with unsaved changes asks first.

@@ -490,6 +490,7 @@ impl Tree {
                                     property: def.name.clone(),
                                     args,
                                 },
+                                route: None,
                             });
                         }
                     }
@@ -607,6 +608,7 @@ impl Tree {
                 from: NodeId(path.clone()),
                 to: NodeId(child_path.clone()),
                 kind: EdgeKind::Child,
+                route: None,
             });
             self.visit(child, child_path, graph, index);
         }

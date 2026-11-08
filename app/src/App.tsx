@@ -47,6 +47,7 @@ import { DRAG_MIME } from "./components/Palette";
 import { bindingOf as entryBinding } from "./library";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
+import { align, cornerOf, distribute, layered, type Alignment, type Box, type Link } from "./tidy";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -80,6 +81,15 @@ import { SettingsPanel, type Section } from "./components/SettingsPanel";
 import { ModeSwitch } from "./components/ModeSwitch";
 import { comboOf, pickOf, tooltipOf, withShortcuts, type Command, type NodePick } from "./commands";
 import {
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignStartVertical,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  AlignStartHorizontal,
+  AlignHorizontalSpaceAround,
+  AlignVerticalSpaceAround,
+  LayoutDashboard,
   FilePlus,
   FolderOpen,
   Hammer,
@@ -160,6 +170,9 @@ const sameEdges = (a: Edge[], b: Edge[]) =>
     const f = b[i];
     return e.id === f.id && e.data === f.data && e.source === f.source && e.target === f.target;
   });
+
+/** Reference data drawn as a curve again. */
+const withoutRoute = ({ route: _, ...rest }: RefData): RefData => rest;
 
 let nextId = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(nextId++).toString(36)}`;
@@ -999,11 +1012,76 @@ export function Editor({
       // Keep editor-only data (bindings) that the design file does not carry.
       const old = new Map(nodes.map((n) => [n.id, n]));
       setNodes(d.nodes.map((n) => (isDtNode(n) ? { ...n, data: { ...n.data, binding: (old.get(n.id) as DtFlowNode | undefined)?.data.binding, todo: (old.get(n.id) as DtFlowNode | undefined)?.data.todo } } : n)));
+      // The routes were for the old places: references go back to curves.
+      setEdges((es) => es.map((e) => (e.type === "ref" && (e.data as RefData).route !== undefined ? { ...e, data: withoutRoute(e.data as RefData) } : e)));
       setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     } catch (e) {
       setErrors([String(e)]);
     }
   };
+
+  /** The drawn top-level node of `id`: itself, or the group frame around it. */
+  const topOf = (id: string, byId: Map<string, FlowNode>) => {
+    let n = byId.get(id);
+    while (n?.parentId) n = byId.get(n.parentId);
+    return n;
+  };
+  const boxOf = (n: FlowNode): Box => ({
+    id: n.id,
+    x: n.position.x,
+    y: n.position.y,
+    width: n.measured?.width ?? n.width ?? 200,
+    height: n.measured?.height ?? n.height ?? 80,
+  });
+
+  /**
+   * Tidies the canvas on show, or the selection on it (US-9.5): columns
+   * along the references, which then turn at right angles. Positions and
+   * routes change in one edit, so one undo restores both.
+   */
+  const tidy = (onlySelected: boolean) => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const tops = onlySelected ? tidyable() : nodes.filter((n) => shown.has(n.id) && !n.parentId);
+    if (tops.length < (onlySelected ? 2 : 1)) return;
+    const ids = new Set(tops.map((n) => n.id));
+    const links: Link[] = [];
+    for (const e of edges) {
+      if (e.type !== "ref") continue;
+      const s = topOf(e.source, byId)?.id;
+      const t = topOf(e.target, byId)?.id;
+      if (s && t && s !== t && ids.has(s) && ids.has(t)) links.push({ id: e.id, source: s, target: t });
+    }
+    const boxes = tops.map(boxOf);
+    const { positions, routes } = layered(boxes, links, cornerOf(boxes));
+    place(positions);
+    // A reference into or out of what moved without a route of its own
+    // would turn in the wrong place: it goes back to a curve.
+    const moved = (id: string) => ids.has(topOf(id, byId)?.id ?? "");
+    setEdges((es) =>
+      es.map((e) => {
+        if (e.type !== "ref") return e;
+        const data = e.data as RefData;
+        const route = routes.get(e.id);
+        if (route !== undefined) return { ...e, data: { ...data, route } };
+        if (data.route !== undefined && (moved(e.source) || moved(e.target))) return { ...e, data: withoutRoute(data) };
+        return e;
+      }),
+    );
+    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+  };
+
+  /** The selected top-level nodes on show, which tidying the selection moves. */
+  const tidyable = () => nodes.filter((n) => n.selected && !n.parentId && shown.has(n.id));
+
+  /** The selected nodes that share one frame, which moving them keeps. */
+  const arrangeable = () => {
+    const sel = nodes.filter((n) => n.selected && shown.has(n.id));
+    return sel.filter((n) => n.parentId === sel[0]?.parentId);
+  };
+  const place = (positions: Map<string, { x: number; y: number }>) =>
+    setNodes((ns) => ns.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)));
+  const alignSelection = (how: Alignment) => place(align(arrangeable().map(boxOf), how));
+  const distributeSelection = (axis: "horizontal" | "vertical") => place(distribute(arrangeable().map(boxOf), axis));
 
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
@@ -1292,6 +1370,11 @@ export function Editor({
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
+  // What the arrange commands would move, for their enabled state; only
+  // the selection matters, so most renders skip the scan.
+  const anySelected = nodes.some((n) => n.selected);
+  const arrangeCount = anySelected ? arrangeable().length : 0;
+  const tidyCount = anySelected ? tidyable().length : 0;
   const registry: Command[] = [
     { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
     {
@@ -1362,15 +1445,69 @@ export function Editor({
       run: ungroupSelection,
     },
     {
-      id: "layout",
-      title: "Auto layout",
+      id: "tidy",
+      title: "Tidy this canvas",
       shortcut: "Ctrl+L",
-      menu: "Edit",
-      group: 2,
+      menu: "Arrange",
+      hint: "Columns along the references, which turn at right angles",
+      icon: LayoutDashboard,
+      disabled: boardView,
+      run: () => tidy(false),
+    },
+    {
+      id: "tidy-selection",
+      title: "Tidy the selection",
+      shortcut: "Ctrl+Shift+L",
+      menu: "Arrange",
+      disabled: boardView || tidyCount < 2,
+      run: () => tidy(true),
+    },
+    {
+      id: "layout",
+      title: "Lay out the whole tree",
+      menu: "Arrange",
+      hint: "Arranges the whole tree from the root down, as on import",
       icon: Workflow,
       disabled: !inTauri || boardView,
       run: autoLayout,
     },
+    ...(
+      [
+        ["left", "Align left edges", AlignStartVertical],
+        ["center", "Align centres", AlignCenterVertical],
+        ["right", "Align right edges", AlignEndVertical],
+        ["top", "Align top edges", AlignStartHorizontal],
+        ["middle", "Align middles", AlignCenterHorizontal],
+        ["bottom", "Align bottom edges", AlignEndHorizontal],
+      ] as const
+    ).map(([how, title, icon]) => ({
+      id: `align-${how}`,
+      title,
+      menu: "Arrange" as const,
+      group: how === "left" || how === "center" || how === "right" ? 1 : 2,
+      icon,
+      disabled: boardView || arrangeCount < 2,
+      run: () => alignSelection(how),
+    })),
+    {
+      id: "distribute-horizontal",
+      title: "Distribute horizontally",
+      menu: "Arrange",
+      group: 3,
+      icon: AlignHorizontalSpaceAround,
+      disabled: boardView || arrangeCount < 3,
+      run: () => distributeSelection("horizontal"),
+    },
+    {
+      id: "distribute-vertical",
+      title: "Distribute vertically",
+      menu: "Arrange",
+      group: 3,
+      icon: AlignVerticalSpaceAround,
+      disabled: boardView || arrangeCount < 3,
+      run: () => distributeSelection("vertical"),
+    },
+
     { id: "palette", title: "Command palette…", shortcut: "Ctrl+K", menu: "View", run: () => setShowPalette(true) },
     {
       id: "open-scope",
@@ -1576,7 +1713,7 @@ export function Editor({
           />
         </div>
         <div className="toolbar-row" role="toolbar" aria-label="Main actions">
-          {[["new", "open", "save"], ["undo", "redo"], ["add", "layout"]].map((ids, g) => (
+          {[["new", "open", "save"], ["undo", "redo"], ["add", "tidy"]].map((ids, g) => (
             <div className="tool-group" key={g}>
               {ids.map((id) => {
                 const c = byId(id);

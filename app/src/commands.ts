@@ -10,7 +10,7 @@ export interface NodePick {
   onPick: (id: string) => void;
 }
 
-export const MENUS = ["File", "Edit", "View", "Insert", "Tools", "Help"] as const;
+export const MENUS = ["File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"] as const;
 export type MenuName = (typeof MENUS)[number];
 
 export interface Command {

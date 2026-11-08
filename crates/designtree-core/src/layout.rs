@@ -68,6 +68,10 @@ pub fn auto_layout(graph: &mut Graph) {
     for node in &mut graph.nodes {
         node.position = positions[&node.id];
     }
+    // Routes were drawn for the old positions.
+    for edge in &mut graph.edges {
+        edge.route = None;
+    }
 
     for group in &mut graph.groups {
         refit_group(group, &positions);
@@ -311,6 +315,7 @@ mod tests {
                     from: (*from).into(),
                     to: (*to).into(),
                     kind: EdgeKind::Child,
+                    route: None,
                 })
                 .collect(),
             groups: vec![],

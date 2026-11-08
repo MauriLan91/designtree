@@ -55,9 +55,29 @@ on the block. **Edit › Ungroup** (Ctrl+Shift+G) removes the frame.
 
 ## Layout
 
-**Auto layout** (Ctrl+L, in the toolbar and the Edit menu) arranges the tree from the root down, with a group
-for each bus. Imported designs are laid out on import. Positions are saved in
-the design file.
+The **Arrange** menu tidies the canvas in one step; every command is one
+undo.
+
+- **Tidy this canvas** (Ctrl+L, also in the toolbar) lays out the level on
+  show in columns along the references, left to right the way a devicetree
+  reads: a device left of the clocks and interrupt controller it uses. A
+  reference to the next column then turns at right angles in the gap
+  between them, each at its own place, the gap widening so they stay
+  apart; one that skips a column or points back stays a curve. Nodes with no reference on this
+  level go in rows below. The view then fits the result.
+- **Tidy the selection** (Ctrl+Shift+L) does the same for the selected
+  nodes only, from where the selection starts, and leaves the rest alone.
+- **Lay out the whole tree** arranges every node of the design from the
+  root down, with a group for each bus; references go back to curves. Imported designs are laid out this way on import.
+- **Align** left, centre, right, top, middle or bottom lines up the selected
+  nodes (two or more); **Distribute horizontally** or **vertically** spaces
+  three or more evenly between the outer two.
+
+**View › Fit the design in view** frames everything on show. Positions and
+the places where references turn are saved in the design file. Moving a
+node keeps its references at right angles while the turn is still between
+the two ends, and draws them as curves past that; tidying again redraws
+them. Pasted references start as curves.
 
 ## Saving
 

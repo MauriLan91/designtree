@@ -42,7 +42,8 @@ F1 lists them in the app.
 | Ctrl+C / Ctrl+V | Copy / paste nodes |
 | Ctrl+G | Group selection |
 | Ctrl+Shift+G | Ungroup |
-| Ctrl+L | Auto layout |
+| Ctrl+L | Tidy this canvas |
+| Ctrl+Shift+L | Tidy the selection |
 | Ctrl+Tab | Next tab (Ctrl+Shift+Tab: previous) |
 | Ctrl+W | Close the tab |
 | Delete | Delete the selection |

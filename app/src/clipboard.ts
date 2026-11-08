@@ -120,7 +120,8 @@ export function pasteClipboard(
   const added: DesignEdge[] = [];
   for (const e of clip.edges) {
     const to = ids.get(e.to) ?? (existing.has(e.to) ? e.to : null);
-    if (to) added.push({ ...e, from: ids.get(e.from)!, to });
+    // Routes are places on the old canvas: pasted references start as curves.
+    if (to) added.push({ ...e, from: ids.get(e.from)!, to, route: undefined });
   }
   const byId = new Map(pasted.map((n) => [n.id, n]));
   const fullName = (name: string, unit?: string | null) => (unit ? `${name}@${unit}` : name);

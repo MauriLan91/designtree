@@ -217,6 +217,11 @@ pub struct Edge {
     pub to: NodeId,
     #[serde(flatten)]
     pub kind: EdgeKind,
+    /// Where a reference drawn as right angles turns: the x of its vertical
+    /// run, set by tidying the canvas (US-9.5). Drawing only; `None` draws a
+    /// curve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<f32>,
 }
 
 /// Visual grouping of nodes (like a Simulink subsystem). Does not affect output.
