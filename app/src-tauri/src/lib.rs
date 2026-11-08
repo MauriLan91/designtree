@@ -248,10 +248,13 @@ fn search_bindings(
 /// built into the app, so they are there before any kernel is loaded.
 #[tauri::command]
 fn basic_bindings() -> Vec<Binding> {
+    basics().to_vec()
+}
+
+/// The basic nodes, built once.
+fn basics() -> &'static [Binding] {
     static BASICS: std::sync::OnceLock<Vec<Binding>> = std::sync::OnceLock::new();
-    BASICS
-        .get_or_init(designtree_bindings::basic_bindings)
-        .clone()
+    BASICS.get_or_init(designtree_bindings::basic_bindings)
 }
 
 /// The library entries matching `query`, one per compatible (US-18.1).
@@ -277,7 +280,6 @@ fn library_entries(
 #[tauri::command]
 fn get_bindings(paths: Vec<String>, state: State<AppState>) -> Vec<Binding> {
     let catalog = state.catalog.read().unwrap();
-    let basics = basic_bindings();
     paths
         .iter()
         .filter_map(|p| {
@@ -285,7 +287,7 @@ fn get_bindings(paths: Vec<String>, state: State<AppState>) -> Vec<Binding> {
                 .by_paths(std::slice::from_ref(p))
                 .first()
                 .map(|b| (*b).clone())
-                .or_else(|| basics.iter().find(|b| &b.path == p).cloned())
+                .or_else(|| basics().iter().find(|b| &b.path == p).cloned())
         })
         .collect()
 }

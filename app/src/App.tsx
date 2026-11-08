@@ -818,13 +818,39 @@ export function Editor({
             if (n.id !== root.id || !isDtNode(n)) return { ...n, selected: false };
             const have = new Set(n.data.properties.map((p) => p.name));
             const added = initial!.properties.filter((p) => !have.has(p.name));
-            return { ...n, selected: true, data: { ...n.data, binding, properties: [...n.data.properties, ...added] } };
+            const todo = [...(n.data.todo ?? []), ...initial!.todo.filter((t) => added.some((p) => p.name === t))];
+            return {
+              ...n,
+              selected: true,
+              data: { ...n.data, binding, properties: [...n.data.properties, ...added], todo: todo.length ? todo : undefined },
+            };
           }),
         );
         return;
       }
       // Basic nodes name themselves (`memory@0`); devices get a generic name.
-      const [name, unitAddress] = binding?.node_name?.split("@") ?? [binding ? genericNodeName(binding) : "node"];
+      const [name, firstAddress] = binding?.node_name?.split("@") ?? [binding ? genericNodeName(binding) : "node"];
+      let unitAddress = firstAddress;
+      if (binding?.node_name) {
+        // Siblings in the scope the node goes to: a single node such as
+        // `chosen` is selected instead of added twice, and a numbered one
+        // takes the next free unit address (`cpu@1`).
+        const parentId = scopeRef.current;
+        const siblingIds = new Set(
+          edgesRef.current.filter((e) => e.sourceHandle === CHILD_HANDLE && e.source === parentId).map((e) => e.target),
+        );
+        const siblings = nodesRef.current.filter((n): n is DtFlowNode => isDtNode(n) && siblingIds.has(n.id) && n.data.name === name);
+        if (firstAddress === undefined && siblings.length > 0) {
+          setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === siblings[0].id })));
+          return;
+        }
+        if (firstAddress !== undefined) {
+          const taken = new Set(siblings.map((n) => n.data.unitAddress));
+          let i = 0;
+          while (taken.has(i.toString(16))) i++;
+          unitAddress = i.toString(16);
+        }
+      }
       const node: DtFlowNode = {
         id,
         type: "dt",

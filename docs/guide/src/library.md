@@ -62,8 +62,11 @@ loaded, holds the nodes every board has and no compatible names: the
 properties come from the dt-schema core schemas built into the app, so each
 arrives with its required properties, set where there is only one choice
 (`device_type = "memory"`) and to-do otherwise. A design has a single root:
-adding the **Root node** fills in what the existing root lacks (`model`,
-`compatible`) instead of adding a second one.
+adding the **Root node** gives the existing root its schema, so `model`,
+`compatible` and the cell sizes show as required rows, instead of adding a
+second root. Likewise a second **Chosen**, **Aliases**, **CPUs** or
+**Reserved memory** in the same place selects the one already there, and a
+second **CPU** or **Memory** takes the next unit address (`cpu@1`).
 
 The last entry, **Empty node**, adds a node with nothing preset, for
 anything else.

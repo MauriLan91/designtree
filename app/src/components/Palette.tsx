@@ -98,9 +98,9 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   }, [summary, query, category]);
 
   // Favorites and recents are kept by schema path and compatible; the
-  // loaded kernel resolves them.
+  // loaded kernel resolves them, and the app itself the basic nodes.
   useEffect(() => {
-    if (!summary) return;
+    if (!inTauri) return;
     const paths = [...new Set([...favorites, ...recents].map((k) => k.split("#")[0]))];
     backend.getBindings(paths).then(
       (bindings) => {
@@ -109,7 +109,10 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
         // compatible they resolved to, so the star and the toggle match them.
         const migrate = (key: "favorites" | "recents", keys: string[], entries: LibraryEntry[], set: (k: string[]) => void) => {
           const next = [...new Set(entries.map(entryKey))];
-          if (keys.some((k) => !k.includes("#")) && next.join() !== keys.join()) {
+          // Only with a kernel loaded, which every saved device key needs; a
+          // basic node's key is a bare path of its own.
+          const legacy = keys.some((k) => !k.includes("#") && !k.startsWith(`dtschema/`));
+          if (summary && legacy && next.join() !== keys.join()) {
             saveList(key, next);
             set(next);
           }
@@ -134,6 +137,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     saveList("favorites", next);
   };
   const used = (e: LibraryEntry) => {
+    if (!e.path) return; // the empty node is not worth remembering
     const next = withRecent(recents, entryKey(e));
     setRecents(next);
     saveList("recents", next);
@@ -141,7 +145,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const add = async (e: LibraryEntry) => {
     if (e === EMPTY_ENTRY || !e.path) return onAdd(null);
     const binding = await bindingOf(e).catch(() => null);
-    if (!binding) return setError(`${e.path} is not in the loaded kernel`);
+    if (!binding) return setError(e.category === BASIC_CATEGORY ? `Could not load the ${e.title} node` : `${e.path} is not in the loaded kernel`);
     setError(null);
     used(e);
     onAdd(binding);
@@ -185,6 +189,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     [basics],
   );
   const sections: Section[] = useMemo(() => {
+    if (searching && category) return [{ id: "matches", title: "Matches", entries: results.entries, headless: true }];
     if (searching) {
       const words = results.query.toLowerCase().split(/\s+/).filter(Boolean);
       const basicMatches = basicSection.entries.filter((e) =>
@@ -196,6 +201,9 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     if (category) return categories;
     return [basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
   }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries]);
+
+  // Search matches include the basic nodes that match.
+  const shown = searching ? sections[0].entries.length : results.entries.length;
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;
@@ -295,7 +303,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
       </div>
       {summary && (
         <p className="lib-total" aria-live="polite">
-          {results.entries.length.toLocaleString()} {searching ? (results.entries.length === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
+          {shown.toLocaleString()} {searching ? (shown === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
         </p>
       )}
       <SectionList
