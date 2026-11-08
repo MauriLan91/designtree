@@ -11,8 +11,14 @@
   Hover a button for its name and shortcut.
 - **Tabs** hold the open designs. A dot marks unsaved changes; closing a tab
   or the window with unsaved changes asks first.
-- **Library** (left): the elements of the loaded kernel checkout, with
-  search, categories, favorites and recent elements.
+- **Side bar** (left), with two views:
+  - **Library**: the elements of the loaded kernel checkout, with search,
+    categories, favorites and recent elements.
+  - **Outline** (Ctrl+Shift+O): the whole devicetree as a tree. Click a node
+    to select it on the canvas and in the source, wherever it is; double-click
+    it, or press Enter, to open its scope. The arrow keys move through the
+    tree and open or close branches, and the tree opens down to whatever you
+    select elsewhere.
 - **Canvas** (middle): the devicetree as a graph. A tinted icon on each node
   and library row shows its kind: CPU, interrupt controller, clock, bus or
   serial device, GPIO, memory. Zoom with the mouse wheel

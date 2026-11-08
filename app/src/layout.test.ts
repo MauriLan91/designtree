@@ -14,7 +14,7 @@ describe("parseLayout", () => {
       inspector: { size: 10 },
       panel: { size: 300, open: true, tab: "build" },
     });
-    expect(layout.library).toEqual({ size: 480, open: false });
+    expect(layout.library).toEqual({ size: 480, open: false, view: "library" });
     expect(layout.inspector).toEqual({ size: 240, open: true });
     expect(layout.panel).toEqual({ size: 300, open: true, tab: "build" });
   });
@@ -27,3 +27,10 @@ describe("clampSize", () => {
   });
 });
 
+
+describe("side bar view", () => {
+  it("keeps the outline and falls back to the library", () => {
+    expect(parseLayout({ library: { view: "outline" } }).library.view).toBe("outline");
+    expect(parseLayout({ library: { view: "files" } }).library.view).toBe("library");
+  });
+});

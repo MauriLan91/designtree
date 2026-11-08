@@ -11,8 +11,11 @@ export interface Pane {
   open: boolean;
 }
 
+/** What the side bar shows: the element library or the tree of the design (US-16.4). */
+export type SideView = "library" | "outline";
+
 export interface Layout {
-  library: Pane;
+  library: Pane & { view: SideView };
   inspector: Pane;
   panel: Pane & { tab: PanelTab };
 }
@@ -28,7 +31,7 @@ export const LIMITS: Record<PaneName, { min: number; max: number }> = {
 };
 
 export const DEFAULT_LAYOUT: Layout = {
-  library: { size: 248, open: true },
+  library: { size: 248, open: true, view: "library" },
   inspector: { size: 320, open: true },
   panel: { size: 200, open: false, tab: "problems" },
 };
@@ -52,8 +55,9 @@ export function parseLayout(raw: unknown): Layout {
     };
   };
   const tab = (obj.panel as { tab?: unknown } | undefined)?.tab;
+  const view = (obj.library as { view?: unknown } | undefined)?.view;
   return {
-    library: pane("library"),
+    library: { ...pane("library"), view: view === "outline" ? "outline" : "library" },
     inspector: pane("inspector"),
     panel: { ...pane("panel"), tab: TABS.includes(tab as PanelTab) ? (tab as PanelTab) : DEFAULT_LAYOUT.panel.tab },
   };

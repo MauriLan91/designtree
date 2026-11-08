@@ -155,3 +155,19 @@ describe("busBar", () => {
     expect(bus.every((e) => e.deletable === false && e.selectable === false)).toBe(true);
   });
 });
+
+describe("treeRows", () => {
+  it("lists the root's children once it is expanded, in design order", async () => {
+    const { treeRows } = await import("./scopes");
+    expect(treeRows(nodes, edges, new Set()).map((r) => r.id)).toEqual(["root"]);
+    const rows = treeRows(nodes, edges, new Set(["root", "soc"]));
+    expect(rows.map((r) => [r.id, r.depth, r.branch])).toEqual([
+      ["root", 0, true],
+      ["cpus", 1, true],
+      ["soc", 1, true],
+      ["uart", 2, false],
+      ["i2c", 2, true],
+      ["osc", 1, false],
+    ]);
+  });
+});

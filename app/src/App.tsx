@@ -55,7 +55,24 @@ import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
 import { BoundaryNode } from "./components/BoundaryNode";
 import { BusBarNode } from "./components/BusBarNode";
-import { BUSBAR_PREFIX, boundaryPorts, busBar, busKind, canHaveChildren, inScope, mainScope, parentsOf, realId, scopeEdges, scopeIds, scopeOf, scopePath } from "./scopes";
+import { Navigator } from "./components/Navigator";
+import { createPortal } from "react-dom";
+import {
+  BUSBAR_PREFIX,
+  boundaryPorts,
+  busBar,
+  busKind,
+  canHaveChildren,
+  inScope,
+  mainScope,
+  parentsOf,
+  realId,
+  scopeEdges,
+  scopeIds,
+  scopeOf,
+  scopePath,
+  treeRows,
+} from "./scopes";
 import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -188,6 +205,8 @@ interface EditorProps {
   /** The panes, shared by every tab and remembered for the user. */
   layout: Layout;
   onLayout: (change: (l: Layout) => Layout) => void;
+  /** Where the navigator goes in the side bar; the visible tab draws it. */
+  outlineSlot: HTMLElement | null;
   onResetLayout: () => void;
   /** The user's settings; changes are saved by the workspace. */
   settings: Settings;
@@ -218,6 +237,7 @@ export function Editor({
   onCheckUpdates,
   layout,
   onLayout,
+  outlineSlot,
   onResetLayout,
   settings,
   settingsLoaded,
@@ -262,6 +282,14 @@ export function Editor({
   const scope = scopeTab !== null && exists(scopeTab) ? scopeTab : main;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
+  // The navigator's open branches (US-16.4).
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   // Undo and redo over everything saved in the design file (US-9.1).
   // Overrides ride along so that undoing past one locks the node again;
@@ -1104,6 +1132,19 @@ export function Editor({
     for (const p of parents.values()) count.set(p, (count.get(p) ?? 0) + 1);
     return count;
   }, [parents]);
+  // The navigator opens down to whatever is selected, wherever it was
+  // selected; the root is always open.
+  const selectedKey = nodes.filter((n) => n.selected).map((n) => n.id).join(" ");
+  useEffect(() => {
+    const ids = selectedKey ? selectedKey.split(" ") : [];
+    const up = new Set<string>(main ? [main] : []);
+    for (const id of ids) for (let p = parents.get(id); p; p = parents.get(p)) up.add(p);
+    if ([...up].some((id) => !expanded.has(id))) setExpanded((s) => new Set([...s, ...up]));
+  }, [selectedKey, main]);
+  // Rows change with the tree, not with positions.
+  const navRows = useMemo(() => treeRows(nodes, edges, expanded), [edges, expanded, nodes.length]);
+  const navNodes = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+
   /** Double-click (D7): open a node that holds others, edit the rest. */
   const openNode = (id: string) => {
     const node = nodes.find((n) => n.id === id);
@@ -1271,6 +1312,20 @@ export function Editor({
       menu: "View",
       disabled: scope === main,
       run: () => showScope(scope === null ? main : scopeOf(scope, main, parents)),
+    },
+    {
+      id: "outline",
+      title: "Outline",
+      shortcut: "Ctrl+Shift+O",
+      menu: "View",
+      group: 2,
+      hint: "The whole devicetree as a tree, in the side bar",
+      checked: layout.library.open && layout.library.view === "outline",
+      run: () =>
+        onLayout((l) => {
+          const shown = l.library.open && l.library.view === "outline";
+          return { ...l, library: { ...l.library, open: true, view: shown ? "library" : "outline" } };
+        }),
     },
     { id: "mode-graph", title: "Graph", shortcut: "Ctrl+1", menu: "View", group: 1, checked: mode === "graph", run: () => setMode("graph") },
     {
@@ -1492,7 +1547,24 @@ export function Editor({
               Bindings may differ; pick another checkout under Kernels…
             </div>
           )}
-          {!boardView && (
+          {active &&
+          outlineSlot &&
+          createPortal(
+            <Navigator
+              rows={navRows}
+              nodes={navNodes}
+              selected={new Set(selectedKey ? selectedKey.split(" ") : [])}
+              onToggle={toggleExpanded}
+              onSelect={focusNode}
+              onOpen={(id) => {
+                const n = navNodes.get(id);
+                if (n && isDtNode(n) && canHaveChildren(n, childCount.has(id))) showScope(id);
+                else focusNode(id);
+              }}
+            />,
+            outlineSlot,
+          )}
+        {!boardView && (
           <ScopeBar
             tabs={[tabOf(main), ...liveScopes.map(tabOf), ...(passing ? [{ ...tabOf(passing), passing: true }] : [])]}
             active={scope === main ? null : scope}
