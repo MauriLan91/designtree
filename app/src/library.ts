@@ -5,6 +5,15 @@
 import { backend } from "./backend";
 import type { Binding, LibraryEntry } from "./model";
 
+/** The basic nodes' category (US-18.3), shown first. */
+export const BASIC_CATEGORY = "basic";
+
+/** The last basic entry: a node with nothing preset, for anything else. */
+export const EMPTY_ENTRY: LibraryEntry = { path: "", category: BASIC_CATEGORY, title: "Empty node" };
+
+/** A basic node as a library entry. */
+export const basicEntry = (b: Binding): LibraryEntry => ({ path: b.path, category: b.category, title: b.title });
+
 /** How favorites and recents remember an entry: its schema and compatible. */
 export function entryKey(e: LibraryEntry): string {
   return e.compatible ? `${e.path}#${e.compatible}` : e.path;
@@ -26,7 +35,10 @@ export function withCompatible(binding: Binding, compatible: string | null | und
   return { ...binding, compatibles: [compatible, ...binding.compatibles.filter((c) => c !== compatible)] };
 }
 
+/** The binding an entry adds; null for the empty node and for a schema
+ * the loaded kernel no longer has. */
 export async function bindingOf(entry: LibraryEntry): Promise<Binding | null> {
+  if (!entry.path) return null;
   const [binding] = await backend.getBindings([entry.path]);
   return binding ? withCompatible(binding, entry.compatible) : null;
 }

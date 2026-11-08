@@ -170,6 +170,10 @@ pub struct Binding {
     pub compatibles: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<PropertySpec>,
+    /// The node name a new node gets, for the basic nodes the name defines
+    /// (`/`, `cpus`, `memory@0`); `None` for a device binding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_name: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -344,7 +348,96 @@ fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding
             .map(|s| s.trim().to_owned()),
         compatibles,
         properties: schemas.properties(&format!("/schemas/{rel}"), doc),
+        node_name: None,
     })
+}
+
+/// The category of the basic nodes in the library.
+pub const BASIC_CATEGORY: &str = "basic";
+
+/// The `/reserved-memory` container. dt-schema describes only its children,
+/// so its own properties (devicetree specification 3.5) are written here.
+const RESERVED_MEMORY: &str = r#"
+$id: http://devicetree.org/schemas/designtree/reserved-memory-node.yaml#
+description: Regions of memory kept from the operating system's normal use.
+properties:
+  '#address-cells': true
+  '#size-cells': true
+  ranges: true
+required:
+  - '#address-cells'
+  - '#size-cells'
+  - ranges
+"#;
+
+/// The basic devicetree nodes every board has (US-18.3): the root, `cpus`
+/// and a `cpu`, `memory`, `chosen`, `aliases` and `reserved-memory`. They
+/// carry no compatible, so the kernel's bindings do not list them; their
+/// properties come from the dt-schema core schemas, so they are in the
+/// library without a kernel.
+pub fn basic_bindings() -> Vec<Binding> {
+    // (core schema, pattern property holding the node, node name, title,
+    // required properties the schema leaves to its parent's)
+    type Basic = (
+        &'static str,
+        Option<&'static str>,
+        &'static str,
+        &'static str,
+        &'static [&'static str],
+    );
+    const BASICS: &[Basic] = &[
+        ("root-node.yaml", None, "/", "Root node", &[]),
+        ("cpus.yaml", None, "cpus", "CPUs", &[]),
+        // `cpus.yaml` requires these of its `cpu@N` children.
+        ("cpu.yaml", None, "cpu@0", "CPU", &["device_type", "reg"]),
+        ("memory.yaml", Some("^memory"), "memory@0", "Memory", &[]),
+        ("chosen.yaml", None, "chosen", "Chosen", &[]),
+        ("aliases.yaml", None, "aliases", "Aliases", &[]),
+        (
+            "designtree/reserved-memory-node.yaml",
+            None,
+            "reserved-memory",
+            "Reserved memory",
+            &[],
+        ),
+    ];
+    let core = resolve::core_docs();
+    let schemas = resolve::Schemas::new(std::iter::empty(), core.iter().cloned());
+    let reserved: Value = serde_norway::from_str(RESERVED_MEMORY).expect("built-in schema parses");
+    BASICS
+        .iter()
+        .filter_map(|&(rel, pattern, name, title, also_required)| {
+            let doc = if rel.starts_with("designtree/") {
+                &reserved
+            } else {
+                &core.iter().find(|(r, _)| r == rel)?.1
+            };
+            let node = match pattern {
+                Some(prefix) => {
+                    doc.get("patternProperties")?
+                        .as_mapping()?
+                        .iter()
+                        .find(|(k, _)| k.as_str().is_some_and(|k| k.starts_with(prefix)))?
+                        .1
+                }
+                None => doc,
+            };
+            let mut properties = schemas.properties(&format!("/schemas/{rel}"), node);
+            // `$nodename` constrains the name, which the entry sets itself.
+            properties.retain(|p| !p.name.starts_with('$'));
+            for p in &mut properties {
+                p.required |= also_required.contains(&p.name.as_str());
+            }
+            Some(Binding {
+                path: format!("dtschema/{rel}"),
+                category: BASIC_CATEGORY.to_owned(),
+                title: Some(title.to_owned()),
+                compatibles: Vec::new(),
+                properties,
+                node_name: Some(name.to_owned()),
+            })
+        })
+        .collect()
 }
 
 /// Collects every literal string reachable through `const`, `enum`, `items`,
@@ -369,5 +462,67 @@ fn collect_strings(spec: &Value, out: &mut Vec<String>) {
         }
         Value::Sequence(seq) => seq.iter().for_each(|v| collect_strings(v, out)),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod basic_tests {
+    use super::*;
+
+    fn required(b: &Binding) -> Vec<&str> {
+        b.properties
+            .iter()
+            .filter(|p| p.required)
+            .map(|p| p.name.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn basic_nodes_come_with_their_required_properties() {
+        let basics = basic_bindings();
+        let names: Vec<_> = basics
+            .iter()
+            .map(|b| b.node_name.as_deref().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "/",
+                "cpus",
+                "cpu@0",
+                "memory@0",
+                "chosen",
+                "aliases",
+                "reserved-memory"
+            ]
+        );
+        let of = |name: &str| {
+            basics
+                .iter()
+                .find(|b| b.node_name.as_deref() == Some(name))
+                .unwrap()
+        };
+        assert_eq!(
+            required(of("/")),
+            ["model", "#address-cells", "#size-cells", "compatible"]
+        );
+        assert_eq!(required(of("cpu@0")), ["device_type", "reg"]);
+        assert_eq!(required(of("memory@0")), ["device_type", "reg"]);
+        assert_eq!(
+            required(of("reserved-memory")),
+            ["#address-cells", "#size-cells", "ranges"]
+        );
+        let device_type = of("memory@0")
+            .properties
+            .iter()
+            .find(|p| p.name == "device_type")
+            .unwrap();
+        assert_eq!(device_type.enum_values, [serde_json::json!("memory")]);
+        assert!(basics
+            .iter()
+            .all(|b| b.category == BASIC_CATEGORY && b.compatibles.is_empty()));
+        assert!(basics
+            .iter()
+            .all(|b| b.properties.iter().all(|p| !p.name.starts_with('$'))));
     }
 }

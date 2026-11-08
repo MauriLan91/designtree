@@ -220,6 +220,7 @@ mod tests {
             title: Some(title.to_string()),
             compatibles: compatibles.iter().map(|c| c.to_string()).collect(),
             properties: Vec::new(),
+            node_name: None,
         }
     }
 

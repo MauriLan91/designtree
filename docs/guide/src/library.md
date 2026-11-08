@@ -53,5 +53,17 @@ that element's `compatible`, a `reg` placeholder, `status = "okay"` and the prop
 schema requires, filled with defaults where the schema has them. Properties
 that still need a value are marked as to-do in the inspector.
 
-**+ Empty node** adds a node without a compatible, for nodes the schemas do
-not describe (`chosen`, `aliases`, `memory`).
+## Basic nodes
+
+The **Basic** section, always on top and there even before a kernel is
+loaded, holds the nodes every board has and no compatible names: the
+**Root node**, **CPUs** (`cpus`) and a **CPU** (`cpu@0`), **Memory**
+(`memory@0`), **Chosen**, **Aliases** and **Reserved memory**. Their
+properties come from the dt-schema core schemas built into the app, so each
+arrives with its required properties, set where there is only one choice
+(`device_type = "memory"`) and to-do otherwise. A design has a single root:
+adding the **Root node** fills in what the existing root lacks (`model`,
+`compatible`) instead of adding a second one.
+
+The last entry, **Empty node**, adds a node with nothing preset, for
+anything else.

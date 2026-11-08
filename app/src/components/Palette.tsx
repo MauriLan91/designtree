@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, LayoutGrid, List } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
 import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from "../libraryHistory";
-import { bindingOf, entryKey, entryOfKey, highlight } from "../library";
+import { BASIC_CATEGORY, EMPTY_ENTRY, basicEntry, bindingOf, entryKey, entryOfKey, highlight } from "../library";
 import type { Binding, LibraryEntry } from "../model";
 import { KINDS, kindOf } from "../categories";
 import {
@@ -46,6 +46,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const [recents, setRecents] = useState(() => loadList("recents"));
   const [favoriteEntries, setFavoriteEntries] = useState<LibraryEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<LibraryEntry[]>([]);
+  const [basics, setBasics] = useState<Binding[]>([]);
   const [prefs, setPrefs] = useState(loadPrefs);
   const updatePrefs = (next: typeof prefs) => {
     setPrefs(next);
@@ -73,6 +74,14 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   useEffect(() => {
     loadKernel(requestedKernel ?? null);
   }, [requestedKernel]);
+
+  // The basic nodes come with the app, so they are there before a kernel.
+  useEffect(() => {
+    if (inTauri) backend.basicBindings().then(setBasics, () => setBasics([]));
+  }, []);
+  const nodeNames = useMemo(() => new Map(basics.map((b) => [b.path, b.node_name ?? ""])), [basics]);
+  /** What the second line of an entry names: its compatible, or the node a basic entry adds. */
+  const subtitle = (e: LibraryEntry) => e.compatible ?? (e.path ? (nodeNames.get(e.path) ?? e.path) : "any node, nothing preset");
 
   useEffect(() => {
     if (!summary) return;
@@ -130,6 +139,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     saveList("recents", next);
   };
   const add = async (e: LibraryEntry) => {
+    if (e === EMPTY_ENTRY || !e.path) return onAdd(null);
     const binding = await bindingOf(e).catch(() => null);
     if (!binding) return setError(`${e.path} is not in the loaded kernel`);
     setError(null);
@@ -152,6 +162,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   });
 
   const star = (e: LibraryEntry) => {
+    if (!e.path) return null;
     const favorite = favorites.includes(entryKey(e));
     return (
       <button
@@ -169,12 +180,22 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const searching = results.query.trim() !== "";
   // Grouped once per result set; a star or an add only changes the history sections.
   const categories = useMemo(() => (searching ? [] : categorySections(results.entries)), [searching, results]);
+  const basicSection: Section = useMemo(
+    () => ({ id: "basic", title: "Basic", category: BASIC_CATEGORY, entries: [...basics.map(basicEntry), EMPTY_ENTRY] }),
+    [basics],
+  );
   const sections: Section[] = useMemo(() => {
-    if (searching) return [{ id: "matches", title: "Matches", entries: results.entries, headless: true }];
+    if (searching) {
+      const words = results.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const basicMatches = basicSection.entries.filter((e) =>
+        words.every((w) => `${e.title} ${nodeNames.get(e.path) ?? ""}`.toLowerCase().includes(w)),
+      );
+      return [{ id: "matches", title: "Matches", entries: [...basicMatches, ...results.entries], headless: true }];
+    }
     // A picked category shows its elements, without the history of other ones.
     if (category) return categories;
-    return [...historySections(favoriteEntries, recentEntries), ...categories];
-  }, [searching, results, category, categories, favoriteEntries, recentEntries]);
+    return [basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
+  }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries]);
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;
@@ -195,9 +216,9 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
         <div className="lib-tiles" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
           {row.entries.map((e) => (
             <div key={entryKey(e)} className="lib-tile" {...entryProps(e)}>
-              <EntryChip category={e.category} />
+              <EntryChip category={e.category} name={subtitle(e)} />
               <span className="lib-tile-name">
-                <Marked text={e.compatible ?? e.path} query={q} />
+                <Marked text={subtitle(e)} query={q} />
               </span>
               {star(e)}
             </div>
@@ -208,13 +229,13 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     const e = row.entries[0];
     return (
       <div className="lib-item binding-row" {...entryProps(e)}>
-        <EntryChip category={e.category} />
+        <EntryChip category={e.category} name={subtitle(e)} />
         <div className="binding-text">
           <div className="binding-title">
             <Marked text={e.title ?? e.path} query={q} />
           </div>
           <div className="binding-compat">
-            <Marked text={e.compatible ?? e.path} query={q} />
+            <Marked text={subtitle(e)} query={q} />
           </div>
         </div>
         {star(e)}
@@ -225,7 +246,6 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   return (
     <aside className="panel palette">
       <h2>Library</h2>
-      <button onClick={() => onAdd(null)} className="wide">+ Empty node</button>
       {!summary && (
         <>
           <p className="hint">
@@ -248,45 +268,49 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="lib-filters">
-            <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-              <option value="">All categories</option>
-              {summary.categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-            <div className="segmented" role="group" aria-label="Library view">
-              {(["list", "grid"] as Display[]).map((d) => (
-                <button
-                  key={d}
-                  aria-pressed={prefs.display === d}
-                  aria-label={d === "list" ? "List" : "Grid"}
-                  title={d === "list" ? "List" : "Grid"}
-                  onClick={() => updatePrefs({ ...prefs, display: d })}
-                >
-                  {d === "list" ? <List size={14} aria-hidden /> : <LayoutGrid size={14} aria-hidden />}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="lib-total" aria-live="polite">
-            {results.entries.length.toLocaleString()} {searching ? (results.entries.length === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
-          </p>
-          <SectionList
-            sections={sections}
-            isOpen={searching || category ? alwaysOpen : isOpen}
-            display={prefs.display}
-            render={renderRow}
-            resetKey={results}
-          />
         </>
       )}
+      <div className="lib-filters">
+        {summary && (
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+            <option value="">All categories</option>
+            {summary.categories.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        )}
+        <div className="segmented" role="group" aria-label="Library view">
+          {(["list", "grid"] as Display[]).map((d) => (
+            <button
+              key={d}
+              aria-pressed={prefs.display === d}
+              aria-label={d === "list" ? "List" : "Grid"}
+              title={d === "list" ? "List" : "Grid"}
+              onClick={() => updatePrefs({ ...prefs, display: d })}
+            >
+              {d === "list" ? <List size={14} aria-hidden /> : <LayoutGrid size={14} aria-hidden />}
+            </button>
+          ))}
+        </div>
+      </div>
+      {summary && (
+        <p className="lib-total" aria-live="polite">
+          {results.entries.length.toLocaleString()} {searching ? (results.entries.length === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
+        </p>
+      )}
+      <SectionList
+        sections={sections}
+        isOpen={searching || category ? alwaysOpen : isOpen}
+        display={prefs.display}
+        render={renderRow}
+        resetKey={results}
+      />
     </aside>
   );
 }
 
-function EntryChip({ category, small }: { category: string; small?: boolean }) {
-  const kind = kindOf(category, "");
+function EntryChip({ category, name = "", small }: { category: string; name?: string; small?: boolean }) {
+  const kind = kindOf(category, name.split("@")[0]);
   const { Icon, title } = KINDS[kind];
   return (
     <span className={`kind-chip ${small ? "" : "large "}kind-${kind}`} title={title}>

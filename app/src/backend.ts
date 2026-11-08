@@ -59,6 +59,8 @@ export const backend = {
   /** One entry per compatible; all of them without a limit (US-18.1). */
   libraryEntries: (query: string, category: string | null, limit?: number) =>
     invoke<LibraryEntry[]>("library_entries", { query, category, limit: limit ?? null }),
+  /** The basic devicetree nodes, without a kernel (US-18.3). */
+  basicBindings: () => invoke<Binding[]>("basic_bindings"),
   getBindings: (paths: string[]) => invoke<Binding[]>("get_bindings", { paths }),
   bindingsForCompatibles: (compatibles: string[]) =>
     invoke<(Binding | null)[]>("bindings_for_compatibles", { compatibles }),

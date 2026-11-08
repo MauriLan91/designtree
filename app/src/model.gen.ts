@@ -316,7 +316,12 @@ path: string,
 /**
  * Library category, taken from the first directory component (`serial`).
  */
-category: string, title?: string | null, compatibles?: Array<string>, properties?: Array<PropertySpec>, };
+category: string, title?: string | null, compatibles?: Array<string>, properties?: Array<PropertySpec>, 
+/**
+ * The node name a new node gets, for the basic nodes the name defines
+ * (`/`, `cpus`, `memory@0`); `None` for a device binding.
+ */
+node_name?: string | null, };
 
 export type LibraryEntry = { 
 /**

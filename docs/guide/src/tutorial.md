@@ -14,10 +14,11 @@ Properties go in the inspector's **Properties** table: type a name under
 `0x40000000 0x20000000`). Its **Text** mode takes `name = value` lines
 instead, and the DTS source panel works too.
 
-Nodes the kernel's schemas do not describe (`cpus`, `memory`, `chosen`,
-`aliases`, the LED itself) are added with **+ Empty node** at the top of the
-library and named in the inspector. Everything else comes from the library
-search.
+The basic nodes every board has (`cpus`, `memory`, `chosen`, `aliases`)
+are in the **Basic** section at the top of the library, with their required
+properties. A node nothing describes, such as the LED itself, is an
+**Empty node**, the last entry of that section, named in the inspector.
+Everything else comes from the library search.
 
 The canvas shows one level of the tree at a time (see [Building a
 design](designing.md)). A node you add goes into the level on show: on the
@@ -30,8 +31,9 @@ otherwise, work on the main canvas.
 2. In the inspector, set **Compatible** to `acme,first-board` and add
    `model = "Acme First Board"` to its properties. The root already has
    `#address-cells = <1>` and `#size-cells = <1>`.
-3. **+ Empty node** on the main canvas, which puts it under the root. Name
-   it `cpus` and give it `#address-cells = <1>` and `#size-cells = <0>`.
+3. Double-click **CPUs** in the library's **Basic** section, on the main
+   canvas, which puts it under the root. It comes as `cpus` with
+   `#size-cells = <0>`; set `#address-cells` to `1`.
 4. Double-click `cpus` to open it. Search the library for `cortex-a7` and
    add the CPU, name it `cpu` with unit address `0`, and set
    `device_type = "cpu"` and `reg = <0>`. Click `/` in the breadcrumb to go
@@ -41,10 +43,10 @@ Checkpoint: `first-board-1-cpu.json`.
 
 ## 2. Memory
 
-1. **+ Empty node** under the root, named `memory`.
-2. Set the unit address to `40000000`, and the properties
-   `device_type = "memory"` and `reg = <0x40000000 0x20000000>` (512 MiB at
-   0x40000000).
+1. Double-click **Memory** in the **Basic** section. It comes as `memory@0`
+   with `device_type = "memory"` and a `reg` to fill in.
+2. Set the unit address to `40000000` and `reg` to the cells
+   `0x40000000 0x20000000` (512 MiB at 0x40000000).
 
 Checkpoint: `first-board-2-memory.json`.
 
@@ -85,7 +87,7 @@ Checkpoint: `first-board-4-uart.json`.
    and `reg-names = "dat", "dirout"`. `gpio-controller` is a toggle and
    `#gpio-cells` is `2`.
 2. Search for `gpio-leds` and add it under the root, named `leds`.
-3. Double-click `leds`, then **+ Empty node** in it, named `led-0`, with
+3. Double-click `leds`, then add an **Empty node** in it, named `led-0`, with
    `default-state = "off"`.
 4. The GPIO controller is on the main canvas, not in `leds`: drag from the
    LED's right handle and drop it on empty canvas, then pick `gpio@1c20800`.

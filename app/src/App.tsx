@@ -809,12 +809,29 @@ export function Editor({
           });
         })();
       const initial = binding ? initialProperties(binding) : null;
+      // A design has one root: the library's root node fills in the
+      // properties the existing one lacks instead of adding another.
+      const root = nodesRef.current.find((n) => isDtNode(n) && n.data.name === "/");
+      if (binding?.node_name === "/" && root) {
+        setNodes((ns) =>
+          ns.map((n) => {
+            if (n.id !== root.id || !isDtNode(n)) return { ...n, selected: false };
+            const have = new Set(n.data.properties.map((p) => p.name));
+            const added = initial!.properties.filter((p) => !have.has(p.name));
+            return { ...n, selected: true, data: { ...n.data, binding, properties: [...n.data.properties, ...added] } };
+          }),
+        );
+        return;
+      }
+      // Basic nodes name themselves (`memory@0`); devices get a generic name.
+      const [name, unitAddress] = binding?.node_name?.split("@") ?? [binding ? genericNodeName(binding) : "node"];
       const node: DtFlowNode = {
         id,
         type: "dt",
         position: at,
         data: {
-          name: binding ? genericNodeName(binding) : "node",
+          name,
+          ...(unitAddress !== undefined ? { unitAddress } : {}),
           compatible: binding?.compatibles?.slice(0, 1) ?? [],
           properties: initial?.properties ?? [],
           binding: binding ?? undefined,
@@ -824,7 +841,7 @@ export function Editor({
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { ...node, selected: true }]);
       // A new node is a child of the scope it is created or dropped in.
       const parent = scopeRef.current;
-      if (parent) {
+      if (parent && name !== "/") {
         setEdges((es) => [
           ...es,
           { id: newId("e"), source: parent, target: id, sourceHandle: CHILD_HANDLE, targetHandle: PARENT_HANDLE },
@@ -840,7 +857,9 @@ export function Editor({
       const raw = e.dataTransfer.getData(DRAG_MIME);
       if (!raw) return;
       const at = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      entryBinding(JSON.parse(raw) as LibraryEntry).then((b) => b && addNode(b, at), () => {});
+      const entry = JSON.parse(raw) as LibraryEntry;
+      // The empty node has no binding; any other entry needs its schema.
+      entryBinding(entry).then((b) => (b || !entry.path) && addNode(b, at), () => {});
     },
     [addNode, screenToFlowPosition],
   );
