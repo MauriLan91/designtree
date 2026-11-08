@@ -268,3 +268,39 @@ export function busBar(
   }));
   return { node, edges };
 }
+
+/** A row of the navigator tree (US-16.4). */
+export interface TreeRow {
+  id: string;
+  depth: number;
+  /** Whether it has children, so a toggle is drawn. */
+  branch: boolean;
+  expanded: boolean;
+}
+
+/**
+ * The visible rows of the navigator: the top-level nodes, then each
+ * expanded node's children, in the order of the design (the child edges).
+ */
+export function treeRows(nodes: FlowNode[], edges: Edge[], expanded: ReadonlySet<string>): TreeRow[] {
+  const children = new Map<string, string[]>();
+  const hasParent = new Set<string>();
+  for (const e of edges) {
+    if (!isTreeEdge(e)) continue;
+    children.set(e.source, [...(children.get(e.source) ?? []), e.target]);
+    hasParent.add(e.target);
+  }
+  const dt = nodes.filter(isDtNode);
+  const known = new Set(dt.map((n) => n.id));
+  // The root first, then the other top-level nodes (overrides, fragments).
+  const top = dt.filter((n) => !hasParent.has(n.id)).sort((a, b) => Number(b.data.name === "/") - Number(a.data.name === "/"));
+  const rows: TreeRow[] = [];
+  const walk = (id: string, depth: number) => {
+    const kids = (children.get(id) ?? []).filter((k) => known.has(k));
+    const open = expanded.has(id);
+    rows.push({ id, depth, branch: kids.length > 0, expanded: open });
+    if (open) kids.forEach((k) => walk(k, depth + 1));
+  };
+  top.forEach((n) => walk(n.id, 0));
+  return rows;
+}

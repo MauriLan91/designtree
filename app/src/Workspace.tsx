@@ -64,6 +64,7 @@ export default function Workspace() {
   }, [settings, settingsLoaded]);
   const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
   const [layout, setLayout] = useState<Layout>(loadLayout);
+  const [outlineSlot, setOutlineSlot] = useState<HTMLDivElement | null>(null);
   const changeLayout = useCallback((change: (l: Layout) => Layout) => {
     setLayout((l) => {
       const next = change(l);
@@ -265,11 +266,27 @@ export default function Workspace() {
       <div className="pane library-pane">
         {/* Kept mounted while collapsed, so the search and the loaded kernel stay. */}
         <div className="pane-body" hidden={!layout.library.open}>
-          <Palette
-            onAdd={(b) => apis.current.get(active)?.addNode(b)}
-            requestedKernel={requestedKernel}
-            onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}
-          />
+          <div className="side-views" role="tablist" aria-label="Side bar">
+            {(["library", "outline"] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={layout.library.view === v}
+                onClick={() => changeLayout((l) => ({ ...l, library: { ...l.library, view: v } }))}
+              >
+                {v === "library" ? "Library" : "Outline"}
+              </button>
+            ))}
+          </div>
+          <div className="side-view" hidden={layout.library.view !== "library"}>
+            <Palette
+              onAdd={(b) => apis.current.get(active)?.addNode(b)}
+              requestedKernel={requestedKernel}
+              onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}
+            />
+          </div>
+          {/* The active editor draws its navigator here (US-16.4). */}
+          <div className="side-view panel outline-slot" hidden={layout.library.view !== "outline"} ref={setOutlineSlot} />
           <Splitter
             pane="library"
             size={layout.library.size}
@@ -293,6 +310,7 @@ export default function Workspace() {
             onCheckUpdates={checkUpdatesNow}
             layout={layout}
             onLayout={changeLayout}
+            outlineSlot={outlineSlot}
             onResetLayout={() => changeLayout(() => DEFAULT_LAYOUT)}
             settings={settings}
             settingsLoaded={settingsLoaded}
@@ -360,6 +378,7 @@ interface TabEditorProps {
   onCheckUpdates: () => void;
   layout: Layout;
   onLayout: (change: (l: Layout) => Layout) => void;
+  outlineSlot: HTMLElement | null;
   onResetLayout: () => void;
   settings: Settings;
   settingsLoaded: boolean;
