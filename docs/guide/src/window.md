@@ -7,7 +7,7 @@
   now (no selection, say). Alt and the underlined letter opens a menu, the
   arrow keys move through it.
 - **Toolbar** under it: New, Open and Save; Undo and Redo; Add empty node and
-  Auto layout; the command search (Ctrl+K); and **Build .dtb** on the right.
+  Tidy this canvas; the command search (Ctrl+K); and **Build .dtb** on the right.
   Hover a button for its name and shortcut.
 - **Tabs** hold the open designs. A dot marks unsaved changes; closing a tab
   or the window with unsaved changes asks first.

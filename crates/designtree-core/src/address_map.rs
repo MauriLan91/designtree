@@ -697,6 +697,7 @@ mod tests {
             from: i2c,
             to: soc,
             kind: EdgeKind::Child,
+            route: None,
         });
         address_map(&graph);
     }

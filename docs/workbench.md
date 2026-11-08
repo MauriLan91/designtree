@@ -12,7 +12,7 @@ Top to bottom, VSCode-like:
 | Region | Size | Content |
 | --- | --- | --- |
 | Menu bar | 30 px | File, Edit, View, Insert, Tools, Help (US-15.2) |
-| Toolbar | 40 px | New, Open, Save · Undo, Redo · Add node, Auto layout · command search (Ctrl+K, the existing palette shortcut) · Build .dtb as the one primary button |
+| Toolbar | 40 px | New, Open, Save · Undo, Redo · Add node, Tidy this canvas · command search (Ctrl+K, the existing palette shortcut) · Build .dtb as the one primary button |
 | Activity bar | 48 px wide | Library, Outline, Board view, Kernel schemas; Settings at the bottom |
 | Side bar | 248 px (200–480) | The active view; library search with results, recents |
 | Editor area | rest | Tabs of open designs with an unsaved dot; Graph / Split / DTS switch at the right of the tab row (US-15.4); zoom controls bottom left, minimap bottom right |
@@ -106,6 +106,6 @@ with its shortcut.
 | Settings | `settings-2` |
 | New, Open, Save | `file-plus`, `folder-open`, `save` |
 | Undo, Redo | `undo-2`, `redo-2` |
-| Add node, Auto layout | `square-plus`, `workflow` |
+| Add node, Tidy this canvas | `square-plus`, `layout-dashboard` |
 | Build .dtb | `hammer` |
 | Error, Warning | `circle-alert`, `triangle-alert` |

@@ -275,6 +275,7 @@ mod tests {
                 property: "interrupt-parent".into(),
                 args: vec![],
             },
+            route: None,
         });
         let tree = interrupt_tree(&g);
         assert_eq!(tree.problems.len(), 1, "{:?}", tree.problems);
@@ -304,6 +305,7 @@ mod tests {
                 property: "interrupts-extended".into(),
                 args: vec![0, 5, 4],
             },
+            route: None,
         });
         g.edges.push(crate::model::Edge {
             from: "uart".into(),
@@ -312,6 +314,7 @@ mod tests {
                 property: "interrupts-extended".into(),
                 args: vec![1, 2],
             },
+            route: None,
         });
         let tree = interrupt_tree(&g);
         let find = |id: &str| {

@@ -709,6 +709,7 @@ mod tests {
             from: from.into(),
             to: to.into(),
             kind: EdgeKind::Child,
+            route: None,
         }
     }
 
@@ -747,6 +748,7 @@ mod tests {
                         property: "clocks".into(),
                         args: vec![],
                     },
+                    route: None,
                 },
             ],
             groups: vec![],
@@ -848,6 +850,7 @@ mod tests {
                         property: "clocks".into(),
                         args: vec![],
                     },
+                    route: None,
                 },
             ],
             groups: vec![],

@@ -114,6 +114,8 @@ export interface GroupData extends Record<string, unknown> {
 export interface RefData extends Record<string, unknown> {
   property: string;
   args: number[];
+  /** The x where the reference, drawn as right angles, turns (US-9.5). */
+  route?: number;
 }
 
 export type DtFlowNode = Node<DtNodeData, "dt">;
@@ -183,6 +185,7 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
           kind: "reference",
           property: (e.data as RefData).property,
           args: (e.data as RefData).args,
+          route: (e.data as RefData).route,
         }
       : { from: e.source, to: e.target, kind: "child" },
   );
@@ -262,7 +265,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
           sourceHandle: REF_HANDLE,
           targetHandle: PHANDLE_HANDLE,
           type: "ref",
-          data: { property: e.property, args: e.args ?? [] },
+          data: { property: e.property, args: e.args ?? [], ...(e.route != null ? { route: e.route } : {}) },
         },
   );
 

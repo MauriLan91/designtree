@@ -71,7 +71,13 @@ board_position?: Position, };
 
 export type EdgeKind = { "kind": "child" } | { "kind": "reference", property: string, args?: Array<number>, };
 
-export type Edge = { from: NodeId, to: NodeId, } & ({ "kind": "child" } | { "kind": "reference", property: string, args?: Array<number>, });
+export type Edge = { from: NodeId, to: NodeId, 
+/**
+ * Where a reference drawn as right angles turns: the x of its vertical
+ * run, set by tidying the canvas (US-9.5). Drawing only; `None` draws a
+ * curve.
+ */
+route?: number | null, } & ({ "kind": "child" } | { "kind": "reference", property: string, args?: Array<number>, });
 
 export type Group = { id: string, title: string, members: Array<NodeId>, subgroups?: Array<Group>, position: Position, size?: Size | null, 
 /**

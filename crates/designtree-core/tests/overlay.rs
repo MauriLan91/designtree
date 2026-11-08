@@ -45,6 +45,7 @@ fn child(from: &str, to: &str) -> Edge {
         from: NodeId(from.into()),
         to: NodeId(to.into()),
         kind: EdgeKind::Child,
+        route: None,
     }
 }
 
@@ -101,6 +102,7 @@ fn edited() -> Graph {
             property: "clocks".into(),
             args: vec![],
         },
+        route: None,
     });
     graph
 }
