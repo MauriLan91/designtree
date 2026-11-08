@@ -5,6 +5,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type {
   AddressMap,
   Binding,
+  LibraryEntry,
   Board,
   BoardLink,
   Cell,
@@ -36,6 +37,7 @@ import type {
 export type {
   AddressMap,
   Binding,
+  LibraryEntry,
   Board,
   BoardLink,
   LinkKind,

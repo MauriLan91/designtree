@@ -20,16 +20,23 @@ bindings may differ between kernels.
 
 ## Finding an element
 
+Every compatible string is an element of its own, titled from the schema
+that documents it: `arm,cortex-a7` and `arm,cortex-a9` are two elements
+named "ARM CPUs". The list holds all of them and scrolls through the whole
+library.
+
 Type in the search box: the search is fuzzy over the compatible string, the
 vendor and the schema title, ranked by match quality, so `bme280`, `bosch
-pressure` and `i2c eeprom` all work. Narrow it with the category list.
+pressure` and `i2c eeprom` all work. The words you typed are highlighted
+and the count above the list says how many elements match. Narrow it with
+the category list.
 The star next to an element adds it to **Favorites**; elements you add show
 up under **Recent**. Both are kept between sessions.
 
 ## Adding a node
 
-Click an element, or drag it to the canvas. The new node comes with its
-`compatible`, a `reg` placeholder, `status = "okay"` and the properties its
+Double-click an element, or drag it to the canvas. The new node comes with
+that element's `compatible`, a `reg` placeholder, `status = "okay"` and the properties its
 schema requires, filled with defaults where the schema has them. Properties
 that still need a value are marked as to-do in the inspector.
 

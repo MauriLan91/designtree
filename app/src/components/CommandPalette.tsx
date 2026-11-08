@@ -66,7 +66,7 @@ export function CommandPalette({ commands, library, onAdd, onClose, initialPick 
       .filter((c) => !c.disabled && matches(c.title))
       .map((c) => ({ key: c.id, title: c.title, hint: c.shortcut, run: c.run }));
     const adds = bindings.map((b) => ({
-      key: `add:${b.path}`,
+      key: `add:${b.path}:${b.compatibles?.[0] ?? ""}`,
       title: `Add ${b.title}`,
       hint: b.compatibles?.[0],
       run: () => onAdd(b),

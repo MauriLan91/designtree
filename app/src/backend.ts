@@ -2,7 +2,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Span } from "./components/DtsEditor";
-import type { AddressMap, Binding, BoardLink, Design, DtMacro, InterruptTree, PinCheck, Problem, SocDtsi } from "./model";
+import type { AddressMap, Binding, BoardLink, Design, DtMacro, InterruptTree, LibraryEntry, PinCheck, Problem, SocDtsi } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -56,6 +56,9 @@ export const backend = {
   removeKernel: (path: string) => invoke<KernelInfo[]>("remove_kernel", { path }),
   searchBindings: (query: string, category: string | null, limit = 200) =>
     invoke<Binding[]>("search_bindings", { query, category, limit }),
+  /** One entry per compatible; all of them without a limit (US-18.1). */
+  libraryEntries: (query: string, category: string | null, limit?: number) =>
+    invoke<LibraryEntry[]>("library_entries", { query, category, limit: limit ?? null }),
   getBindings: (paths: string[]) => invoke<Binding[]>("get_bindings", { paths }),
   bindingsForCompatibles: (compatibles: string[]) =>
     invoke<(Binding | null)[]>("bindings_for_compatibles", { compatibles }),
