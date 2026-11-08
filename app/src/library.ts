@@ -38,6 +38,8 @@ export async function bindingOf(entry: LibraryEntry): Promise<Binding | null> {
  */
 export function highlight(text: string, query: string): { text: string; match: boolean }[] {
   const lower = text.toLowerCase();
+  // Lowercasing can change the length (`İ`); then positions would not match.
+  if (lower.length !== text.length) return [{ text, match: false }];
   const marked = new Array<boolean>(text.length).fill(false);
   for (const word of query.toLowerCase().split(/\s+/).filter(Boolean)) {
     for (let i = lower.indexOf(word); i >= 0; i = lower.indexOf(word, i + 1)) {

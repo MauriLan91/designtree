@@ -59,21 +59,31 @@ const COMPATIBLE_WEIGHT: u32 = 100;
 const TITLE_WEIGHT: u32 = 80;
 const PATH_WEIGHT: u32 = 60;
 
-/// The score of one library entry (a compatible of a schema, with the
-/// schema's lowercase title and path), or `None` when a word matches nowhere.
-fn score_entry(
-    words: &[String],
-    compatible: Option<&str>,
-    title: Option<&str>,
-    path: &str,
-) -> Option<u32> {
+/// How well each word matches a schema's title and path, which every
+/// compatible of the schema shares.
+fn schema_scores(words: &[String], binding: &Binding) -> Vec<u32> {
+    let title = binding.title.as_ref().map(|t| t.to_lowercase());
+    let path = binding.path.to_lowercase();
+    words
+        .iter()
+        .map(|word| {
+            let title = title
+                .as_deref()
+                .map_or(0, |t| score_word(word, t) * TITLE_WEIGHT / 100);
+            title.max(score_word(word, &path) * PATH_WEIGHT / 100)
+        })
+        .collect()
+}
+
+/// The score of one library entry: each word's best match in the
+/// compatible or in the schema (`schema`, from [`schema_scores`]); `None`
+/// when a word matches nowhere.
+fn score_entry(words: &[String], compatible: Option<&str>, schema: &[u32]) -> Option<u32> {
     let mut total = 0;
-    for word in words {
-        let mut best = compatible.map_or(0, |c| score_word(word, c) * COMPATIBLE_WEIGHT / 100);
-        if let Some(title) = title {
-            best = best.max(score_word(word, title) * TITLE_WEIGHT / 100);
-        }
-        best = best.max(score_word(word, path) * PATH_WEIGHT / 100);
+    for (word, &fixed) in words.iter().zip(schema) {
+        let best = compatible
+            .map_or(0, |c| score_word(word, c) * COMPATIBLE_WEIGHT / 100)
+            .max(fixed);
         if best == 0 {
             return None;
         }
@@ -161,17 +171,18 @@ impl Catalog {
     /// in catalog order.
     pub fn search(&self, query: &str, category: Option<&str>, limit: usize) -> Vec<Hit<'_>> {
         let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-        let entries = self.in_category(category).flat_map(entries_of);
         if words.is_empty() {
-            return entries.take(limit).collect();
+            return self
+                .in_category(category)
+                .flat_map(entries_of)
+                .take(limit)
+                .collect();
         }
         let mut scored: Vec<(u32, Hit)> = Vec::new();
         for binding in self.in_category(category) {
-            // Lowercased once per schema, not once per compatible.
-            let title = binding.title.as_ref().map(|t| t.to_lowercase());
-            let path = binding.path.to_lowercase();
+            let schema = schema_scores(&words, binding);
             for hit in entries_of(binding) {
-                if let Some(score) = score_entry(&words, hit.compatible, title.as_deref(), &path) {
+                if let Some(score) = score_entry(&words, hit.compatible, &schema) {
                     scored.push((score, hit));
                 }
             }

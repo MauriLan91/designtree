@@ -232,9 +232,14 @@ fn search_bindings(
     state: State<AppState>,
 ) -> Vec<Binding> {
     let catalog = state.catalog.read().unwrap();
+    // One schema per result, with its best-matching compatible first: the
+    // search lists every compatible, and a schema can have over a hundred.
+    let mut seen = std::collections::HashSet::new();
     catalog
-        .search(&query, category.as_deref(), limit)
+        .search(&query, category.as_deref(), usize::MAX)
         .iter()
+        .filter(|hit| seen.insert(hit.binding.path.as_str()))
+        .take(limit)
         .map(|hit| hit.to_binding())
         .collect()
 }

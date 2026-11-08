@@ -55,7 +55,10 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     if (!summary) return;
     const t = setTimeout(() => {
       backend.libraryEntries(query, category || null).then(
-        (entries) => setResults({ query, entries }),
+        (entries) => {
+          setResults({ query, entries });
+          setError(null);
+        },
         (e) => setError(String(e)),
       );
     }, 150);
@@ -70,8 +73,21 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     backend.getBindings(paths).then(
       (bindings) => {
         const resolve = (keys: string[]) => keys.map((k) => entryOfKey(k, bindings)).filter((e): e is LibraryEntry => e !== null);
-        setFavoriteEntries(resolve(favorites));
-        setRecentEntries(resolve(recents));
+        // Keys saved as a bare path before US-18.1 are rewritten with the
+        // compatible they resolved to, so the star and the toggle match them.
+        const migrate = (key: "favorites" | "recents", keys: string[], entries: LibraryEntry[], set: (k: string[]) => void) => {
+          const next = [...new Set(entries.map(entryKey))];
+          if (keys.some((k) => !k.includes("#")) && next.join() !== keys.join()) {
+            saveList(key, next);
+            set(next);
+          }
+        };
+        const fav = resolve(favorites);
+        const rec = resolve(recents);
+        setFavoriteEntries(fav);
+        setRecentEntries(rec);
+        migrate("favorites", favorites, fav, setFavorites);
+        migrate("recents", recents, rec, setRecents);
       },
       () => {
         setFavoriteEntries([]);
@@ -93,6 +109,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
   const add = async (e: LibraryEntry) => {
     const binding = await bindingOf(e).catch(() => null);
     if (!binding) return setError(`${e.path} is not in the loaded kernel`);
+    setError(null);
     used(e);
     onAdd(binding);
   };
