@@ -1109,6 +1109,10 @@ export function Editor({
     const node = nodes.find((n) => n.id === id);
     if (!node || !isDtNode(node)) return;
     if (canHaveChildren(node, childCount.has(id))) return showScope(id);
+    editNode(id);
+  };
+  /** Selects `id` and puts the cursor in its properties in the inspector. */
+  const editNode = (id: string) => {
     selectOnly([id]);
     onLayout((l) => (l.inspector.open ? l : { ...l, inspector: { ...l.inspector, open: true } }));
     setTimeout(() => document.querySelector<HTMLElement>(".inspector textarea")?.focus(), 30);
@@ -1531,7 +1535,11 @@ export function Editor({
               fitViewOptions={{ maxZoom: 1 }}
               minZoom={0.1}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
-              onNodeDoubleClick={(_, node) => openNode(node.id)}
+              onNodeDoubleClick={(_, node) => {
+                // The bar is the scope's own controller: edit its properties.
+                if (node.id.startsWith(BUSBAR_PREFIX)) editNode(node.id.slice(BUSBAR_PREFIX.length));
+                else openNode(node.id);
+              }}
               onNodeClick={(_, node) => {
                 // The bar stands for the scope's controller; a port for its node elsewhere.
                 if (node.id.startsWith(BUSBAR_PREFIX)) selectOnly([node.id.slice(BUSBAR_PREFIX.length)]);
