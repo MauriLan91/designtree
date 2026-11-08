@@ -44,6 +44,7 @@ import {
 import { Inspector } from "./components/Inspector";
 import { BoardView } from "./components/BoardView";
 import { DRAG_MIME } from "./components/Palette";
+import { bindingOf as entryBinding } from "./library";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
@@ -113,6 +114,7 @@ import {
   type BoardLink,
   type PinCheck,
   type RefData,
+  type LibraryEntry,
 } from "./model";
 
 const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode, busbar: BusBarNode };
@@ -837,7 +839,8 @@ export function Editor({
       e.preventDefault();
       const raw = e.dataTransfer.getData(DRAG_MIME);
       if (!raw) return;
-      addNode(JSON.parse(raw) as Binding, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+      const at = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      entryBinding(JSON.parse(raw) as LibraryEntry).then((b) => b && addNode(b, at), () => {});
     },
     [addNode, screenToFlowPosition],
   );

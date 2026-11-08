@@ -894,3 +894,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .missing-row .key-text { color: var(--muted); }
 .prop-table .missing-row input:not([type="checkbox"]) { border-color: var(--border); border-style: dashed; }
 .prop-table .row-hint { display: block; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 11px; font-style: italic; }
+/* Library rows have a fixed height so the list can draw only those in view (US-18.1). */
+.binding-list.virtual li:not(.spacer) { height: 48px; box-sizing: border-box; }
+.binding-list li.spacer { padding: 0; margin: 0; border: 0; background: none; cursor: default; }
+.binding-list mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }

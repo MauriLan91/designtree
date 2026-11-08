@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use designtree_bindings::{Binding, DtMacro, PropertySpec, PropertyType};
+use designtree_bindings::{Binding, DtMacro, LibraryEntry, PropertySpec, PropertyType};
 use designtree_core::{
     AddressMap, AddressProblem, Board, BoardLink, Bus, Cell, Connector, ConnectorPin, Edge,
     EdgeKind, GpioLine, Graph, Group, Inherited, InterruptController, InterruptProblem,
@@ -64,6 +64,7 @@ fn generate() -> String {
         PropertyType::decl(&cfg),
         PropertySpec::decl(&cfg),
         Binding::decl(&cfg),
+        LibraryEntry::decl(&cfg),
         DtMacro::decl(&cfg),
         SocDtsi::decl(&cfg),
     ];

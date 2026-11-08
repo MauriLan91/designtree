@@ -229,9 +229,9 @@ function useBinding(created: Binding | undefined, compatible: string | undefined
     if (created || !compatible || !inTauri) return;
     let stale = false;
     backend
-      .searchBindings(compatible, null, 50)
-      .then((list) => {
-        if (!stale) setFound(list.find((b) => b.compatibles?.includes(compatible)));
+      .bindingsForCompatibles([compatible])
+      .then(([binding]) => {
+        if (!stale) setFound(binding ?? undefined);
       })
       .catch(() => {});
     return () => {

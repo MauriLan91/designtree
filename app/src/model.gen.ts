@@ -318,6 +318,12 @@ path: string,
  */
 category: string, title?: string | null, compatibles?: Array<string>, properties?: Array<PropertySpec>, };
 
+export type LibraryEntry = { 
+/**
+ * Schema path, which the full binding is fetched by.
+ */
+path: string, category: string, title?: string | null, compatible?: string | null, };
+
 export type DtMacro = { name: string, value: number, 
 /**
  * Header as written in `#include <...>`, e.g. `dt-bindings/gpio/gpio.h`.

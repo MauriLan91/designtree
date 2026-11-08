@@ -7,8 +7,12 @@
 //! finds `st,stm32-uart` before a schema that merely mentions them.
 //!
 //! A schema often documents many compatibles (`arm/cpus.yaml` has over a
-//! hundred), so each hit also names the compatible the query matched best:
-//! that is the one the user was looking for and the one a new node gets.
+//! hundred), so the library has one entry per compatible: each is scored on
+//! its own compatible and its schema's title and path, and is what a new
+//! node gets.
+
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{Binding, Catalog};
 
@@ -55,18 +59,31 @@ const COMPATIBLE_WEIGHT: u32 = 100;
 const TITLE_WEIGHT: u32 = 80;
 const PATH_WEIGHT: u32 = 60;
 
-fn score_binding(words: &[String], binding: &Binding, title: Option<&str>) -> Option<u32> {
+/// How well each word matches a schema's title and path, which every
+/// compatible of the schema shares.
+fn schema_scores(words: &[String], binding: &Binding) -> Vec<u32> {
+    let title = binding.title.as_ref().map(|t| t.to_lowercase());
     let path = binding.path.to_lowercase();
+    words
+        .iter()
+        .map(|word| {
+            let title = title
+                .as_deref()
+                .map_or(0, |t| score_word(word, t) * TITLE_WEIGHT / 100);
+            title.max(score_word(word, &path) * PATH_WEIGHT / 100)
+        })
+        .collect()
+}
+
+/// The score of one library entry: each word's best match in the
+/// compatible or in the schema (`schema`, from [`schema_scores`]); `None`
+/// when a word matches nowhere.
+fn score_entry(words: &[String], compatible: Option<&str>, schema: &[u32]) -> Option<u32> {
     let mut total = 0;
-    for word in words {
-        let mut best = 0;
-        for compatible in &binding.compatibles {
-            best = best.max(score_word(word, compatible) * COMPATIBLE_WEIGHT / 100);
-        }
-        if let Some(title) = title {
-            best = best.max(score_word(word, title) * TITLE_WEIGHT / 100);
-        }
-        best = best.max(score_word(word, &path) * PATH_WEIGHT / 100);
+    for (word, &fixed) in words.iter().zip(schema) {
+        let best = compatible
+            .map_or(0, |c| score_word(word, c) * COMPATIBLE_WEIGHT / 100)
+            .max(fixed);
         if best == 0 {
             return None;
         }
@@ -75,33 +92,18 @@ fn score_binding(words: &[String], binding: &Binding, title: Option<&str>) -> Op
     Some(total)
 }
 
-/// The compatible of `binding` that matches `words` best, if any matches at
-/// all; the shorter one among equals, so `cortex-a7` picks `arm,cortex-a7`
-/// over `arm,cortex-a710`.
-fn best_compatible<'a>(words: &[String], binding: &'a Binding) -> Option<&'a str> {
-    binding
-        .compatibles
-        .iter()
-        .map(|c| {
-            let score: u32 = words.iter().map(|w| score_word(w, c)).sum();
-            (score, c)
-        })
-        .filter(|(score, _)| *score > 0)
-        .min_by(|(sa, a), (sb, b)| sb.cmp(sa).then_with(|| a.len().cmp(&b.len())))
-        .map(|(_, c)| c.as_str())
-}
-
-/// One search result: the binding and the compatible the query matched.
+/// One library entry: a compatible and the schema that documents it. A
+/// schema without compatibles is one entry of its own.
 #[derive(Debug, Clone, Copy)]
 pub struct Hit<'a> {
     pub binding: &'a Binding,
-    /// `None` when the query matched only the title or the path.
+    /// `None` for a schema that lists no compatible.
     pub compatible: Option<&'a str>,
 }
 
 impl Hit<'_> {
-    /// A copy of the binding with the matched compatible first, where the
-    /// library row and a new node take it from.
+    /// A copy of the binding with the entry's compatible first, where a new
+    /// node takes it from.
     pub fn to_binding(&self) -> Binding {
         let mut binding = self.binding.clone();
         if let Some(c) = self.compatible {
@@ -112,58 +114,89 @@ impl Hit<'_> {
         }
         binding
     }
+
+    /// The entry without the schema's properties, as the library lists it.
+    pub fn to_entry(&self) -> LibraryEntry {
+        LibraryEntry {
+            path: self.binding.path.clone(),
+            category: self.binding.category.clone(),
+            title: self.binding.title.clone(),
+            compatible: self.compatible.map(str::to_string),
+        }
+    }
+}
+
+/// A row of the element library (US-18.1): one per compatible, so that
+/// `arm,cortex-a7` is found and added as itself, not as the first of the
+/// 150 compatibles of `arm/cpus.yaml`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct LibraryEntry {
+    /// Schema path, which the full binding is fetched by.
+    pub path: String,
+    pub category: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatible: Option<String>,
+}
+
+/// The library entries of one schema: one per compatible, or the schema
+/// alone when it lists none.
+fn entries_of(binding: &Binding) -> impl Iterator<Item = Hit<'_>> {
+    let alone = binding.compatibles.is_empty().then_some(Hit {
+        binding,
+        compatible: None,
+    });
+    binding
+        .compatibles
+        .iter()
+        .map(move |c| Hit {
+            binding,
+            compatible: Some(c.as_str()),
+        })
+        .chain(alone)
 }
 
 impl Catalog {
-    /// The bindings that match `query`, best first, at most `limit`;
-    /// restricted to `category` when given. An empty query lists the
-    /// category in catalog order.
+    /// The schemas of the catalog in order, restricted to `category`.
+    fn in_category(&self, category: Option<&str>) -> impl Iterator<Item = &Binding> + '_ {
+        let category = category.map(str::to_string);
+        self.bindings
+            .iter()
+            .filter(move |b| category.as_ref().is_none_or(|c| &b.category == c))
+    }
+
+    /// The library entries that match `query`, best first, at most `limit`;
+    /// restricted to `category` when given. An empty query lists them all
+    /// in catalog order.
     pub fn search(&self, query: &str, category: Option<&str>, limit: usize) -> Vec<Hit<'_>> {
         let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
-        let in_category = |b: &&Binding| category.is_none_or(|c| b.category == c);
         if words.is_empty() {
             return self
-                .bindings
-                .iter()
-                .filter(in_category)
+                .in_category(category)
+                .flat_map(entries_of)
                 .take(limit)
-                .map(|binding| Hit {
-                    binding,
-                    compatible: None,
-                })
                 .collect();
         }
-        let mut scored: Vec<(u32, &Binding)> = self
-            .bindings
-            .iter()
-            .filter(in_category)
-            .filter_map(|b| {
-                let title = b.title.as_ref().map(|t| t.to_lowercase());
-                score_binding(&words, b, title.as_deref()).map(|s| (s, b))
-            })
-            .collect();
-        // Shorter compatibles first among equals: `st,stm32-uart` before
-        // `st,stm32-uart-variant`.
-        let shortest = |b: &Binding| {
-            b.compatibles
-                .iter()
-                .map(String::len)
-                .min()
-                .unwrap_or(usize::MAX)
-        };
+        let mut scored: Vec<(u32, Hit)> = Vec::new();
+        for binding in self.in_category(category) {
+            let schema = schema_scores(&words, binding);
+            for hit in entries_of(binding) {
+                if let Some(score) = score_entry(&words, hit.compatible, &schema) {
+                    scored.push((score, hit));
+                }
+            }
+        }
+        // Shorter compatibles first among equals: `arm,cortex-a7` before
+        // `arm,cortex-a710`.
+        let len = |h: &Hit| h.compatible.map_or(usize::MAX, str::len);
         scored.sort_by(|(sa, a), (sb, b)| {
             sb.cmp(sa)
-                .then_with(|| shortest(a).cmp(&shortest(b)))
-                .then_with(|| a.path.cmp(&b.path))
+                .then_with(|| len(a).cmp(&len(b)))
+                .then_with(|| a.compatible.cmp(&b.compatible))
+                .then_with(|| a.binding.path.cmp(&b.binding.path))
         });
-        scored
-            .into_iter()
-            .take(limit)
-            .map(|(_, binding)| Hit {
-                binding,
-                compatible: best_compatible(&words, binding),
-            })
-            .collect()
+        scored.into_iter().take(limit).map(|(_, hit)| hit).collect()
     }
 
     /// The bindings whose schema path is in `paths`, in that order; paths
@@ -210,18 +243,22 @@ mod tests {
         }
     }
 
-    fn paths(found: Vec<Hit<'_>>) -> Vec<&str> {
-        found.into_iter().map(|h| h.binding.path.as_str()).collect()
+    fn compatibles(found: Vec<Hit<'_>>) -> Vec<&str> {
+        found
+            .into_iter()
+            .map(|h| h.compatible.unwrap_or("-"))
+            .collect()
     }
 
     #[test]
     fn ranks_by_match_quality() {
         let c = catalog();
         // Exact compatible, then prefix, then word start.
-        assert_eq!(paths(c.search("ns16550a", None, 10)), ["serial/8250.yaml"]);
-        let found = paths(c.search("st,stm32", None, 10));
-        assert_eq!(found[0], "serial/st,stm32-uart.yaml");
-        assert!(found.contains(&"i2c/st,stm32-i2c.yaml"));
+        assert_eq!(compatibles(c.search("ns16550a", None, 10)), ["ns16550a"]);
+        assert_eq!(
+            compatibles(c.search("st,stm32", None, 10)),
+            ["st,stm32-uart", "st,stm32f7-i2c", "st,stm32h7-uart"]
+        );
     }
 
     #[test]
@@ -229,8 +266,8 @@ mod tests {
         let c = catalog();
         // Vendor from the compatible, kind from the title.
         assert_eq!(
-            paths(c.search("st usart", None, 10)),
-            ["serial/st,stm32-uart.yaml"]
+            compatibles(c.search("st usart", None, 10)),
+            ["st,stm32-uart", "st,stm32h7-uart"]
         );
         assert!(c.search("st nothere", None, 10).is_empty());
     }
@@ -238,22 +275,36 @@ mod tests {
     #[test]
     fn scattered_letters_still_match() {
         let c = catalog();
-        assert_eq!(paths(c.search("imx6fec", None, 10)), ["net/fsl,fec.yaml"]);
+        assert_eq!(
+            compatibles(c.search("imx6fec", None, 10)),
+            ["fsl,imx6q-fec"]
+        );
     }
 
     #[test]
     fn category_and_limit_apply() {
         let c = catalog();
         assert_eq!(
-            paths(c.search("stm32", Some("i2c"), 10)),
-            ["i2c/st,stm32-i2c.yaml"]
+            compatibles(c.search("stm32", Some("i2c"), 10)),
+            ["st,stm32f7-i2c"]
         );
         assert_eq!(c.search("", Some("serial"), 1).len(), 1);
-        assert_eq!(c.search("", None, 10).len(), 4);
+        // One entry per compatible, in catalog order.
+        assert_eq!(
+            compatibles(c.search("", None, 10)),
+            [
+                "st,stm32-uart",
+                "st,stm32h7-uart",
+                "ns16550a",
+                "ns16550",
+                "st,stm32f7-i2c",
+                "fsl,imx6q-fec"
+            ]
+        );
     }
 
     #[test]
-    fn names_the_compatible_that_matched() {
+    fn lists_each_compatible_as_its_own_entry() {
         let c = Catalog {
             bindings: vec![binding(
                 "arm/cpus.yaml",
@@ -267,15 +318,25 @@ mod tests {
             )],
             ..Catalog::default()
         };
-        let hit = c.search("cortex-a7", None, 10)[0];
-        assert_eq!(hit.compatible, Some("arm,cortex-a7"));
-        let added = hit.to_binding();
+        let found = c.search("cortex-a7", None, 10);
+        assert_eq!(
+            compatibles(found.clone()),
+            ["arm,cortex-a7", "arm,cortex-a710"]
+        );
+        let added = found[0].to_binding();
         assert_eq!(added.compatibles[0], "arm,cortex-a7");
         assert_eq!(added.compatibles.len(), 4);
-        // A match on the title alone keeps the schema's own order.
-        let hit = c.search("cpus", None, 10)[0];
-        assert_eq!(hit.compatible, None);
-        assert_eq!(hit.to_binding().compatibles[0], "apm,potenza");
+        let entry = found[0].to_entry();
+        assert_eq!(entry.compatible.as_deref(), Some("arm,cortex-a7"));
+        assert_eq!(entry.title.as_deref(), Some("ARM CPUs"));
+        // A match on the title lists every compatible of the schema.
+        assert_eq!(c.search("cpus", None, 10).len(), 4);
+        // A schema without compatibles is one entry.
+        let bare = Catalog {
+            bindings: vec![binding("misc/bare.yaml", "Bare", &[])],
+            ..Catalog::default()
+        };
+        assert_eq!(compatibles(bare.search("bare", None, 10)), ["-"]);
     }
 
     #[test]
@@ -295,8 +356,8 @@ mod tests {
         );
     }
 
-    /// The library holds some 26,000 compatibles in 5,000 schemas; the
-    /// backlog asks for results in under 50 ms.
+    /// The library holds some 26,000 compatibles in 5,000 schemas, one
+    /// entry each; the backlog asks for results in under 50 ms.
     #[test]
     #[cfg(not(debug_assertions))]
     fn searches_a_kernel_sized_catalog_quickly() {
@@ -321,6 +382,16 @@ mod tests {
         let found = c.search("vendor7 chip12 blk", None, 200);
         let took = start.elapsed();
         assert!(!found.is_empty());
+        assert!(took.as_millis() < 50, "took {took:?}");
+        // The whole library, as the list shows it before a query is typed.
+        let start = std::time::Instant::now();
+        let all: Vec<LibraryEntry> = c
+            .search("", None, usize::MAX)
+            .iter()
+            .map(Hit::to_entry)
+            .collect();
+        let took = start.elapsed();
+        assert_eq!(all.len(), 25_000);
         assert!(took.as_millis() < 50, "took {took:?}");
     }
 }

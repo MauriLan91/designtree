@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use designtree_bindings::{Binding, Catalog, Checker, DtMacro};
+use designtree_bindings::{Binding, Catalog, Checker, DtMacro, LibraryEntry};
 use designtree_core::dtc::DtcError;
 use designtree_core::{
     AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Severity,
@@ -232,10 +232,32 @@ fn search_bindings(
     state: State<AppState>,
 ) -> Vec<Binding> {
     let catalog = state.catalog.read().unwrap();
+    // One schema per result, with its best-matching compatible first: the
+    // search lists every compatible, and a schema can have over a hundred.
+    let mut seen = std::collections::HashSet::new();
     catalog
-        .search(&query, category.as_deref(), limit)
+        .search(&query, category.as_deref(), usize::MAX)
         .iter()
+        .filter(|hit| seen.insert(hit.binding.path.as_str()))
+        .take(limit)
         .map(|hit| hit.to_binding())
+        .collect()
+}
+
+/// The library entries matching `query`, one per compatible (US-18.1).
+/// Without a limit the whole library comes back for the virtualized list.
+#[tauri::command]
+fn library_entries(
+    query: String,
+    category: Option<String>,
+    limit: Option<usize>,
+    state: State<AppState>,
+) -> Vec<LibraryEntry> {
+    let catalog = state.catalog.read().unwrap();
+    catalog
+        .search(&query, category.as_deref(), limit.unwrap_or(usize::MAX))
+        .iter()
+        .map(|hit| hit.to_entry())
         .collect()
 }
 
@@ -697,6 +719,7 @@ pub fn run() {
             add_kernel,
             remove_kernel,
             search_bindings,
+            library_entries,
             dtc_version,
             read_settings,
             write_settings,
