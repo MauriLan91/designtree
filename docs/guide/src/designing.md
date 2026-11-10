@@ -81,6 +81,10 @@ them. Pasted references start as curves.
 
 ## Saving
 
-**Save…** (Ctrl+S) writes the design file (`.json`). **Export .dts…** writes
+**Save** (Ctrl+S) writes the design file (`.json`) it was opened from or
+last saved to, and asks for a file only the first time. **Save as…**
+(Ctrl+Shift+S) always asks, and the new file becomes the design's. File
+dialogs start in the folder of the design's file, or of the last file you
+picked. **Export .dts…** writes
 the devicetree source: kernel style, tabs, a blank line between properties
 and subnodes, imported nodes in their original order.

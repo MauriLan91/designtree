@@ -41,7 +41,8 @@ F1 lists them in the app.
 | Ctrl+K | Command palette |
 | Ctrl+N | New design |
 | Ctrl+O | Open design |
-| Ctrl+S | Save design |
+| Ctrl+S | Save |
+| Ctrl+Shift+S | Save as |
 | Ctrl+B | Build .dtb |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z, Ctrl+Y | Redo |
