@@ -60,7 +60,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M3 v0.3 Productive editor** ✅ | Undo/redo, text/graph sync, board view, keyboard flow, performance | G4, G5 | done 2026-11-06 |
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
-| **M6 v1.2 Editing comfort** | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | to be set |
+| **M6 v1.2 Editing comfort** | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | 2027-01-01 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
 following milestone. To be adjusted to the team's real capacity.
