@@ -1,6 +1,6 @@
 # Product backlog
 
-> Status: **draft v0.3** (2026-11-06, M5 added from the first UX feedback). Product decisions below were taken
+> Status: **draft v0.4** (2026-11-10, M6 added from the second round of UX feedback). Product decisions below were taken
 > with the product owner; story details can still change during refinement.
 > Every milestone is mirrored as a
 > [GitHub milestone](https://github.com/MauriLan91/designtree/milestones) and
@@ -60,6 +60,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M3 v0.3 Productive editor** ✅ | Undo/redo, text/graph sync, board view, keyboard flow, performance | G4, G5 | done 2026-11-06 |
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
+| **M6 v1.2 Editing comfort** | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | to be set |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
 following milestone. To be adjusted to the team's real capacity.
@@ -276,6 +277,48 @@ side panel squeezes the DTS source when the inspector is long.
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
 | US-9.5 | As a user, I want commands that tidy the canvas so that I can reorder everything in one step. | Layout of the current scope, of the selection or of everything; align and distribute; orthogonal edge routing from the layout's bend points; fit view; all undoable. | 5 | Sonnet 5.5 | run, simplify, microinteractions |
+
+## M6 · v1.2 Editing comfort
+
+Stories from the second round of hands-on feedback (16 notes, 2026-11-10).
+Four of the notes are defects and are tracked as bugs in v1.0: the square
+reference handles of a node overlap its round port handles, a boolean property
+that is set cannot be cleared from its checkbox, a single number (`reg-shift`
+of `ns16550a`) is shown with a "Cell" child row, and a string array can show
+no arrow to expand it. The independent review of the same day (#133-#144)
+covers only part of one note: #139 fixes multi-entry cells in the Text mode,
+while US-17.4 below brings them to the table.
+
+### F15 Workbench (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-15.7 | As a user, I want always-visible buttons for the side views and the bottom panel so that I can open them without knowing a shortcut. | Activity bar on the left edge with Library and Outline icons, replacing the two tabs of the side bar; clicking the active icon collapses the side bar; a button in the status bar opens and closes the bottom panel; all three are commands of the registry (D9) with tooltips naming the shortcut. | 3 | Sonnet 5.5 | run, ux-heuristics, refactoring-ui |
+| US-15.8 | As a BSP maintainer, I want to resize the two halves of the Graph / DTS split so that I can give the text or the graph more room. | Splitter between graph and source in Split mode, dragged or moved with the arrow keys; double click restores an even split; the ratio is remembered per user; both halves keep a minimum width. | 2 | Sonnet 5.5 | run, microinteractions |
+| US-15.9 | As a user, I want Save to write to the file the design already has so that I am not asked for a file every time. | Save (Ctrl+S) overwrites the file the design was opened from or last saved to, and asks only for a design without one; Save as… (Ctrl+Shift+S) always asks and makes the new file the current one; the dialog starts in the folder of the current file, or the last folder used; the tab title follows the file name. | 2 | Sonnet 5.5 | run, security-review |
+
+### F9 Editing ergonomics (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-9.6 | As a user, I want nodes to snap to a grid so that the canvas stays aligned without effort. | Snap to grid while dragging, switched from a toolbar toggle, the View menu and a shortcut; grid size in the settings; the background shows the grid while snap is on; the choice is remembered per user. | 2 | Sonnet 5.5 | run |
+| US-9.7 | As a user, I want selection tools so that I can act on many nodes at once. | Dragging on the empty canvas draws a selection rectangle, with the canvas panned by the middle button or Space+drag; Ctrl+click and Shift+click add to or remove from the selection; Select all (Ctrl+A) selects the nodes of the current scope; the tool (select or pan) is switched from the toolbar; the status bar shows how many nodes are selected. | 3 | Sonnet 5.5 | run, ux-heuristics |
+| US-9.8 | As a user, I want buttons that arrange the canvas, or the selected nodes, in several layouts so that I can order a scope in one click. | Arrange menu in the toolbar with grid, tree (horizontal and vertical), star around the selected or most-referenced node, align (left, centre, right, top, middle, bottom) and distribute (horizontal, vertical); each applies to the selection when two or more nodes are selected, to the scope otherwise; all undoable; reuses the commands of US-9.5. | 5 | Sonnet 5.5 | run, simplify, microinteractions |
+
+### F17 Property table (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-17.3 | As a user, I want to choose whether a number is shown in decimal, hexadecimal or octal so that frequencies and addresses each read naturally. | Base selector on every numeric value; the base is kept in the design file and written to the exported DTS; an imported DTS keeps the base each number was written in; new values default to decimal, addresses (`reg`, `ranges`) to hexadecimal; input accepts any of the three bases with `dtc` semantics (`010` is octal); G1 unaffected. | 5 | Opus 5.5 | run, code-review |
+| US-17.4 | As a user, I want to build groups of cells such as `<0x01c81000 0x1000>, <0x01c82000 0x2000>` in the table so that multi-entry properties need no text mode. | A cell property expands into one row per entry, each with its cells; "Add entry" appends a group; the cells of an entry are sized from the parent's `#address-cells`/`#size-cells` for `reg` and from the schema otherwise; entries export as separate `<…>` groups and round-trip; item counts in warnings count entries (see #140). | 5 | Opus 5.5 | run, code-review, software-design-philosophy |
+| US-17.5 | As a user, I want the properties of `aliases` to be node references picked from a list so that I cannot write an alias that points nowhere. | A Reference type in the table whose value is chosen from a picker of the labelled nodes and exported as `&label`; under `/aliases` every new property is a Reference and no other type is offered; the same type serves other path properties; a reference follows the rename of its label (see #137). | 3 | Sonnet 5.5 | run, code-review |
+
+### F18 Library browser (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-18.4 | As a bring-up engineer, I want the library to put first the elements that fit the node I am in so that I pick a device that belongs there. | A "Fits here" section on top of the library and of search results, from the open scope's schema (child node patterns, bus type: I²C, SPI, `cpus`, ...); everything else stays available below; a node placed under a parent whose schema does not allow it gets a warning on the node and in the problems panel, naming the parent and the reason. | 8 | Opus 5.5 | run, code-review, design-everyday-things |
+| US-18.5 | As a user, I want a button that clears the library search so that I get back to the full list in one click. | A clear (×) button inside the search field while it holds text; Escape does the same; focus stays in the field. | 1 | Haiku 5.5 | run |
 
 ## Ideas not yet scheduled
 
