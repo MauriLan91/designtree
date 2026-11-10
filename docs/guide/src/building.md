@@ -9,5 +9,7 @@ or start the app with `DESIGNTREE_DTC=/path/to/dtc`. When `dtc` is missing,
 the Build tab of the bottom panel says so.
 
 The **Build** panel lists `dtc`'s errors and warnings. Those about a node are
-attached to it on the canvas; click one to select the node. `dtc` runs
-without a shell and reads the source from standard input.
+attached to it on the canvas; click one to select the node. After the next
+edit the list is dimmed and marked as built before the last change, until
+you build again. `dtc` runs without a shell and reads the source from
+standard input.

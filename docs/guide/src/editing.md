@@ -46,6 +46,6 @@ F1 lists them in the app.
 | Ctrl+Shift+L | Tidy the selection |
 | Ctrl+Tab | Next tab (Ctrl+Shift+Tab: previous) |
 | Ctrl+W | Close the tab |
-| Delete | Delete the selection |
+| Delete | Delete the selection, child nodes included |
 | Shift+drag | Select an area |
 | F1 | Keyboard shortcuts |

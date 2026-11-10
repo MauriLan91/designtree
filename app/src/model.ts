@@ -393,6 +393,9 @@ export function formatProperties(props: Property[]): string {
 
 /** Generic node name for a binding category (devicetree spec 2.2.2). */
 export function genericNodeName(binding: Binding): string {
+  // CPU bindings live with their architecture (`arm/cpus.yaml`), whose
+  // category would name the node `arm`; the schemas want `cpu`.
+  if (/(^|\/)cpus?\.yaml$/.test(binding.path)) return "cpu";
   const names: Record<string, string> = {
     clock: "clock-controller",
     gpio: "gpio",

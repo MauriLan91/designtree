@@ -46,6 +46,8 @@ interface Props {
   locked: boolean;
   onChange: (properties: Property[]) => void;
   onReferenceChange: (id: string, args: number[]) => void;
+  /** Cells of one `reg` entry, from the parent's #address-cells and #size-cells. */
+  regCells?: number;
 }
 
 const KINDS = Object.keys(KIND_TITLES) as ValueKind[];
@@ -65,7 +67,7 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
 /** A schema type that holds one number, edited as one field with no item rows. */
 const isScalar = (spec: PropertySpec | undefined) => /^u?int(8|16|32|64)$/.test(spec?.type ?? "");
 
-export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange }: Props) {
+export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, regCells }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
   // One-string values the user made a list; the binding says so for its own.
@@ -202,7 +204,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           // A scalar keeps its item rows only when it somehow holds several.
           const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind);
           const expanded = open.has(p.name) && items !== null;
-          const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value);
+          const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, p.name === "reg" ? regCells : undefined);
           const isTodo = todo?.includes(p.name);
           return (
             <Fragment key={p.name}>

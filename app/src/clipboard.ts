@@ -160,7 +160,7 @@ export function pasteClipboard(
 }
 
 /** Label references inside a value (`<&gpio1 5 0>`, `&uart0`) follow renamed labels. */
-function renameLabels(value: PropertyValue, labels: Map<string, string>): PropertyValue {
+export function renameLabels(value: PropertyValue, labels: Map<string, string>): PropertyValue {
   if (value.type !== "mixed") return value;
   return {
     type: "mixed",

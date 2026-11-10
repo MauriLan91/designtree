@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Binding } from "./model";
-import { initialProperties, specDefault } from "./schemaProps";
+import type { Binding, PropertySpec } from "./model";
+import { checkValue, initialProperties, regEntryCells, specDefault } from "./schemaProps";
 
 const binding: Binding = {
   path: "serial/8250.yaml",
@@ -41,11 +41,39 @@ describe("basic nodes", () => {
         { name: "reg", required: true, type: "address", min_items: 1 },
       ],
     };
-    const { properties, todo } = initialProperties(memory);
+    const { properties, todo } = initialProperties(memory, 2);
     expect(properties).toEqual([
-      { name: "reg", value: { type: "cells", value: [0] } },
+      { name: "reg", value: { type: "cells", value: [0, 0] } },
       { name: "device_type", value: { type: "strings", value: ["memory"] } },
     ]);
     expect(todo).toEqual(["reg"]);
+  });
+});
+
+describe("reg placeholders and counts (#136, #140)", () => {
+  const cells = (value: number[]) => ({ type: "cells" as const, value });
+  const parent = (a: number, s: number) => [
+    { name: "#address-cells", value: cells([a]) },
+    { name: "#size-cells", value: cells([s]) },
+  ];
+
+  it("gives reg the parent's address and size cells", () => {
+    expect(regEntryCells(parent(1, 0))).toBe(1);
+    expect(regEntryCells(parent(1, 1))).toBe(2);
+    expect(regEntryCells([])).toBe(3);
+    const reg = (n: number) => initialProperties(binding, n).properties.find((p) => p.name === "reg")?.value;
+    expect(reg(1)).toEqual(cells([0]));
+    expect(reg(2)).toEqual(cells([0, 0]));
+  });
+
+  it("counts matrix items as entries, and not at all without their width", () => {
+    const reg = { name: "reg", required: true, type: "uint32-matrix", max_items: 1 } as PropertySpec;
+    expect(checkValue(reg, cells([0x1c28000, 0x400]), 2)).toBeNull();
+    expect(checkValue(reg, cells([0x1c28000, 0x400]))).toBeNull();
+    expect(checkValue(reg, cells([1, 2, 3, 4]), 2)).toBe("at most 1 item");
+    const interrupts = { name: "interrupts", required: true, type: "uint32-matrix", max_items: 1 } as PropertySpec;
+    expect(checkValue(interrupts, cells([0, 0, 4]))).toBeNull();
+    const list = { name: "x", required: false, type: "uint32-array", max_items: 2 } as PropertySpec;
+    expect(checkValue(list, cells([1, 2, 3]))).toBe("at most 2 items");
   });
 });
