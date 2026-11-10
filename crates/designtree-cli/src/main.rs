@@ -135,7 +135,19 @@ enum Command {
     },
 }
 
-fn main() -> Result<()> {
+/// User errors (a missing file, an invalid design) are printed as their
+/// message: anyhow's `Debug` would add a stack trace under `RUST_BACKTRACE`.
+fn main() -> std::process::ExitCode {
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<()> {
     match Cli::parse().command {
         Command::Index {
             linux_src,
