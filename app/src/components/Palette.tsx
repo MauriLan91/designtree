@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, LayoutGrid, List } from "lucide-react";
+import { ChevronDown, ChevronRight, LayoutGrid, List, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
 import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from "../libraryHistory";
@@ -271,11 +271,7 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
             {summary.bindings.toLocaleString()} bindings, {summary.compatibles.toLocaleString()} compatibles
             {summary.version && ` · kernel ${summary.version}`}
           </p>
-          <input
-            placeholder="Search compatible or title"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <SearchField value={query} onChange={setQuery} />
         </>
       )}
       <div className="lib-filters">
@@ -392,6 +388,44 @@ function SectionList({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The library search, with a button and Escape to clear it (US-18.5). */
+function SearchField({ value, onChange }: { value: string; onChange: (text: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <div className="search-field">
+      <input
+        ref={input}
+        aria-label="Search the library"
+        placeholder="Search compatible or title"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          // Only a search with text uses Escape; otherwise it is the window's.
+          if (e.key === "Escape" && value) {
+            e.stopPropagation();
+            onChange("");
+          }
+        }}
+      />
+      {value && (
+        <button
+          className="search-clear"
+          aria-label="Clear the search"
+          title="Clear (Esc)"
+          // Keeps the focus in the field.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            onChange("");
+            input.current?.focus();
+          }}
+        >
+          <X size={14} aria-hidden />
+        </button>
+      )}
     </div>
   );
 }
