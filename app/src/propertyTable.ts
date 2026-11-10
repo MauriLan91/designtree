@@ -50,7 +50,7 @@ export function cellText(c: Cell): string {
 }
 
 /**
- * A cell from its text: a number (decimal or 0x), a `dt-bindings` macro name
+ * A cell from its text: a number (decimal, 0x hex or 0 octal), a `dt-bindings` macro name
  * (`GIC_SPI`), or a reference (`&gic`, `&{/soc/gic}`). Throws otherwise.
  */
 export function parseCellText(text: string): Cell {
@@ -58,9 +58,17 @@ export function parseCellText(text: string): Cell {
   const ref = /^&\{(\/[^}]*)\}$/.exec(t) ?? /^&([A-Za-z_][\w-]*)$/.exec(t);
   if (ref) return { phandle: ref[1] };
   if (/^[A-Z_][A-Z0-9_]*$/.test(t)) return t;
-  const n = /^(0x[0-9a-f]+|\d+)$/i.test(t) ? Number(t) : NaN;
+  const n = parseNumber(t);
   if (n <= 0xffffffff) return n;
   throw new Error(`"${t}" is not a number, macro or &reference`);
+}
+
+/** A number as dtc reads it: decimal, `0x` hex, or octal after a leading 0
+ * (`010` is 8); NaN otherwise. */
+function parseNumber(t: string): number {
+  if (/^0x[0-9a-f]+$/i.test(t)) return Number(t);
+  if (/^0[0-7]+$/.test(t)) return parseInt(t, 8);
+  return /^(0|[1-9]\d*)$/.test(t) ? Number(t) : NaN;
 }
 
 function parseByte(text: string): number {

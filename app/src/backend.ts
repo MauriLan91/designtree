@@ -2,7 +2,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Span } from "./components/DtsEditor";
-import type { AddressMap, Binding, BoardLink, Design, DtMacro, InterruptTree, LibraryEntry, PinCheck, Problem, SocDtsi } from "./model";
+import type { AddressMap, Binding, BoardLink, Design, DtMacro, InterruptTree, LibraryEntry, PinCheck, Problem, Property, SocDtsi } from "./model";
 
 export interface CatalogSummary {
   bindings: number;
@@ -74,6 +74,7 @@ export const backend = {
   checkSchemas: (design: Design) => invoke<Problem[] | null>("check_schemas", { design }),
   autoLayout: (design: Design) => invoke<Design>("auto_layout", { design }),
   exportDtsFlat: (design: Design) => invoke<string>("export_dts_flat", { design }),
+  parseProperties: (text: string) => invoke<Property[]>("parse_properties", { text }),
   exportDtsMapped: (design: Design) => invoke<MappedSource>("export_dts_mapped", { design }),
   /** Rejects with a `SourceError` when the text does not import. */
   applySource: (text: string, design: Design) => invoke<EditedDesign>("apply_source", { text, design }),

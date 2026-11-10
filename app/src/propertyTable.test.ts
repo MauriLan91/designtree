@@ -84,6 +84,13 @@ describe("items", () => {
     expect(withItem(one, 1, "ahb")).toEqual({ type: "strings", value: ["apb", "ahb"] });
   });
 
+  it("reads a leading 0 as octal, as dtc does", () => {
+    expect(parseCellText("010")).toBe(8);
+    expect(parseCellText("0")).toBe(0);
+    expect(parseCellText("10")).toBe(10);
+    expect(() => parseCellText("08")).toThrow();
+  });
+
   it("refuses text that is not a cell, byte or chunk", () => {
     expect(() => parseCellText("1e3")).toThrow();
     expect(() => parseCellText("0b11")).toThrow();

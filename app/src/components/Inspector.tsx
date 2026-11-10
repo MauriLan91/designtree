@@ -10,7 +10,7 @@ import { clearEditedTodo } from "../schemaProps";
 import {
   baseName,
   formatProperties,
-  parseProperties,
+  keepUnchanged,
   type DtFlowNode,
   type DtNodeData,
   type Binding,
@@ -118,12 +118,23 @@ function NodeInspector({
   const setProps = (properties: Property[]) =>
     onChange(node.id, { properties, todo: clearEditedTodo(data.todo, data.properties, properties) });
 
-  const commitProps = () => {
+  // Read with the backend's DTS parser, the grammar of the source panel.
+  const commitProps = async () => {
+    if (propsText === allText) return;
     try {
-      setProps(parseProperties(propsText, data.properties));
+      const parsed = keepUnchanged(await backend.parseProperties(propsText), propsText, data.properties);
+      // `compatible` has its own field, which the export writes.
+      const compatible = parsed.find((p) => p.name === "compatible");
+      if (compatible && compatible.value.type !== "strings") throw new Error("compatible takes strings");
+      const properties = parsed.filter((p) => p !== compatible);
+      onChange(node.id, {
+        properties,
+        todo: clearEditedTodo(data.todo, data.properties, properties),
+        ...(compatible?.value.type === "strings" ? { compatible: compatible.value.value } : {}),
+      });
       setPropsError(null);
     } catch (e) {
-      setPropsError((e as Error).message);
+      setPropsError(e instanceof Error ? e.message : String(e));
     }
   };
 
