@@ -27,6 +27,7 @@ import { AddressMapPanel } from "./components/AddressMapPanel";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
+import { ProblemList } from "./components/ProblemList";
 import { NodeProblems } from "./nodeProblems";
 import { NodePorts } from "./nodePorts";
 import {
@@ -125,7 +126,11 @@ import {
   type PinCheck,
   type RefData,
   type LibraryEntry,
+  type Problem,
 } from "./model";
+
+/** An error that is about no node, such as a failed command. */
+const failure = (message: string): Problem => ({ severity: "error", message });
 
 const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode, busbar: BusBarNode };
 const edgeTypes = { ref: RefEdge };
@@ -385,7 +390,8 @@ export function Editor({
     };
   }, [active, setNodes, setEdges]);
   const [showApplied, setShowApplied] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  // Why the design cannot be written as DTS, on the nodes they are about.
+  const [errors, setErrors] = useState<Problem[]>([]);
   /** File the design was last opened from or saved to; the .dtb goes next to it. */
   const [designPath, setDesignPath] = useState<string | null>(null);
   const [title, setTitle] = useState("Untitled");
@@ -454,7 +460,7 @@ export function Editor({
   // replace it.
   useEffect(() => {
     if (!inTauri) {
-      setErrors(["Backend not available: run the app with `npm run tauri dev`."]);
+      setErrors([failure("Backend not available: run the app with `npm run tauri dev`.")]);
       return;
     }
     let stale = false;
@@ -476,7 +482,7 @@ export function Editor({
           setSourceError(null);
         }
       } catch (e) {
-        if (!stale) setErrors(Array.isArray(e) ? e : [String(e)]);
+        if (!stale) setErrors(Array.isArray(e) ? e : [failure(String(e))]);
       }
     }, 250);
     return () => {
@@ -550,11 +556,11 @@ export function Editor({
 
   const nodeProblems = useMemo(() => {
     const byNode = new Map<string, string[]>();
-    for (const p of schema.problems ?? []) {
+    for (const p of [...errors, ...(schema.problems ?? [])]) {
       if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
     }
     return byNode;
-  }, [schema.problems]);
+  }, [errors, schema.problems]);
 
   useEffect(() => {
     if (!showInterrupts || !inTauri) return;
@@ -1002,7 +1008,7 @@ export function Editor({
       setScopeTab(null);
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
-      setErrors([String(e)]);
+      setErrors([failure(String(e))]);
     }
   };
 
@@ -1016,7 +1022,7 @@ export function Editor({
       setEdges((es) => es.map((e) => (e.type === "ref" && (e.data as RefData).route !== undefined ? { ...e, data: withoutRoute(e.data as RefData) } : e)));
       setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     } catch (e) {
-      setErrors([String(e)]);
+      setErrors([failure(String(e))]);
     }
   };
 
@@ -1106,7 +1112,7 @@ export function Editor({
       setTitle(baseName(path));
       return true;
     } catch (e) {
-      setErrors([String(e)]);
+      setErrors([failure(String(e))]);
       return false;
     }
   };
@@ -1904,13 +1910,7 @@ export function Editor({
           onResize={(size) => onLayout((l) => ({ ...l, panel: { ...l.panel, size } }))}
           onClose={() => togglePane("panel")}
         >
-          {layout.panel.tab === "problems" && errors.length > 0 && (
-            <ul className="errors">
-              {errors.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          )}
+          {layout.panel.tab === "problems" && errors.length > 0 && <ProblemList problems={errors} nodeName={nodeName} onFocusNode={focusNode} />}
           {layout.panel.tab === "problems" &&
             (kernel ? (
               <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />

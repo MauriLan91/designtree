@@ -481,9 +481,9 @@ struct MappedSource {
 
 /// The design as DTS, with the lines of each node for the editor.
 #[tauri::command]
-fn export_dts_mapped(design: Graph) -> Result<MappedSource, Vec<String>> {
+fn export_dts_mapped(design: Graph) -> Result<MappedSource, Vec<Problem>> {
     let (dts, map) = designtree_core::to_dts_mapped(&design)
-        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+        .map_err(|errors| errors.iter().map(Problem::from).collect::<Vec<_>>())?;
     Ok(MappedSource {
         dts,
         spans: spans(map.spans),
@@ -531,9 +531,9 @@ fn apply_source(
 
 /// The whole tree; for an overlay, its base with the overlay applied.
 #[tauri::command]
-fn export_dts_flat(design: Graph) -> Result<String, Vec<String>> {
+fn export_dts_flat(design: Graph) -> Result<String, Vec<Problem>> {
     designtree_core::to_dts_flat(&design)
-        .map_err(|errors| errors.iter().map(ToString::to_string).collect())
+        .map_err(|errors| errors.iter().map(Problem::from).collect())
 }
 
 /// A new overlay for the design file (.json) or devicetree source at

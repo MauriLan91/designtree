@@ -4,6 +4,7 @@ import { backend, inTauri } from "../backend";
 import { PropertyTable, type Reference } from "./PropertyTable";
 import { SpecifierEditor } from "./SpecifierEditor";
 import { TextInput } from "./TextInput";
+import { nameProblem } from "../names";
 import { clearEditedTodo } from "../schemaProps";
 import {
   baseName,
@@ -150,6 +151,7 @@ function NodeInspector({
             disabled={isRoot || data.inherited !== undefined}
             onCommit={(name) => onChange(node.id, { name })}
           />
+          <FieldError text={isRoot ? null : nameProblem("node", data.name)} />
         </label>
         <label>
           Unit address
@@ -159,6 +161,7 @@ function NodeInspector({
             disabled={isRoot || data.inherited !== undefined}
             onCommit={(unitAddress) => onChange(node.id, { unitAddress })}
           />
+          <FieldError text={nameProblem("unit", data.unitAddress ?? "")} />
         </label>
       </div>
       <label>
@@ -169,6 +172,7 @@ function NodeInspector({
           disabled={data.inherited?.labels?.includes(data.label ?? "") || locked}
           onCommit={(label) => onChange(node.id, { label })}
         />
+        <FieldError text={nameProblem("label", data.label ?? "")} />
       </label>
       <label>
         Compatible (comma separated)
@@ -239,4 +243,9 @@ function useBinding(created: Binding | undefined, compatible: string | undefined
     };
   }, [created, compatible]);
   return created ?? found;
+}
+
+/** Why a field's value cannot be exported, under the field. */
+function FieldError({ text }: { text: string | null }) {
+  return text ? <span className="field-error">{text}</span> : null;
 }

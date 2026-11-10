@@ -17,6 +17,7 @@ use ts_rs::TS;
 
 use crate::dts::SourceMap;
 use crate::model::NodeId;
+use crate::validate::ValidationError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
@@ -35,6 +36,18 @@ pub struct Problem {
     /// The node the message is about, when it could be found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node: Option<NodeId>,
+}
+
+/// A structural error as a problem on its node, for the editor's list.
+impl From<&ValidationError> for Problem {
+    fn from(error: &ValidationError) -> Self {
+        Problem {
+            severity: Severity::Error,
+            message: error.to_string(),
+            line: None,
+            node: error.node().cloned(),
+        }
+    }
 }
 
 /// The problems in dtc's stderr, located with `map`.
