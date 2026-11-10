@@ -18,7 +18,13 @@ export interface Settings {
   updates: boolean;
   /** Shortcut overrides by command id; "" removes a command's shortcut. */
   shortcuts: Record<string, string>;
+  /** Nodes snap to the canvas grid while dragged (US-9.6). */
+  snapToGrid: boolean;
+  /** Grid spacing in canvas pixels. */
+  gridSize: number;
 }
+
+export const GRID_SIZES = [10, 15, 20, 25, 30, 40, 50] as const;
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
@@ -26,6 +32,8 @@ export const DEFAULT_SETTINGS: Settings = {
   dtcPath: null,
   updates: true,
   shortcuts: {},
+  snapToGrid: false,
+  gridSize: 20,
 };
 
 const STORAGE_KEY = "designtree.settings";
@@ -54,6 +62,8 @@ export function parseSettings(raw: unknown): Settings {
     dtcPath: typeof obj.dtcPath === "string" && obj.dtcPath.startsWith("/") ? obj.dtcPath : null,
     updates: typeof obj.updates === "boolean" ? obj.updates : DEFAULT_SETTINGS.updates,
     shortcuts,
+    snapToGrid: typeof obj.snapToGrid === "boolean" ? obj.snapToGrid : DEFAULT_SETTINGS.snapToGrid,
+    gridSize: GRID_SIZES.includes(obj.gridSize as (typeof GRID_SIZES)[number]) ? (obj.gridSize as number) : DEFAULT_SETTINGS.gridSize,
   };
 }
 

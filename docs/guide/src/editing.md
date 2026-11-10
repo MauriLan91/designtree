@@ -18,6 +18,12 @@ Each design has its own tab with its own undo history. Ctrl+Tab and
 Ctrl+Shift+Tab switch tabs, Ctrl+W closes one, middle-click closes the tab
 under the mouse.
 
+## Snap to grid
+
+**View › Snap to grid**, the grid button in the toolbar or Ctrl+' makes
+nodes snap to a grid while you drag them, and the canvas shows the grid
+lines. The grid size is in **Settings › Editor**; both are remembered.
+
 ## Command palette
 
 The search box in the toolbar, **View › Command palette…** or Ctrl+K opens the
@@ -44,6 +50,7 @@ F1 lists them in the app.
 | Ctrl+Shift+G | Ungroup |
 | Ctrl+L | Tidy this canvas |
 | Ctrl+Shift+L | Tidy the selection |
+| Ctrl+' | Snap to grid on or off |
 | Ctrl+Tab | Next tab (Ctrl+Shift+Tab: previous) |
 | Ctrl+W | Close the tab |
 | Delete | Delete the selection, child nodes included |

@@ -9,6 +9,8 @@
   --code: #fbfbfc;
   --node: #ffffff;
   --border: #dcdfe4;
+  /* Canvas grid lines while snap to grid is on. */
+  --grid: #e8eaee;
   --border-strong: #c3c8cf;
   --hover: #e1e4e9;
   --selected: #e6edfb;
@@ -59,6 +61,7 @@
     --code: #15171b;
     --node: #22262d;
     --border: #2b3038;
+    --grid: #22262d;
     --border-strong: #3b414b;
     --hover: #272b32;
     --selected: #1f2b42;
@@ -94,6 +97,7 @@
   }
 }
 :root[data-theme="dark"] {
+  --grid: #22262d;
   --bg: #15181c;
   --side: #181b20;
   --panel: #1c1f25;
@@ -265,6 +269,7 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
   color: var(--text);
 }
 .tool:hover:not(:disabled) { background: var(--hover); }
+.tool[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .command-search {
   display: flex;
   align-items: center;
