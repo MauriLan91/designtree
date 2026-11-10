@@ -13,8 +13,8 @@ Select a node to edit it in the inspector.
     a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
     suggested as you type when the kernel bindings are loaded.
   - With a kernel checkout loaded, the binding fixes the type of the
-    properties it describes. An enum is a dropdown and a boolean a
-    checkbox. Hover a key for the schema's description; values outside the
+    properties it describes. An enum is a dropdown, a single number one
+    field, and a boolean a checkbox: untick it to remove the property. Hover a key for the schema's description; values outside the
     schema's limits get a warning under the row.
   - The binding's required properties, marked with `*`, are always on top
     and cannot be removed. One without a value is an empty to-do row: type
