@@ -26,8 +26,11 @@ Select a node to edit it in the inspector.
   - **Add a property…** offers the binding's optional properties as you
     type, with their type and description.
   - For a property the schema does not describe, pick the type yourself:
-    Boolean, String, String list, Cells, Bytes or Mixed. Changing it keeps
-    what can be kept, so cells become bytes and back.
+    Boolean, String, String list, Cells, Bytes, Reference or Mixed.
+    Changing it keeps what can be kept, so cells become bytes and back.
+  - A **Reference** names a node by its label, picked from a list, and is
+    written as `&label` (the DTS turns it into the node's path). Under
+    `aliases` every property is one. Renaming the label updates it.
   - References drawn on the canvas (`clocks`, `interrupt-parent`, `gpios`)
     are rows of type **Phandle**; open one to edit the specifier cells of
     each target.

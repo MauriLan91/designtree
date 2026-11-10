@@ -33,9 +33,11 @@ interface Props {
   references: Reference[];
   /** Cells of one `reg` entry of the inspected node, from its parent. */
   regCells?: number;
+  /** Every label of the design, for reference values. */
+  labels?: string[];
 }
 
-export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references, regCells }: Props) {
+export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references, regCells, labels }: Props) {
   if (node?.type === "dt") {
     return (
       <NodeInspector
@@ -46,6 +48,7 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCell
         onOverride={() => onOverride(node.id)}
         references={references}
         regCells={regCells}
+        labels={labels}
         onReferenceChange={(id, args) => {
           const ref = references.find((r) => r.id === id);
           if (ref) onEdgeChange(id, { property: ref.property, args });
@@ -97,6 +100,7 @@ function NodeInspector({
   references,
   onReferenceChange,
   regCells,
+  labels,
 }: {
   node: DtFlowNode;
   onChange: Props["onNodeChange"];
@@ -105,6 +109,7 @@ function NodeInspector({
   references: Reference[];
   onReferenceChange: (id: string, args: number[]) => void;
   regCells?: number;
+  labels?: string[];
 }) {
   const { data } = node;
   const binding = useBinding(data.binding, data.compatible[0]);
@@ -232,6 +237,9 @@ function NodeInspector({
           onChange={setProps}
           onReferenceChange={onReferenceChange}
           regCells={regCells}
+          labels={labels}
+          // `aliases` maps names to nodes and nothing else.
+          referencesOnly={data.name === "aliases"}
         />
       )}
     </section>

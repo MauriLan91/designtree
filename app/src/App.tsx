@@ -1312,6 +1312,10 @@ export function Editor({
         : null;
   const inspectedParent = nodes.find((n) => n.id === edges.find((e) => e.sourceHandle === CHILD_HANDLE && e.target === inspected?.id)?.source);
   const inspectedRegCells = inspectedParent && isDtNode(inspectedParent) ? regEntryCells(inspectedParent.data.properties) : undefined;
+  const designLabels = useMemo(
+    () => nodes.filter(isDtNode).flatMap((n) => [n.data.label, ...(n.data.extraLabels ?? [])]).filter((l): l is string => !!l).sort(),
+    [nodes],
+  );
   // Its references, which its property table lists with the properties.
   const inspectedRefs = edges
     .filter((e) => e.type === "ref" && e.source === inspected?.id && e.data)
@@ -1942,6 +1946,7 @@ export function Editor({
               onEdgeChange={updateEdgeData}
               providerCells={providerCells}
               regCells={inspectedRegCells}
+              labels={designLabels}
             />
           </aside>
           <Splitter
