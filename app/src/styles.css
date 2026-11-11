@@ -440,6 +440,9 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 /* Its dark edge stroke is barely visible on our dark canvas. */
 .react-flow.dark { --xy-edge-stroke: #6b7280; --xy-edge-stroke-selected: #9aa0a6; }
 .react-flow__handle.h-ref { background: var(--ref); width: 9px; height: 9px; border-radius: 2px; }
+/* On the title row (8px padding + half its 18px chip), clear of the port
+   list below, whose round handles sit on the same edges. */
+.dt-node .react-flow__handle.h-ref { top: 17px; }
 /* Typed ports: providers on the left, consumer properties on the right. */
 .dt-node-ports { display: flex; justify-content: space-between; gap: 12px; margin: 6px -12px 0; font-size: 11px; font-family: var(--mono); }
 .dt-node-ports ul { list-style: none; margin: 0; padding: 0; }

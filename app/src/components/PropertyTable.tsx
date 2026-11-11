@@ -62,6 +62,9 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
   return null;
 }
 
+/** A schema type that holds one number, edited as one field with no item rows. */
+const isScalar = (spec: PropertySpec | undefined) => /^u?int(8|16|32|64)$/.test(spec?.type ?? "");
+
 export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -196,7 +199,8 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
-          const items = itemsOf(p.value, kind);
+          // A scalar keeps its item rows only when it somehow holds several.
+          const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind);
           const expanded = open.has(p.name) && items !== null;
           const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value);
           const isTodo = todo?.includes(p.name);
@@ -265,6 +269,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
                     }}
                     onSet={(value) => attempt(p.name, () => value)}
+                    onClear={() => (spec?.required ? reset(p.name) : attempt(p.name, () => null))}
                   />
                   {warning && <span className="row-error">{warning}</span>}
                   {isTodo && !warning && <span className="row-todo">to do</span>}
@@ -457,6 +462,7 @@ function ValueCell({
   disabled,
   onCommit,
   onSet,
+  onClear,
 }: {
   name: string;
   value: PropertyValue;
@@ -465,8 +471,10 @@ function ValueCell({
   disabled: boolean;
   onCommit: (text: string) => void;
   onSet: (value: PropertyValue) => void;
+  /** Unticking a flag: a flag is set by being present, so it goes away. */
+  onClear: () => void;
 }): ReactNode {
-  if (kind === "flag") return <input type="checkbox" aria-label={name} checked disabled readOnly title="Present: remove the row to clear it" />;
+  if (kind === "flag") return <input type="checkbox" aria-label={name} checked disabled={disabled} onChange={onClear} title="Untick to remove it" />;
   if (kind === "string" && spec?.enum?.length && spec.enum.every((v) => typeof v === "string")) {
     const current = summaryOf(value);
     return (
