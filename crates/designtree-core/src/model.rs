@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use ts_rs::TS;
 
 /// Stable identifier of a node inside a [`Graph`].
@@ -108,6 +108,11 @@ mod json_safe_u64 {
     }
 }
 
+/// An empty label in a design file is no label, not `: node {`.
+fn empty_as_none<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?.filter(|s| !s.is_empty()))
+}
+
 /// Size of a group frame on the editor canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 pub struct Size {
@@ -131,7 +136,11 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit_address: Option<String>,
     /// DTS label used as phandle target, e.g. `uart0`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "empty_as_none"
+    )]
     pub label: Option<String>,
     /// More labels for the same node (`l2: l2_cache: cache { };`).
     /// References always use `label`.

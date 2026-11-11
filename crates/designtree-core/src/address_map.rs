@@ -146,7 +146,11 @@ impl<'a> Tree<'a> {
                     if size.max(1) > window_size - offset {
                         return Ok(Translation::OutOfRange);
                     }
-                    address = offset + parent_address;
+                    // A window placed at the top of a 64-bit space can end past it.
+                    let Some(end) = parent_address.checked_add(offset + size.max(1) - 1) else {
+                        return Ok(Translation::OutOfRange);
+                    };
+                    address = end - (size.max(1) - 1);
                 }
                 _ => return error("ranges is not a list of cells".into()),
             }
@@ -522,6 +526,29 @@ mod tests {
         // Starts inside the window but runs past its end.
         assert!(region(&map, "edge@ff000").out_of_range);
         assert!(!region(&map, "uart@1000").out_of_range);
+    }
+
+    #[test]
+    fn a_window_past_the_top_of_the_address_space_is_out_of_range() {
+        let map = map_of(
+            r#"/dts-v1/;
+/ {
+	#address-cells = <2>;
+	#size-cells = <1>;
+	bus@0 {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x10 0xffffffff 0xffffff00 0x1000>;
+		dev@210 { reg = <0x210 0x10>; };
+		low@10 { reg = <0x10 0x10>; };
+	};
+};
+"#,
+        );
+        assert!(region(&map, "dev@210").out_of_range);
+        let low = region(&map, "low@10");
+        assert_eq!(low.cpu_start.as_deref(), Some("0xffffffffffffff00"));
     }
 
     #[test]

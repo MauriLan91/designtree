@@ -875,6 +875,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .row-remove { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 4px; background: none; color: var(--muted); opacity: 0; }
 .prop-table tr:hover .row-remove, .prop-table .row-remove:focus-visible { opacity: 1; }
 .prop-table .row-remove:hover { background: var(--border); color: var(--danger); }
+.field-error { display: block; color: var(--danger); font-size: 11px; font-weight: normal; margin-top: 2px; }
 .prop-table .row-error { display: block; padding: 0 4px; color: var(--danger); font-size: 11px; }
 .prop-table .row-todo { display: block; padding: 0 4px; color: var(--warn); font-size: 11px; }
 .prop-table tr.todo > th { box-shadow: inset 2px 0 0 var(--warn); }

@@ -14,23 +14,120 @@ pub enum ValidationError {
     DuplicateId(String),
     #[error("edge references unknown node `{0}`")]
     UnknownNode(String),
-    #[error("node `{0}` has more than one parent")]
-    MultipleParents(String),
-    #[error("node `{0}` is not attached to the root")]
-    Detached(String),
-    #[error("reference target `{0}` has no label")]
-    UnlabeledTarget(String),
-    #[error("duplicate label `{0}`")]
-    DuplicateLabel(String),
-    #[error("property `{property}` of node `{node}` references unknown node `{target}`")]
+    // `path` is how messages name a node: its path when it is attached to
+    // the root, else its own name. `node` is its id, for the editor.
+    #[error("node `{path}` has more than one parent")]
+    MultipleParents { node: NodeId, path: String },
+    #[error("node `{path}` is not attached to the root")]
+    Detached { node: NodeId, path: String },
+    #[error("reference target `{path}` has no label")]
+    UnlabeledTarget { node: NodeId, path: String },
+    #[error("duplicate label `{label}` (on `{path}`)")]
+    DuplicateLabel {
+        node: NodeId,
+        path: String,
+        label: String,
+    },
+    #[error("property `{property}` of node `{path}` references unknown node `{target}`")]
     UnknownReference {
-        node: String,
+        node: NodeId,
+        path: String,
         property: String,
         target: String,
     },
+    /// What dtc's grammar would refuse, so the editor can say it before a build.
+    #[error("node `{path}`: `{name}` is not a valid {what}")]
+    InvalidName {
+        node: NodeId,
+        path: String,
+        what: NameKind,
+        name: String,
+    },
+    #[error("node `{path}` has the property `{property}` more than once")]
+    DuplicateProperty {
+        node: NodeId,
+        path: String,
+        property: String,
+    },
+    #[error("node `{path}` has more than one child named `{name}`")]
+    DuplicateChild {
+        node: NodeId,
+        path: String,
+        name: String,
+    },
     /// Overlays are applied to a compiled base, so they can only add.
-    #[error("`{node}`: an overlay cannot {what}")]
-    OverlayCannot { node: String, what: String },
+    #[error("`{path}`: an overlay cannot {what}")]
+    OverlayCannot {
+        node: NodeId,
+        path: String,
+        what: String,
+    },
+}
+
+impl ValidationError {
+    /// The node the error is about, when there is one.
+    pub fn node(&self) -> Option<&NodeId> {
+        use ValidationError::*;
+        match self {
+            MissingRoot | MultipleRoots | DuplicateId(_) | UnknownNode(_) => None,
+            MultipleParents { node, .. }
+            | Detached { node, .. }
+            | UnlabeledTarget { node, .. }
+            | DuplicateLabel { node, .. }
+            | UnknownReference { node, .. }
+            | InvalidName { node, .. }
+            | DuplicateProperty { node, .. }
+            | DuplicateChild { node, .. }
+            | OverlayCannot { node, .. } => Some(node),
+        }
+    }
+}
+
+/// The kind of name an [`ValidationError::InvalidName`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameKind {
+    NodeName,
+    UnitAddress,
+    Label,
+    Property,
+}
+
+impl std::fmt::Display for NameKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            NameKind::NodeName => "node name",
+            NameKind::UnitAddress => "unit address",
+            NameKind::Label => "label",
+            NameKind::Property => "property name",
+        })
+    }
+}
+
+impl NameKind {
+    /// Whether dtc's lexer reads `name` as one name of this kind.
+    pub fn accepts(self, name: &str) -> bool {
+        let mut chars = name.chars();
+        match self {
+            NameKind::Label => {
+                chars
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                    && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            }
+            NameKind::NodeName | NameKind::UnitAddress => {
+                !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || ",._+-".contains(c))
+            }
+            NameKind::Property => {
+                !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || ",._+?#-".contains(c))
+            }
+        }
+    }
 }
 
 /// Checks structural rules that must hold before DTS can be generated.
@@ -38,6 +135,14 @@ pub enum ValidationError {
 /// editor can highlight them all.
 pub fn validate(graph: &Graph) -> Vec<ValidationError> {
     let mut errors = Vec::new();
+    let paths = node_paths(graph);
+    let path_of = |id: &NodeId| -> String {
+        paths
+            .get(id)
+            .cloned()
+            .or_else(|| graph.node(id).map(Node::full_name))
+            .unwrap_or_else(|| id.0.clone())
+    };
 
     let mut ids = HashSet::new();
     for node in &graph.nodes {
@@ -47,9 +152,15 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
     }
 
     let mut labels = HashSet::new();
-    for label in graph.nodes.iter().flat_map(Node::labels) {
-        if !labels.insert(label) {
-            errors.push(ValidationError::DuplicateLabel(label.clone()));
+    for node in &graph.nodes {
+        for label in node.labels() {
+            if !labels.insert(label) {
+                errors.push(ValidationError::DuplicateLabel {
+                    node: node.id.clone(),
+                    path: path_of(&node.id),
+                    label: label.clone(),
+                });
+            }
         }
     }
 
@@ -69,12 +180,18 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
         match &edge.kind {
             EdgeKind::Child => {
                 if parent.insert(&edge.to, &edge.from).is_some() {
-                    errors.push(ValidationError::MultipleParents(edge.to.0.clone()));
+                    errors.push(ValidationError::MultipleParents {
+                        node: edge.to.clone(),
+                        path: path_of(&edge.to),
+                    });
                 }
             }
             EdgeKind::Reference { .. } => {
                 if graph.node(&edge.to).is_some_and(|n| n.label.is_none()) {
-                    errors.push(ValidationError::UnlabeledTarget(edge.to.0.clone()));
+                    errors.push(ValidationError::UnlabeledTarget {
+                        node: edge.to.clone(),
+                        path: path_of(&edge.to),
+                    });
                 }
             }
         }
@@ -96,22 +213,118 @@ pub fn validate(graph: &Graph) -> Vec<ValidationError> {
             }
         };
         if !attached {
-            errors.push(ValidationError::Detached(node.id.0.clone()));
+            errors.push(ValidationError::Detached {
+                node: node.id.clone(),
+                path: path_of(&node.id),
+            });
         }
     }
 
-    check_value_references(graph, &labels, &mut errors);
+    check_names(graph, &path_of, &mut errors);
+    check_duplicates(graph, &path_of, &mut errors);
+    check_value_references(graph, &labels, &paths, &path_of, &mut errors);
     if graph.overlay.is_some() {
-        check_overlay(graph, &mut errors);
+        check_overlay(graph, &path_of, &mut errors);
     }
     errors
+}
+
+/// Names dtc would not parse. Inherited nodes come from parsed source, but
+/// a design file can still hold anything.
+fn check_names(
+    graph: &Graph,
+    path_of: &dyn Fn(&NodeId) -> String,
+    errors: &mut Vec<ValidationError>,
+) {
+    for node in &graph.nodes {
+        let mut check = |what: NameKind, name: &str| {
+            if !what.accepts(name) {
+                errors.push(ValidationError::InvalidName {
+                    node: node.id.clone(),
+                    path: path_of(&node.id),
+                    what,
+                    name: name.to_owned(),
+                });
+            }
+        };
+        if !node.is_root() {
+            check(NameKind::NodeName, &node.name);
+        }
+        if let Some(unit) = &node.unit_address {
+            check(NameKind::UnitAddress, unit);
+        }
+        for label in node.labels() {
+            check(NameKind::Label, label);
+        }
+        for property in &node.properties {
+            check(NameKind::Property, &property.name);
+        }
+    }
+}
+
+/// Two properties of a node with one name, counting `compatible` and the
+/// phandle lists drawn as edges, and siblings with one `name@unit`: dtc
+/// refuses both.
+fn check_duplicates(
+    graph: &Graph,
+    path_of: &dyn Fn(&NodeId) -> String,
+    errors: &mut Vec<ValidationError>,
+) {
+    let mut references: HashMap<&NodeId, HashSet<&str>> = HashMap::new();
+    let mut children: HashMap<&NodeId, Vec<&NodeId>> = HashMap::new();
+    for edge in &graph.edges {
+        match &edge.kind {
+            EdgeKind::Reference { property, .. } => {
+                references.entry(&edge.from).or_default().insert(property);
+            }
+            EdgeKind::Child => children.entry(&edge.from).or_default().push(&edge.to),
+        }
+    }
+    for node in &graph.nodes {
+        let mut seen = HashSet::new();
+        if !node.compatible.is_empty() {
+            seen.insert("compatible");
+        }
+        let refs = references.get(&node.id);
+        let mut reported = HashSet::new();
+        for property in &node.properties {
+            let name = property.name.as_str();
+            let twice = !seen.insert(name) || refs.is_some_and(|r| r.contains(name));
+            if twice && reported.insert(name) {
+                errors.push(ValidationError::DuplicateProperty {
+                    node: node.id.clone(),
+                    path: path_of(&node.id),
+                    property: name.to_owned(),
+                });
+            }
+        }
+        let mut names = HashSet::new();
+        let mut reported = HashSet::new();
+        for child in children.get(&node.id).into_iter().flatten() {
+            let Some(child) = graph.node(child) else {
+                continue;
+            };
+            let name = child.full_name();
+            if !names.insert(name.clone()) && reported.insert(name.clone()) {
+                errors.push(ValidationError::DuplicateChild {
+                    node: node.id.clone(),
+                    path: path_of(&node.id),
+                    name,
+                });
+            }
+        }
+    }
 }
 
 /// What an overlay cannot express: deleting from its base, labeling base
 /// nodes or referencing them by path (only labels reach the base, through
 /// its `__symbols__`), adding `/memreserve/`s and changing
 /// `/omit-if-no-ref/`.
-fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
+fn check_overlay(
+    graph: &Graph,
+    path_of: &dyn Fn(&NodeId) -> String,
+    errors: &mut Vec<ValidationError>,
+) {
     let referenced: HashSet<(&NodeId, &str)> = graph
         .edges
         .iter()
@@ -120,25 +333,35 @@ fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
             EdgeKind::Child => None,
         })
         .collect();
-    let mut cannot = |node: &str, what: String| {
+    let mut cannot = |node: &NodeId, path: String, what: String| {
         errors.push(ValidationError::OverlayCannot {
-            node: node.to_owned(),
+            node: node.clone(),
+            path,
             what,
         })
     };
+    let root = graph
+        .root()
+        .map(|r| r.id.clone())
+        .unwrap_or_else(|| "/".into());
     for target in &graph.deleted_nodes {
-        cannot(target, "delete a node of its base".into());
+        cannot(&root, target.clone(), "delete a node of its base".into());
     }
     if graph.memreserves.iter().any(|r| !r.inherited) {
-        cannot("/", "add /memreserve/ entries".into());
+        cannot(&root, "/".into(), "add /memreserve/ entries".into());
     }
     for node in &graph.nodes {
         let Some(base) = &node.inherited else {
             continue;
         };
-        let id = node.id.0.as_str();
+        let id = &node.id;
+        let path = path_of(id);
         for label in node.labels().filter(|l| !base.labels.contains(l)) {
-            cannot(id, format!("add the label `{label}` to a node of its base"));
+            cannot(
+                id,
+                path.clone(),
+                format!("add the label `{label}` to a node of its base"),
+            );
         }
         let present = |name: &str| {
             (name == "compatible" && !node.compatible.is_empty())
@@ -146,10 +369,18 @@ fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
                 || referenced.contains(&(&node.id, name))
         };
         for property in base.properties.iter().filter(|p| !present(&p.name)) {
-            cannot(id, format!("delete the property `{}`", property.name));
+            cannot(
+                id,
+                path.clone(),
+                format!("delete the property `{}`", property.name),
+            );
         }
         if node.omit_if_no_ref != base.omit_if_no_ref {
-            cannot(id, "change /omit-if-no-ref/ on a node of its base".into());
+            cannot(
+                id,
+                path,
+                "change /omit-if-no-ref/ on a node of its base".into(),
+            );
         }
     }
     // Values the overlay writes: those of its own nodes and changed ones.
@@ -171,7 +402,8 @@ fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
             });
             if by_path {
                 cannot(
-                    &node.id.0,
+                    &node.id,
+                    path_of(&node.id),
                     format!(
                         "reference a node by path (`{}`); use its label",
                         property.name
@@ -186,9 +418,11 @@ fn check_overlay(graph: &Graph, errors: &mut Vec<ValidationError>) {
 fn check_value_references(
     graph: &Graph,
     labels: &HashSet<&String>,
+    paths: &HashMap<NodeId, String>,
+    path_of: &dyn Fn(&NodeId) -> String,
     errors: &mut Vec<ValidationError>,
 ) {
-    let mut paths: Option<HashSet<String>> = None;
+    let mut known_paths: Option<HashSet<&String>> = None;
     for node in &graph.nodes {
         for property in &node.properties {
             let PropertyValue::Mixed(chunks) = &property.value else {
@@ -207,15 +441,16 @@ fn check_value_references(
             });
             for target in targets {
                 let known = if target.starts_with('/') {
-                    paths
-                        .get_or_insert_with(|| node_paths(graph).into_values().collect())
+                    known_paths
+                        .get_or_insert_with(|| paths.values().collect())
                         .contains(target)
                 } else {
                     labels.contains(target)
                 };
                 if !known {
                     errors.push(ValidationError::UnknownReference {
-                        node: node.id.0.clone(),
+                        node: node.id.clone(),
+                        path: path_of(&node.id),
                         property: property.name.clone(),
                         target: target.clone(),
                     });
@@ -253,4 +488,155 @@ pub(crate) fn node_paths(graph: &Graph) -> HashMap<NodeId, String> {
         paths.insert(id.clone(), if path.is_empty() { "/".into() } else { path });
     }
     paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Edge, Property};
+
+    fn node(id: &str, name: &str) -> Node {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": name,
+            "position": { "x": 0.0, "y": 0.0 },
+        }))
+        .unwrap()
+    }
+
+    fn child(from: &str, to: &str) -> Edge {
+        Edge {
+            from: from.into(),
+            to: to.into(),
+            kind: EdgeKind::Child,
+            route: None,
+        }
+    }
+
+    fn graph(nodes: Vec<Node>) -> Graph {
+        let edges = nodes
+            .iter()
+            .filter(|n| !n.is_root())
+            .map(|n| child("root", &n.id.0))
+            .collect();
+        Graph {
+            nodes,
+            edges,
+            ..Default::default()
+        }
+    }
+
+    fn flag(name: &str) -> Property {
+        Property {
+            name: name.into(),
+            value: PropertyValue::Empty,
+        }
+    }
+
+    #[test]
+    fn names_dtc_would_refuse_are_reported_on_their_node() {
+        let mut leds = node("n1", "my leds}");
+        leds.label = Some("led-0".into());
+        leds.unit_address = Some("1 0".into());
+        leds.properties = vec![flag("bad prop"), flag("#gpio-cells"), flag("linux,code?")];
+        let errors = validate(&graph(vec![node("root", "/"), leds]));
+        let invalid: Vec<_> = errors
+            .iter()
+            .filter_map(|e| match e {
+                ValidationError::InvalidName { what, name, .. } => Some((*what, name.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            invalid,
+            [
+                (NameKind::NodeName, "my leds}"),
+                (NameKind::UnitAddress, "1 0"),
+                (NameKind::Label, "led-0"),
+                (NameKind::Property, "bad prop"),
+            ]
+        );
+        assert_eq!(errors[0].node(), Some(&NodeId::from("n1")));
+        assert_eq!(
+            errors[0].to_string(),
+            "node `/my leds}@1 0`: `my leds}` is not a valid node name"
+        );
+        assert!(NameKind::Label.accepts("_osc24M"));
+        assert!(!NameKind::Label.accepts("0osc"));
+        assert!(!NameKind::NodeName.accepts("serial@0"));
+    }
+
+    #[test]
+    fn an_empty_label_in_a_design_file_is_no_label() {
+        let node: Node = serde_json::from_value(serde_json::json!({
+            "id": "osc", "name": "oscillator", "label": "",
+            "position": { "x": 0.0, "y": 0.0 },
+        }))
+        .unwrap();
+        assert_eq!(node.label, None);
+    }
+
+    #[test]
+    fn duplicate_properties_and_siblings_are_reported() {
+        let mut gpio = node("gpio", "gpio");
+        gpio.compatible = vec!["opencores,gpio".into()];
+        gpio.properties = vec![
+            flag("compatible"),
+            flag("clocks"),
+            flag("ready"),
+            flag("ready"),
+        ];
+        let mut a = node("a", "serial");
+        a.unit_address = Some("1c28000".into());
+        let mut b = a.clone();
+        b.id = "b".into();
+        let mut osc = node("osc", "osc");
+        osc.label = Some("osc".into());
+        let mut g = graph(vec![node("root", "/"), gpio, a, b, osc]);
+        g.edges.push(Edge {
+            from: "gpio".into(),
+            to: "osc".into(),
+            kind: EdgeKind::Reference {
+                property: "clocks".into(),
+                args: vec![],
+            },
+            route: None,
+        });
+        let messages: Vec<_> = validate(&g).iter().map(ToString::to_string).collect();
+        assert_eq!(
+            messages,
+            [
+                "node `/` has more than one child named `serial@1c28000`",
+                "node `/gpio` has the property `compatible` more than once",
+                "node `/gpio` has the property `clocks` more than once",
+                "node `/gpio` has the property `ready` more than once",
+            ]
+        );
+    }
+
+    #[test]
+    fn messages_name_nodes_by_path_not_id() {
+        let mut aliases = node("nmwb5q1xxk", "aliases");
+        aliases.properties = vec![Property {
+            name: "serial0".into(),
+            value: PropertyValue::Mixed(vec![ValueChunk::Path {
+                target: "uart0".into(),
+            }]),
+        }];
+        let errors = validate(&graph(vec![node("root", "/"), aliases]));
+        assert_eq!(
+            errors[0].to_string(),
+            "property `serial0` of node `/aliases` references unknown node `uart0`"
+        );
+        assert_eq!(errors[0].node(), Some(&NodeId::from("nmwb5q1xxk")));
+
+        let lost = validate(&Graph {
+            nodes: vec![node("root", "/"), node("x1", "led-0")],
+            ..Default::default()
+        });
+        assert_eq!(
+            lost[0].to_string(),
+            "node `led-0` is not attached to the root"
+        );
+    }
 }

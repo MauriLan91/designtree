@@ -15,8 +15,10 @@ another kernel version than the loaded one. Pick the matching checkout under
 **Build .dtb says dtc is missing.** Install it (`dtc` on Arch,
 `device-tree-compiler` on Debian and Ubuntu) or point **Tools › Set dtc path…** at it.
 
-**Build .dtb is greyed out.** The design has structural errors; the DTS
-source panel lists them.
+**Build .dtb is greyed out.** The design has structural errors, such as a
+label with a `-`, a property set twice or two children with the same name.
+The **Problems** panel and the DTS source panel list them; click one in
+Problems to show its node.
 
 **An include is not found when importing.** Includes are only read from the
 file's directory, its kernel tree and the configured include directories.

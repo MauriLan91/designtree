@@ -1,3 +1,4 @@
+import type { Problem } from "../model";
 import { DtsEditor, type SourceError, type Span } from "./DtsEditor";
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   showApplied: boolean;
   onShowApplied: (applied: boolean) => void;
   /** Why the design cannot be written as DTS. */
-  errors: string[];
+  errors: Problem[];
   sourceError: SourceError | null;
   onEdit: (text: string) => void;
   onCursorNode: (node: string | null) => void;
@@ -39,8 +40,8 @@ export function DtsPreview(props: Props) {
       )}
       {errors.length > 0 && (
         <ul className="errors">
-          {errors.map((e) => (
-            <li key={e}>{e}</li>
+          {errors.map((e, i) => (
+            <li key={i}>{e.message}</li>
           ))}
         </ul>
       )}

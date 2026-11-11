@@ -857,8 +857,14 @@ mod tests {
             ..Default::default()
         };
         let errors = to_dts(&graph).unwrap_err();
-        assert!(errors.contains(&ValidationError::Detached("b".into())));
-        assert!(errors.contains(&ValidationError::UnlabeledTarget("b".into())));
+        assert!(errors.contains(&ValidationError::Detached {
+            node: "b".into(),
+            path: "b".into()
+        }));
+        assert!(errors.contains(&ValidationError::UnlabeledTarget {
+            node: "b".into(),
+            path: "b".into()
+        }));
     }
 
     #[test]
@@ -899,6 +905,7 @@ mod tests {
             to_dts(&graph).unwrap_err(),
             [ValidationError::UnknownReference {
                 node: "root".into(),
+                path: "/".into(),
                 property: "mixed".into(),
                 target: "missing".into(),
             }]
@@ -938,7 +945,13 @@ mod tests {
             ..Default::default()
         };
         let errors = validate(&graph);
-        assert!(errors.contains(&ValidationError::Detached("a".into())));
-        assert!(errors.contains(&ValidationError::Detached("b".into())));
+        assert!(errors.contains(&ValidationError::Detached {
+            node: "a".into(),
+            path: "a".into()
+        }));
+        assert!(errors.contains(&ValidationError::Detached {
+            node: "b".into(),
+            path: "b".into()
+        }));
     }
 }

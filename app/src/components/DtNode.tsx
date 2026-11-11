@@ -75,7 +75,7 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
       )}
       {problems.length > 0 && (
         <div className="dt-node-errors" title={problems.join("\n")}>
-          {problems.length} schema error{problems.length === 1 ? "" : "s"}
+          {problems.length} error{problems.length === 1 ? "" : "s"}
         </div>
       )}
       {ports && (ports.providers.length > 0 || consumers.length > 0 || hidden > 0) && (
