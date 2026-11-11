@@ -14,7 +14,15 @@ export type Cell = number | string | { phandle: string, };
 
 export type ValueChunk = { "type": "cells", bits: number, cells: Array<Cell>, } | { "type": "string", value: string, } | { "type": "bytes", value: Array<number>, } | { "type": "path", target: string, };
 
-export type Property = { name: string, value: PropertyValue, };
+export type NumberBase = "dec" | "hex" | "oct";
+
+export type Property = { name: string, value: PropertyValue, 
+/**
+ * How its numbers are written in DTS (US-17.3): as imported, or as the
+ * user picked. `None` writes addresses (`reg`, `ranges`) in hex and
+ * everything else in decimal.
+ */
+base?: NumberBase, };
 
 export type Inherited = { 
 /**

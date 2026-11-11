@@ -4,7 +4,7 @@
 // into one child row per item, each edited the same way. This module is the
 // table's model: what a value looks like as rows and how an edit of one row
 // changes the value. The component only draws it.
-import { formatCell, type Cell, type PropertyValue, type ValueChunk } from "./model";
+import { formatCell, type Cell, type NumberBase, type PropertyValue, type ValueChunk } from "./model";
 
 /** The types the table offers for a property. */
 export type ValueKind = "flag" | "string" | "strings" | "cells" | "bytes" | "reference" | "mixed";
@@ -58,8 +58,8 @@ export const formatNumber = formatCell;
 const formatByte = (b: number) => b.toString(16).padStart(2, "0");
 const formatRef = (target: string) => (target.startsWith("/") ? `&{${target}}` : `&${target}`);
 
-export function cellText(c: Cell): string {
-  return typeof c === "number" ? formatNumber(c) : typeof c === "string" ? c : formatRef(c.phandle);
+export function cellText(c: Cell, base: NumberBase = "hex"): string {
+  return typeof c === "number" ? formatNumber(c, base) : typeof c === "string" ? c : formatRef(c.phandle);
 }
 
 /**
@@ -104,10 +104,10 @@ function cellChunk(value: PropertyValue): (ValueChunk & { type: "cells" }) | nul
   return value.type === "mixed" && value.value.length === 1 && value.value[0].type === "cells" ? value.value[0] : null;
 }
 
-function chunkText(chunk: ValueChunk): string {
+function chunkText(chunk: ValueChunk, base: NumberBase): string {
   switch (chunk.type) {
     case "cells":
-      return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${chunk.cells.map(cellText).join(" ")}>`;
+      return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${chunk.cells.map((c) => cellText(c, base)).join(" ")}>`;
     case "string":
       return JSON.stringify(chunk.value);
     case "bytes":
@@ -139,20 +139,20 @@ export function parseChunkText(text: string): ValueChunk {
 
 /** The child rows of a value, as the text each one edits; null when the
  * value has no parts (a flag, or a plain string). */
-export function itemsOf(value: PropertyValue, kind = kindOf(value)): string[] | null {
+export function itemsOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex"): string[] | null {
   switch (value.type) {
     case "empty":
       return null;
     case "strings":
       return kind === "string" ? null : value.value;
     case "cells":
-      return value.value.map(formatNumber);
+      return value.value.map((c) => formatNumber(c, base));
     case "bytes":
       return value.value.map(formatByte);
     case "mixed":
       if (referenceOf(value) !== null) return null;
       // One chunk of cells is shown as its cells, like a plain cell list.
-      return cellChunk(value)?.cells.map(cellText) ?? value.value.map(chunkText);
+      return cellChunk(value)?.cells.map((c) => cellText(c, base)) ?? value.value.map((c) => chunkText(c, base));
   }
 }
 
@@ -215,18 +215,18 @@ export function blankItem(value: PropertyValue): string {
 }
 
 /** The one-line text of a value, as the row shows and edits it. */
-export function summaryOf(value: PropertyValue, kind = kindOf(value)): string {
+export function summaryOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex"): string {
   switch (value.type) {
     case "empty":
       return "";
     case "strings":
       return kind === "string" ? value.value[0] : value.value.map((s) => JSON.stringify(s)).join(", ");
     case "cells":
-      return value.value.map(formatNumber).join(" ");
+      return value.value.map((c) => formatNumber(c, base)).join(" ");
     case "bytes":
       return value.value.map(formatByte).join(" ");
     case "mixed":
-      return cellChunk(value)?.cells.map(cellText).join(" ") ?? value.value.map(chunkText).join(", ");
+      return cellChunk(value)?.cells.map((c) => cellText(c, base)).join(" ") ?? value.value.map((c) => chunkText(c, base)).join(", ");
   }
 }
 

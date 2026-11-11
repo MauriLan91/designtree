@@ -124,6 +124,44 @@ pub struct Size {
 pub struct Property {
     pub name: String,
     pub value: PropertyValue,
+    /// How its numbers are written in DTS (US-17.3): as imported, or as the
+    /// user picked. `None` writes addresses (`reg`, `ranges`) in hex and
+    /// everything else in decimal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base: Option<NumberBase>,
+}
+
+/// The base numbers of a property are written in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum NumberBase {
+    /// `24000000`.
+    Dec,
+    /// `0x1c28000`; values below 10 stay decimal, as in kernel sources.
+    Hex,
+    /// `0644`, dtc's leading 0.
+    Oct,
+}
+
+impl NumberBase {
+    /// The base a property gets when none is stored.
+    pub fn default_for(property: &str) -> NumberBase {
+        match property {
+            "reg" | "ranges" | "dma-ranges" | "interrupt-map" | "interrupt-map-mask" => {
+                NumberBase::Hex
+            }
+            _ => NumberBase::Dec,
+        }
+    }
+
+    pub fn format(self, n: u64) -> String {
+        match self {
+            NumberBase::Hex if n >= 10 => format!("{n:#x}"),
+            NumberBase::Oct if n > 0 => format!("0{n:o}"),
+            _ => n.to_string(),
+        }
+    }
 }
 
 /// A devicetree node placed on the canvas.

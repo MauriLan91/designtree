@@ -447,6 +447,7 @@ fn bench(
             .push(designtree_core::Property {
                 name: "designtree-bench".into(),
                 value: designtree_core::PropertyValue::Empty,
+                base: None,
             });
         designtree_core::to_dts_mapped(&edited)
     };

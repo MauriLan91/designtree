@@ -891,6 +891,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .add-item .link, .prop-table .add-property { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .prop-table .add-property { padding: 2px 4px; color: var(--muted); }
 .prop-table select { padding: 0 0 0 2px; font-family: inherit; font-size: 11px; color: var(--muted); text-overflow: ellipsis; }
+.prop-table .base-select { height: 20px; margin-top: 2px; font-size: 10px; }
 .prop-table .add-item td { padding-left: 4px; }
 /* Required properties without a value (US-17.2). */
 .prop-table .missing-row .key-text { color: var(--muted); }

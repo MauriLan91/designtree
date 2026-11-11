@@ -546,6 +546,7 @@ mod tests {
         Property {
             name: name.into(),
             value: PropertyValue::Empty,
+            base: None,
         }
     }
 
@@ -638,6 +639,7 @@ mod tests {
             value: PropertyValue::Mixed(vec![ValueChunk::Path {
                 target: "uart0".into(),
             }]),
+            base: None,
         }];
         let errors = validate(&graph(vec![node("root", "/"), aliases]));
         assert_eq!(
