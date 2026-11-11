@@ -32,7 +32,10 @@ Select a node to edit it in the inspector.
     are rows of type **Phandle**; open one to edit the specifier cells of
     each target.
   - **Text** switches to the raw mode: every property as `name = value`,
-    one per line, as in the DTS. **Table** switches back.
+    one per line, as in the DTS. It reads values as the DTS source panel
+    does, so `<0x1000 0x100>, <0x2000 0x100>`, `&uart0` and `<&gic 0 4>`
+    are accepted and `010` is octal; the `;` is optional. A `compatible`
+    line goes to the **Compatible** field. **Table** switches back.
 
 Select a reference edge to change its property name and specifier cells;
 select a group to rename it.

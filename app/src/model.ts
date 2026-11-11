@@ -281,59 +281,18 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
 //   local-mac-address = [00 11 22 33 44 55]
 //   dma-coherent
 
-export function parseCell(token: string): number {
-  const n = Number(token);
-  if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
-    throw new Error(`invalid cell "${token}"`);
-  }
-  return n;
-}
-
 /**
- * Parses the property text. Lines left exactly as `formatProperties` wrote
- * them keep their value from `previous`, so values this simple format cannot
- * parse (mixed values from an imported .dts) survive editing other lines.
+ * The properties the backend read from the Text mode's `text`, with the
+ * value of each line left exactly as `formatProperties` wrote it taken from
+ * `previous`: values the text cannot spell the same way survive editing
+ * other lines.
  */
-export function parseProperties(text: string, previous: Property[] = []): Property[] {
-  const unchanged = new Map(previous.map((p) => [formatProperty(p), p]));
-  const props: Property[] = [];
-  text.split("\n").forEach((raw, i) => {
-    const line = raw.trim().replace(/;$/, "");
-    if (!line || line.startsWith("//")) return;
-    const kept = unchanged.get(line);
-    if (kept) {
-      props.push(kept);
-      return;
-    }
-    const eq = line.indexOf("=");
-    if (eq < 0) {
-      props.push({ name: line, value: { type: "empty" } });
-      return;
-    }
-    const name = line.slice(0, eq).trim();
-    const rhs = line.slice(eq + 1).trim();
-    try {
-      if (rhs.startsWith("<") && rhs.endsWith(">")) {
-        const cells = rhs.slice(1, -1).trim().split(/\s+/).filter(Boolean).map(parseCell);
-        props.push({ name, value: { type: "cells", value: cells } });
-      } else if (rhs.startsWith("[") && rhs.endsWith("]")) {
-        const bytes = rhs.slice(1, -1).trim().split(/\s+/).filter(Boolean).map((b) => {
-          const v = parseInt(b, 16);
-          if (Number.isNaN(v) || v > 0xff) throw new Error(`invalid byte "${b}"`);
-          return v;
-        });
-        props.push({ name, value: { type: "bytes", value: bytes } });
-      } else if (rhs.startsWith('"')) {
-        const strings = [...rhs.matchAll(/"(?:[^"\\]|\\.)*"/g)].map((m) => JSON.parse(m[0]) as string);
-        props.push({ name, value: { type: "strings", value: strings } });
-      } else {
-        throw new Error("expected <cells>, \"strings\" or [bytes]");
-      }
-    } catch (err) {
-      throw new Error(`line ${i + 1}: ${(err as Error).message}`);
-    }
+export function keepUnchanged(parsed: Property[], text: string, previous: Property[]): Property[] {
+  const lines = new Set(text.split("\n").map((l) => l.trim().replace(/;$/, "")));
+  return parsed.map((p) => {
+    const before = previous.find((q) => q.name === p.name);
+    return before && lines.has(formatProperty(before)) ? before : p;
   });
-  return props;
 }
 
 export function formatCell(c: number): string {

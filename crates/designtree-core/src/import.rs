@@ -640,6 +640,81 @@ fn chunk_targets(chunks: &mut [ValueChunk]) -> impl Iterator<Item = &mut String>
     })
 }
 
+/// The properties in `text`, one DTS property per line as the inspector's
+/// Text mode shows them (`reg = <0x1000 0x100>, <0x2000 0x100>`), with or
+/// without the `;`. Same grammar as a .dts file, so the text mode, the
+/// source panel and import read values alike. References stay in the
+/// values (`<&gic 0 4>`, `&uart0`): validation checks their targets.
+/// Errors are located by `line` in `text`.
+pub fn parse_properties(text: &str) -> std::result::Result<Vec<Property>, ImportError> {
+    // A line that does not end a value gets the `;` the text mode leaves out.
+    let body: String = text
+        .lines()
+        .map(|line| {
+            let t = line.trim_end();
+            let open = t.is_empty()
+                || t.ends_with([';', ',', '{', '}'])
+                || t.trim_start().starts_with("//")
+                || t.trim_start().starts_with("/*");
+            if open {
+                format!("{t}\n")
+            } else {
+                format!("{t};\n")
+            }
+        })
+        .collect();
+    const HEADER_LINES: u32 = 2;
+    let source = format!("/dts-v1/;\n/ {{\n{body}}};\n");
+    let at_line = |line: u32, message: String| ImportError {
+        file: String::new(),
+        // A value left open is found at the closing `};`, past the text.
+        line: line
+            .saturating_sub(HEADER_LINES)
+            .clamp(1, text.lines().count().max(1) as u32),
+        column: 1,
+        message,
+    };
+    let document = parse(&source, "properties").map_err(|e| at_line(e.line, e.message))?;
+    let mut properties: Vec<Property> = Vec::new();
+    for item in document.items {
+        let TopItem::Root(body, _) = item else {
+            continue;
+        };
+        for item in body.items {
+            match item {
+                BodyItem::Property(def) => {
+                    let value = match classify(&def) {
+                        Classified::Value(value) => value,
+                        Classified::Phandles(_) => PropertyValue::Mixed(def.value.clone()),
+                    };
+                    let property = Property {
+                        name: def.name.clone(),
+                        value,
+                    };
+                    // As in a .dts, a later definition replaces an earlier one.
+                    match properties.iter_mut().find(|p| p.name == def.name) {
+                        Some(p) => *p = property,
+                        None => properties.push(property),
+                    }
+                }
+                BodyItem::Node(node) => {
+                    return Err(at_line(
+                        node.pos.line,
+                        format!("`{}` is a node: add nodes on the canvas", node.name),
+                    ))
+                }
+                BodyItem::DeleteProperty { pos, .. } | BodyItem::DeleteNode { pos, .. } => {
+                    return Err(at_line(
+                        pos.line,
+                        "remove the line instead of deleting".into(),
+                    ))
+                }
+            }
+        }
+    }
+    Ok(properties)
+}
+
 enum Classified<'a> {
     Value(PropertyValue),
     /// Phandle list: one entry per `&label` with the cells that follow it.
@@ -1281,5 +1356,50 @@ mod tests {
              &uart0 {\n\tstatus = \"okay\";\n};\n\n\
              /omit-if-no-ref/ &uart0;\n\n"
         );
+    }
+
+    #[test]
+    fn the_text_mode_reads_properties_with_the_dts_grammar() {
+        let props = parse_properties(
+            "reg = <0x01c81000 0x1000>, <0x01c82000 0x2000>\n\
+             serial0 = &uart0;\n\
+             \n\
+             clocks = <&osc 1>\n\
+             mode = <010>\n\
+             interrupt-controller\n\
+             names = \"a\",\n\
+             \t\"b\"\n",
+        )
+        .unwrap();
+        let value = |name: &str| &props.iter().find(|p| p.name == name).unwrap().value;
+        assert_eq!(
+            value("reg"),
+            &PropertyValue::Cells(vec![0x01c8_1000, 0x1000, 0x01c8_2000, 0x2000])
+        );
+        assert_eq!(
+            value("serial0"),
+            &PropertyValue::Mixed(vec![ValueChunk::Path {
+                target: "uart0".into()
+            }])
+        );
+        assert!(matches!(value("clocks"), PropertyValue::Mixed(_)));
+        assert_eq!(
+            value("mode"),
+            &PropertyValue::Cells(vec![8]),
+            "octal, as dtc"
+        );
+        assert_eq!(value("interrupt-controller"), &PropertyValue::Empty);
+        assert_eq!(
+            value("names"),
+            &PropertyValue::Strings(vec!["a".into(), "b".into()])
+        );
+    }
+
+    #[test]
+    fn text_mode_errors_name_the_line_of_the_text() {
+        let error = parse_properties("status = \"okay\"\nreg = <0x10 0x1000>,\n").unwrap_err();
+        assert_eq!(error.line, 2, "{error}");
+        let error = parse_properties("a = <1>\nchild { };\n").unwrap_err();
+        assert!(error.message.contains("add nodes on the canvas"), "{error}");
     }
 }

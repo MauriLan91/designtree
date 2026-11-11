@@ -8,7 +8,8 @@ use std::sync::{Arc, RwLock};
 use designtree_bindings::{Binding, Catalog, Checker, DtMacro, LibraryEntry};
 use designtree_core::dtc::DtcError;
 use designtree_core::{
-    AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Severity,
+    AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Property,
+    Severity,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -530,6 +531,12 @@ fn apply_source(
 }
 
 /// The whole tree; for an overlay, its base with the overlay applied.
+/// The properties of the inspector's Text mode, read as DTS.
+#[tauri::command]
+fn parse_properties(text: &str) -> Result<Vec<Property>, String> {
+    designtree_core::parse_properties(text).map_err(|e| format!("line {}: {}", e.line, e.message))
+}
+
 #[tauri::command]
 fn export_dts_flat(design: Graph) -> Result<String, Vec<Problem>> {
     designtree_core::to_dts_flat(&design)
@@ -753,6 +760,7 @@ pub fn run() {
             resolve_dt_macros,
             validate_design,
             export_dts_flat,
+            parse_properties,
             export_dts_mapped,
             apply_source,
             new_overlay,
