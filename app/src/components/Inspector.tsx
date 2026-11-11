@@ -5,6 +5,7 @@ import { PropertyTable, type Reference } from "./PropertyTable";
 import { SpecifierEditor } from "./SpecifierEditor";
 import { TextInput } from "./TextInput";
 import { nameProblem } from "../names";
+import { formatCompatible, parseCompatible } from "../compatible";
 import { clearEditedTodo } from "../schemaProps";
 import {
   baseName,
@@ -30,9 +31,11 @@ interface Props {
   onOverride: (id: string) => void;
   /** The references of the inspected node, shown in its property table. */
   references: Reference[];
+  /** Cells of one `reg` entry of the inspected node, from its parent. */
+  regCells?: number;
 }
 
-export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references }: Props) {
+export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references, regCells }: Props) {
   if (node?.type === "dt") {
     return (
       <NodeInspector
@@ -42,6 +45,7 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCell
         overriding={overriding.has(node.id)}
         onOverride={() => onOverride(node.id)}
         references={references}
+        regCells={regCells}
         onReferenceChange={(id, args) => {
           const ref = references.find((r) => r.id === id);
           if (ref) onEdgeChange(id, { property: ref.property, args });
@@ -92,6 +96,7 @@ function NodeInspector({
   onOverride,
   references,
   onReferenceChange,
+  regCells,
 }: {
   node: DtFlowNode;
   onChange: Props["onNodeChange"];
@@ -99,6 +104,7 @@ function NodeInspector({
   onOverride: () => void;
   references: Reference[];
   onReferenceChange: (id: string, args: number[]) => void;
+  regCells?: number;
 }) {
   const { data } = node;
   const binding = useBinding(data.binding, data.compatible[0]);
@@ -175,13 +181,8 @@ function NodeInspector({
         <FieldError text={nameProblem("label", data.label ?? "")} />
       </label>
       <label>
-        Compatible (comma separated)
-        <TextInput
-          key={node.id}
-          value={data.compatible.join(", ")}
-          disabled={locked}
-          onCommit={(text) => onChange(node.id, { compatible: text.split(",").map((s) => s.trim()).filter(Boolean) })}
-        />
+        Compatible (most specific first, space separated)
+        <CompatibleInput key={node.id} value={data.compatible} disabled={locked} onCommit={(compatible) => onChange(node.id, { compatible })} />
       </label>
       <div className="props-head">
         <span>Properties</span>
@@ -219,6 +220,7 @@ function NodeInspector({
           locked={locked}
           onChange={setProps}
           onReferenceChange={onReferenceChange}
+          regCells={regCells}
         />
       )}
     </section>
@@ -248,4 +250,21 @@ function useBinding(created: Binding | undefined, compatible: string | undefined
 /** Why a field's value cannot be exported, under the field. */
 function FieldError({ text }: { text: string | null }) {
   return text ? <span className="field-error">{text}</span> : null;
+}
+
+/** The compatible strings as one line. What was typed stays as typed while
+ * it means the same list, so a pause after a space does not eat the space. */
+function CompatibleInput({ value, disabled, onCommit }: { value: string[]; disabled: boolean; onCommit: (list: string[]) => void }) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const same = typed !== null && parseCompatible(typed).join("\0") === value.join("\0");
+  return (
+    <TextInput
+      value={same ? typed : formatCompatible(value)}
+      disabled={disabled}
+      onCommit={(text) => {
+        setTyped(text);
+        onCommit(parseCompatible(text));
+      }}
+    />
+  );
 }

@@ -2,7 +2,7 @@
 
 Select a node to edit it in the inspector.
 
-- **Name**, **Unit address**, **Label** and **Compatible** (comma separated)
+- **Name**, **Unit address**, **Label** and **Compatible** (strings separated by spaces, most specific first)
   come first.
 - **Properties**: a table with a **Key**, a **Type** and a **Value** column,
   one row per property, edited the same way whatever the value holds.

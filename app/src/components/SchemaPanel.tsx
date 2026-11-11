@@ -23,7 +23,7 @@ export function SchemaPanel({ schema, nodeName, onFocusNode }: Props) {
       <h2>Schema check</h2>
       <p className="hint">
         {schema.problems === null
-          ? "Not checked: the design has structural errors (see the DTS preview)"
+          ? "Not checked: the design has structural errors (listed above)"
           : count === 0
             ? "No problems found"
             : `${count} problem${count === 1 ? "" : "s"}`}

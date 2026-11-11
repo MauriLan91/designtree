@@ -865,7 +865,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table input:not([type="checkbox"]), .prop-table select { width: 100%; min-width: 0; height: 24px; padding: 0 4px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: 12px var(--mono); }
 .prop-table input:not([type="checkbox"]):hover, .prop-table select:hover { border-color: var(--border); }
 .prop-table input:not([type="checkbox"]):focus, .prop-table select:focus { border-color: var(--accent); background: var(--panel); outline: none; }
-.prop-table .type { padding: 0 4px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prop-table .type { display: block; padding: 0 4px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prop-table .twisty { display: flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; padding: 0; border: none; background: none; color: var(--muted); }
 .prop-table .item-row th { padding-left: 22px; }
 .prop-table .item-index { display: inline-block; padding: 0 4px; color: var(--muted); font-family: var(--mono); }
@@ -876,7 +876,7 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table tr:hover .row-remove, .prop-table .row-remove:focus-visible { opacity: 1; }
 .prop-table .row-remove:hover { background: var(--border); color: var(--danger); }
 .field-error { display: block; color: var(--danger); font-size: 11px; font-weight: normal; margin-top: 2px; }
-.prop-table .row-error { display: block; padding: 0 4px; color: var(--danger); font-size: 11px; }
+.prop-table .row-error { display: block; padding: 0 4px; color: var(--danger); font-size: 11px; overflow-wrap: anywhere; }
 .prop-table .row-todo { display: block; padding: 0 4px; color: var(--warn); font-size: 11px; }
 .prop-table tr.todo > th { box-shadow: inset 2px 0 0 var(--warn); }
 .prop-table .add-item .link, .prop-table .add-property { display: flex; align-items: center; gap: 4px; font-size: 12px; }
@@ -909,3 +909,5 @@ button.lib-header:hover { background: var(--hover); }
 .lib-tile .star { position: absolute; top: 2px; right: 2px; font-size: 13px; opacity: 0; }
 .lib-tile:hover .star, .lib-tile .star[aria-pressed="true"], .lib-tile .star:focus-visible { opacity: 1; }
 .lib-scroll mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
+/* A build result from before the last edit stays readable but recedes. */
+.build.stale .problems, .build.stale > pre { opacity: 0.55; }

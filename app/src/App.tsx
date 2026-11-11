@@ -21,7 +21,7 @@ import type { SourceError, Span } from "./components/DtsEditor";
 import { reconcileEdges, reconcileNodes } from "./textSync";
 import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "./collapse";
 import { GroupNode } from "./components/GroupNode";
-import { initialProperties } from "./schemaProps";
+import { initialProperties, regEntryCells } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
 import { AddressMapPanel } from "./components/AddressMapPanel";
 import { SocPicker } from "./components/SocPicker";
@@ -101,7 +101,7 @@ import {
   Undo2,
   Workflow,
 } from "lucide-react";
-import { CLIPBOARD_MIME, copySelection, parseClipboard, pasteClipboard } from "./clipboard";
+import { CLIPBOARD_MIME, copySelection, parseClipboard, pasteClipboard, renameLabels } from "./clipboard";
 import {
   CHILD_HANDLE,
   PARENT_HANDLE,
@@ -827,7 +827,8 @@ export function Editor({
             y: rect.top + rect.height * 0.15 + (Math.random() - 0.5) * 60,
           });
         })();
-      const initial = binding ? initialProperties(binding) : null;
+      const scope = nodesRef.current.find((n) => n.id === scopeRef.current);
+      const initial = binding ? initialProperties(binding, regEntryCells(scope && isDtNode(scope) ? scope.data.properties : undefined)) : null;
       // A design has one root: the library's root node fills in the
       // properties the existing one lacks instead of adding another.
       const root = nodesRef.current.find((n) => isDtNode(n) && n.data.name === "/");
@@ -913,8 +914,9 @@ export function Editor({
     async ({ nodes: del, edges: delEdges }) => {
       const ids = new Set(del.filter((n) => !(isDtNode(n) && n.data.name === "/")).map((n) => n.id));
       const isChildEdge = (e: Edge) => e.sourceHandle === CHILD_HANDLE;
-      // Deleting an inherited node deletes its subtree, as /delete-node/ does.
-      const stack = nodes.filter((n) => ids.has(n.id) && isDtNode(n) && n.data.inherited).map((n) => n.id);
+      // Deleting a node deletes its subtree, as /delete-node/ does: children
+      // left without a parent could not be exported.
+      const stack = [...ids];
       while (stack.length > 0) {
         const id = stack.pop()!;
         for (const e of edges) {
@@ -1154,11 +1156,14 @@ export function Editor({
         output: result.output ?? undefined,
         message: result.log,
         problems: result.problems,
+        key: schemaKey,
       });
     } catch (e) {
-      setBuild({ running: false, message: String(e), problems: [] });
+      setBuild({ running: false, message: String(e), problems: [], key: schemaKey });
     }
   };
+
+  const buildStale = !!build && !build.running && build.key !== schemaKey;
 
   const focusNode = (id: string) => {
     // A node in another scope is shown there; a scope's own node is its tab.
@@ -1301,6 +1306,8 @@ export function Editor({
       : selectedNodes.length === 0 && !selectedEdge && scope
         ? (nodes.find((n) => n.id === scope) ?? null)
         : null;
+  const inspectedParent = nodes.find((n) => n.id === edges.find((e) => e.sourceHandle === CHILD_HANDLE && e.target === inspected?.id)?.source);
+  const inspectedRegCells = inspectedParent && isDtNode(inspectedParent) ? regEntryCells(inspectedParent.data.properties) : undefined;
   // Its references, which its property table lists with the properties.
   const inspectedRefs = edges
     .filter((e) => e.type === "ref" && e.source === inspected?.id && e.data)
@@ -1696,7 +1703,23 @@ export function Editor({
   }, [active]);
 
   const updateNodeData = (id: string, data: object) =>
-    setNodes((ns) => ns.map((n) => (n.id === id ? ({ ...n, data: { ...n.data, ...data } } as FlowNode) : n)));
+    setNodes((ns) => {
+      const next = ns.map((n) => (n.id === id ? ({ ...n, data: { ...n.data, ...data } } as FlowNode) : n));
+      // Values that name the label (`serial0 = &uart0`) follow its rename, as
+      // reference edges do. Not to an empty label or one another node has:
+      // the field commits as the user types.
+      const before = ns.find((n) => n.id === id);
+      const from = before && isDtNode(before) ? before.data.label : undefined;
+      const to = (data as { label?: string }).label;
+      if (!from || !to || from === to || !("label" in data)) return next;
+      if (ns.some((n) => n.id !== id && isDtNode(n) && (n.data.label === to || n.data.extraLabels?.includes(to)))) return next;
+      const labels = new Map([[from, to]]);
+      return next.map((n) =>
+        isDtNode(n) && n.data.properties.some((p) => p.value.type === "mixed")
+          ? { ...n, data: { ...n.data, properties: n.data.properties.map((p) => ({ ...p, value: renameLabels(p.value, labels) })) } }
+          : n,
+      );
+    });
   const updateEdgeData = (id: string, data: RefData) =>
     setEdges((es) => es.map((e) => (e.id === id ? { ...e, data } : e)));
 
@@ -1885,6 +1908,7 @@ export function Editor({
               onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
               onEdgeChange={updateEdgeData}
               providerCells={providerCells}
+              regCells={inspectedRegCells}
             />
           </aside>
           <Splitter
@@ -1900,7 +1924,7 @@ export function Editor({
         <BottomPanel
           tabs={[
             { id: "problems", title: "Problems", count: problemCount.errors + problemCount.warnings },
-            { id: "build", title: "Build", count: build?.problems.length },
+            { id: "build", title: "Build", count: buildStale ? undefined : build?.problems.length },
             { id: "interrupts", title: "Interrupts" },
             { id: "address-map", title: "Address map" },
           ]}
@@ -1919,7 +1943,7 @@ export function Editor({
             ))}
           {layout.panel.tab === "build" &&
             (build ? (
-              <BuildPanel build={build} nodeName={nodeName} onFocusNode={focusNode} />
+              <BuildPanel build={build} stale={buildStale} nodeName={nodeName} onFocusNode={focusNode} />
             ) : (
               <p className="hint">Build .dtb (Ctrl+B) to see dtc's output here.</p>
             ))}
