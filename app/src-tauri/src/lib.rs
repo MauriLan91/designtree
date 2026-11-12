@@ -604,6 +604,7 @@ fn base64(bytes: &[u8]) -> String {
 
 #[tauri::command]
 fn save_design(path: PathBuf, design: Graph) -> Result<(), String> {
+    writable(&path, &["json"])?;
     let json = serde_json::to_string_pretty(&design).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())
 }
@@ -700,6 +701,7 @@ fn build_dtb(
     output: PathBuf,
     state: State<AppState>,
 ) -> Result<BuildResult, String> {
+    writable(&output, &["dtb", "dtbo"])?;
     let joined = |errors: Vec<designtree_core::ValidationError>| {
         errors
             .iter()
@@ -733,7 +735,27 @@ fn build_dtb(
 
 #[tauri::command]
 fn write_text(path: PathBuf, content: String) -> Result<(), String> {
+    writable(&path, &["dts", "dtsi", "dtso"])?;
     fs::write(path, content).map_err(|e| e.to_string())
+}
+
+/// The webview names the paths it writes, so a script that got into it
+/// could overwrite any file the user can (`~/.bashrc`). Writes are kept to
+/// the kinds of file the app makes.
+fn writable(path: &Path, extensions: &[&str]) -> Result<(), String> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    if ext.is_some_and(|e| extensions.contains(&e.as_str())) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} is not a .{} file",
+            path.display(),
+            extensions.join(", .")
+        ))
+    }
 }
 
 pub fn run() {

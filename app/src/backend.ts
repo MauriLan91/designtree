@@ -103,18 +103,30 @@ const DTSO_FILTER = [{ name: "Devicetree overlay source", extensions: ["dtso"] }
 const DTBO_FILTER = [{ name: "Devicetree overlay blob", extensions: ["dtbo"] }];
 const BASE_FILTER = [{ name: "Design or devicetree source", extensions: ["json", "dts"] }];
 
+type Filter = { name: string; extensions: string[] };
+
+/** A save dialog whose path gets the filter's first extension when it has
+ * none of them: the backend writes only the kinds of file the app makes. */
+async function saveAs(filters: Filter[], defaultPath: string): Promise<string | null> {
+  const path = await save({ filters, defaultPath });
+  if (!path) return null;
+  const extensions = filters.flatMap((f) => f.extensions);
+  const ext = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase();
+  return ext && extensions.includes(ext) ? path : `${path}.${extensions[0]}`;
+}
+
 export const dialogs = {
   pickKernelTree: () =>
     open({ directory: true, title: "Select a Linux kernel source tree" }) as Promise<string | null>,
   pickDesignToOpen: () => open({ filters: DESIGN_FILTER }) as Promise<string | null>,
-  pickDesignToSave: () => save({ filters: DESIGN_FILTER, defaultPath: "design.json" }),
+  pickDesignToSave: () => saveAs(DESIGN_FILTER, "design.json"),
   pickDtsToOpen: () => open({ filters: DTS_FILTER }) as Promise<string | null>,
-  pickDtbToSave: () => save({ filters: DTB_FILTER, defaultPath: "board.dtb" }),
+  pickDtbToSave: () => saveAs(DTB_FILTER, "board.dtb"),
   pickDtc: () => open({ title: "Select the dtc program" }) as Promise<string | null>,
-  pickDtsToSave: () => save({ filters: DTS_FILTER, defaultPath: "board.dts" }),
+  pickDtsToSave: () => saveAs(DTS_FILTER, "board.dts"),
   pickOverlayBase: () => open({ filters: BASE_FILTER, title: "Select the base the overlay applies to" }) as Promise<string | null>,
-  pickDtsoToSave: () => save({ filters: DTSO_FILTER, defaultPath: "overlay.dtso" }),
-  pickDtboToSave: () => save({ filters: DTBO_FILTER, defaultPath: "overlay.dtbo" }),
+  pickDtsoToSave: () => saveAs(DTSO_FILTER, "overlay.dtso"),
+  pickDtboToSave: () => saveAs(DTBO_FILTER, "overlay.dtbo"),
   pickBoardImage: () =>
     open({
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg"] }],
