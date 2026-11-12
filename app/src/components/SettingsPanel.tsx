@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { backend, dialogs, inTauri } from "../backend";
 import { RESERVED_SHORTCUTS, comboOf, shortcutClashes, type Command } from "../commands";
 import type { EditorMode } from "../layout";
-import { isCombo, type Settings, type Theme } from "../settings";
+import { GRID_SIZES, isCombo, type Settings, type Theme } from "../settings";
 import { KernelCheckouts } from "./KernelCheckouts";
 
 export const SECTIONS = ["General", "Editor", "Kernel", "Build", "Shortcuts", "Updates"] as const;
@@ -140,6 +140,31 @@ export function SettingsPanel(props: Props) {
         ],
         (editorMode) => onChange({ editorMode }),
         "Mode of new tabs",
+      ),
+    },
+    {
+      section: "Editor",
+      key: "snap",
+      title: "Snap to grid",
+      words: "grid align drag",
+      description: "Nodes snap to the grid while you drag them; the canvas shows the grid. Also View › Snap to grid.",
+      control: (
+        <label className="check">
+          <input type="checkbox" checked={settings.snapToGrid} onChange={(e) => onChange({ snapToGrid: e.target.checked })} />
+          On
+        </label>
+      ),
+    },
+    {
+      section: "Editor",
+      key: "grid-size",
+      title: "Grid size",
+      words: "grid spacing snap",
+      control: select<string>(
+        String(settings.gridSize),
+        GRID_SIZES.map((n) => [String(n), `${n} px`] as [string, string]),
+        (size) => onChange({ gridSize: Number(size) }),
+        "Grid size",
       ),
     },
     {

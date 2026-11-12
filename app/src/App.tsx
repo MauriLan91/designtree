@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -91,6 +92,7 @@ import {
   AlignHorizontalSpaceAround,
   AlignVerticalSpaceAround,
   LayoutDashboard,
+  Grid3x3,
   FilePlus,
   FolderOpen,
   Hammer,
@@ -1619,6 +1621,17 @@ export function Editor({
       run: () => togglePanel("address-map"),
     },
     { id: "fit", title: "Fit the design in view", menu: "View", group: 4, run: () => fitView({ maxZoom: 1, duration: 300 }) },
+    {
+      id: "snap",
+      title: "Snap to grid",
+      shortcut: "Ctrl+'",
+      menu: "View",
+      group: 4,
+      icon: Grid3x3,
+      hint: "Nodes snap to the grid while dragged; the grid size is in the settings",
+      checked: settings.snapToGrid,
+      run: () => onSettings({ snapToGrid: !settings.snapToGrid }),
+    },
     { id: "add", title: "Empty node", menu: "Insert", icon: SquarePlus, hint: "Add a node with no binding", run: () => addNode(null) },
     {
       id: "connect",
@@ -1742,7 +1755,7 @@ export function Editor({
           />
         </div>
         <div className="toolbar-row" role="toolbar" aria-label="Main actions">
-          {[["new", "open", "save"], ["undo", "redo"], ["add", "tidy"]].map((ids, g) => (
+          {[["new", "open", "save"], ["undo", "redo"], ["add", "tidy", "snap"]].map((ids, g) => (
             <div className="tool-group" key={g}>
               {ids.map((id) => {
                 const c = byId(id);
@@ -1754,6 +1767,7 @@ export function Editor({
                     aria-label={c.title.replace(/…$/, "")}
                     title={tooltipOf(c)}
                     disabled={c.disabled}
+                    aria-pressed={c.checked}
                     onClick={() => c.run()}
                   >
                     <Icon size={18} strokeWidth={1.75} aria-hidden />
@@ -1843,6 +1857,8 @@ export function Editor({
               fitViewOptions={{ maxZoom: 1 }}
               minZoom={0.1}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
+              snapToGrid={settings.snapToGrid}
+              snapGrid={[settings.gridSize, settings.gridSize]}
               onNodeDoubleClick={(_, node) => {
                 // The bar is the scope's own controller: edit its properties.
                 if (node.id.startsWith(BUSBAR_PREFIX)) editNode(node.id.slice(BUSBAR_PREFIX.length));
@@ -1870,7 +1886,11 @@ export function Editor({
               }}
               zoomOnDoubleClick={false}
             >
-              <Background />
+              {settings.snapToGrid ? (
+                <Background variant={BackgroundVariant.Lines} gap={settings.gridSize} color="var(--grid)" />
+              ) : (
+                <Background />
+              )}
               <Controls />
               <MiniMap pannable zoomable />
             </ReactFlow>
