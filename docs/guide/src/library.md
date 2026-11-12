@@ -41,7 +41,7 @@ Type in the search box: the search is fuzzy over the compatible string, the
 vendor and the schema title, ranked by match quality, so `bme280`, `bosch
 pressure` and `i2c eeprom` all work. The words you typed are highlighted
 and the count above the list says how many elements match. Narrow it with
-the category list.
+the category list. The × in the box, or Escape, clears the search.
 The star next to an element adds it to **Favorites**; elements you add show
 up under **Recent**. Both are kept between sessions. While a search is
 typed, the sections give way to one list of matches, best first.
