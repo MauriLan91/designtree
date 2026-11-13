@@ -105,26 +105,41 @@ const BASE_FILTER = [{ name: "Design or devicetree source", extensions: ["json",
 
 type Filter = { name: string; extensions: string[] };
 
+// The folder of the last file picked, where the next dialog starts (US-15.9).
+let lastFolder: string | null = null;
+const folderOf = (path: string) => path.replace(/[/\\][^/\\]*$/, "") || "/";
+function remember<T extends string | null>(path: T): T {
+  if (path) lastFolder = folderOf(path);
+  return path;
+}
+/** Where a dialog starts: the file `near` names, else `name` in the last folder used. */
+const startAt = (name: string, near?: string | null) => near ?? (lastFolder ? `${lastFolder}/${name}` : name);
+
 /** A save dialog whose path gets the filter's first extension when it has
  * none of them: the backend writes only the kinds of file the app makes. */
-async function saveAs(filters: Filter[], defaultPath: string): Promise<string | null> {
-  const path = await save({ filters, defaultPath });
+async function saveAs(filters: Filter[], name: string, near?: string | null): Promise<string | null> {
+  const path = remember(await save({ filters, defaultPath: startAt(name, near) }));
   if (!path) return null;
   const extensions = filters.flatMap((f) => f.extensions);
   const ext = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase();
   return ext && extensions.includes(ext) ? path : `${path}.${extensions[0]}`;
 }
 
+async function openFile(options: Parameters<typeof open>[0]): Promise<string | null> {
+  return remember((await open({ defaultPath: lastFolder ?? undefined, ...options })) as string | null);
+}
+
 export const dialogs = {
   pickKernelTree: () =>
     open({ directory: true, title: "Select a Linux kernel source tree" }) as Promise<string | null>,
-  pickDesignToOpen: () => open({ filters: DESIGN_FILTER }) as Promise<string | null>,
-  pickDesignToSave: () => saveAs(DESIGN_FILTER, "design.json"),
-  pickDtsToOpen: () => open({ filters: DTS_FILTER }) as Promise<string | null>,
+  pickDesignToOpen: () => openFile({ filters: DESIGN_FILTER }),
+  /** `current`: the design's file, which the dialog starts at. */
+  pickDesignToSave: (current?: string | null) => saveAs(DESIGN_FILTER, "design.json", current),
+  pickDtsToOpen: () => openFile({ filters: DTS_FILTER }),
   pickDtbToSave: () => saveAs(DTB_FILTER, "board.dtb"),
   pickDtc: () => open({ title: "Select the dtc program" }) as Promise<string | null>,
   pickDtsToSave: () => saveAs(DTS_FILTER, "board.dts"),
-  pickOverlayBase: () => open({ filters: BASE_FILTER, title: "Select the base the overlay applies to" }) as Promise<string | null>,
+  pickOverlayBase: () => openFile({ filters: BASE_FILTER, title: "Select the base the overlay applies to" }),
   pickDtsoToSave: () => saveAs(DTSO_FILTER, "overlay.dtso"),
   pickDtboToSave: () => saveAs(DTBO_FILTER, "overlay.dtbo"),
   pickBoardImage: () =>

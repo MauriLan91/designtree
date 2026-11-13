@@ -1103,8 +1103,10 @@ export function Editor({
     if (path) onOpen({ load: () => backend.importDts(path), path: null, name: baseName(path) });
   };
 
-  const saveDesign = async () => {
-    const path = await dialogs.pickDesignToSave();
+  /** Save writes to the design's file and asks only when it has none;
+   * Save as always asks, and the file picked becomes the design's. */
+  const saveDesign = async (as = false) => {
+    const path = !as && designPath ? designPath : await dialogs.pickDesignToSave(designPath);
     if (!path) return false;
     try {
       // The design is now built against the library's kernel.
@@ -1121,7 +1123,7 @@ export function Editor({
     }
   };
   const apiRef = useRef<EditorApi | null>(null);
-  apiRef.current = { addNode: (b) => addNode(b), load: loadDesign, save: saveDesign };
+  apiRef.current = { addNode: (b) => addNode(b), load: loadDesign, save: () => saveDesign() };
   useEffect(() => {
     api({
       addNode: (b) => apiRef.current!.addNode(b),
@@ -1410,7 +1412,18 @@ export function Editor({
     },
     { id: "open", title: "Open design…", shortcut: "Ctrl+O", menu: "File", group: 1, icon: FolderOpen, disabled: !inTauri, run: openDesign },
     { id: "import", title: "Import .dts…", menu: "File", group: 1, disabled: !inTauri, run: importDts },
-    { id: "save", title: "Save design…", shortcut: "Ctrl+S", menu: "File", group: 2, icon: Save, disabled: !inTauri, run: saveDesign },
+    {
+      id: "save",
+      title: designPath ? "Save" : "Save…",
+      shortcut: "Ctrl+S",
+      menu: "File",
+      group: 2,
+      icon: Save,
+      hint: designPath ? `To ${designPath}` : undefined,
+      disabled: !inTauri,
+      run: () => saveDesign(),
+    },
+    { id: "save-as", title: "Save as…", shortcut: "Ctrl+Shift+S", menu: "File", group: 2, disabled: !inTauri, run: () => saveDesign(true) },
     {
       id: "export",
       title: "Export .dts…",
