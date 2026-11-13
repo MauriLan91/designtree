@@ -28,6 +28,11 @@ Select a node to edit it in the inspector.
   - For a property the schema does not describe, pick the type yourself:
     Boolean, String, String list, Cells, Bytes, Reference or Mixed.
     Changing it keeps what can be kept, so cells become bytes and back.
+  - A row holding numbers has a **Dec**, **Hex** or **Oct** selector under
+    its type: the numbers are shown, and written to the DTS, in that base.
+    Addresses (`reg`, `ranges`) start in hex and everything else in
+    decimal; an imported file keeps the base each property was written in.
+    A value can be typed in any base (`24000000`, `0x16e3600`, `0644`).
   - A **Reference** names a node by its label, picked from a list, and is
     written as `&label` (the DTS turns it into the node's path). Under
     `aliases` every property is one. Renaming the label updates it.

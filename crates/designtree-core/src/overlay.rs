@@ -78,6 +78,7 @@ pub fn overlay_on(base: &Graph, base_file: &str) -> Graph {
             properties.push(Property {
                 name: "compatible".into(),
                 value: PropertyValue::Strings(node.compatible.clone()),
+                base: None,
             });
         }
         properties.extend(node.properties.iter().cloned());
@@ -103,6 +104,7 @@ pub fn overlay_on(base: &Graph, base_file: &str) -> Graph {
         properties.extend(lists.into_iter().map(|(name, chunks)| Property {
             name,
             value: PropertyValue::Mixed(chunks),
+            base: None,
         }));
         node.inherited = Some(Inherited {
             file: base_file.to_owned(),

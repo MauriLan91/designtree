@@ -267,6 +267,7 @@ mod tests {
         g.nodes[4].properties.push(crate::model::Property {
             name: "#interrupt-cells".into(),
             value: PropertyValue::Cells(vec![1]),
+            base: None,
         });
         g.edges.push(crate::model::Edge {
             from: "uart".into(),

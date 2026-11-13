@@ -12,9 +12,9 @@ use designtree_bindings::{Binding, DtMacro, LibraryEntry, PropertySpec, Property
 use designtree_core::{
     AddressMap, AddressProblem, Board, BoardLink, Bus, Cell, Connector, ConnectorPin, Edge,
     EdgeKind, GpioLine, Graph, Group, Inherited, InterruptController, InterruptProblem,
-    InterruptTree, LinkKind, MemReserve, Node, NodeId, Overlay, PinCheck, PinKind, PinProblem,
-    PinState, Position, Problem, Property, PropertyValue, Region, Severity, Size, SocDtsi,
-    ValueChunk,
+    InterruptTree, LinkKind, MemReserve, Node, NodeId, NumberBase, Overlay, PinCheck, PinKind,
+    PinProblem, PinState, Position, Problem, Property, PropertyValue, Region, Severity, Size,
+    SocDtsi, ValueChunk,
 };
 use ts_rs::{Config, TS};
 
@@ -33,6 +33,7 @@ fn generate() -> String {
         PropertyValue::decl(&cfg),
         Cell::decl(&cfg),
         ValueChunk::decl(&cfg),
+        NumberBase::decl(&cfg),
         Property::decl(&cfg),
         Inherited::decl(&cfg),
         Node::decl(&cfg),

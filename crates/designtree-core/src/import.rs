@@ -476,6 +476,7 @@ impl Tree {
                         graph.nodes[graph_index].properties.push(Property {
                             name: def.name.clone(),
                             value,
+                            base: def.base,
                         })
                     }
                     Classified::Phandles(entries) => {
@@ -526,6 +527,7 @@ impl Tree {
                     Property {
                         name: def.name.clone(),
                         value,
+                        base: def.base,
                     }
                 })
                 .collect();
@@ -690,6 +692,7 @@ pub fn parse_properties(text: &str) -> std::result::Result<Vec<Property>, Import
                     let property = Property {
                         name: def.name.clone(),
                         value,
+                        base: def.base,
                     };
                     // As in a .dts, a later definition replaces an earlier one.
                     match properties.iter_mut().find(|p| p.name == def.name) {
@@ -790,6 +793,7 @@ fn classify(def: &PropertyDef) -> Classified<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::NumberBase;
 
     fn import(source: &str) -> Graph {
         import_dts(source, Path::new("test.dts"), &ImportOptions::default())
@@ -1021,10 +1025,12 @@ mod tests {
                 Property {
                     name: "status".into(),
                     value: PropertyValue::Strings(vec!["okay".into()]),
+                    base: None,
                 },
                 Property {
                     name: "extra".into(),
                     value: PropertyValue::Empty,
+                    base: None,
                 },
             ]
         );
@@ -1273,7 +1279,7 @@ mod tests {
             \t};\n\n\
             \tcodec: codec@1a {\n\
             \t\treg = <0x1a>;\n\
-            \t\tspeed = <0x190>;\n\
+            \t\tspeed = <400>;\n\
             \t};\n\
             };\n\n";
         let exported = crate::to_dts(&graph).unwrap();
@@ -1401,5 +1407,37 @@ mod tests {
         assert_eq!(error.line, 2, "{error}");
         let error = parse_properties("a = <1>\nchild { };\n").unwrap_err();
         assert!(error.message.contains("add nodes on the canvas"), "{error}");
+    }
+
+    #[test]
+    fn numbers_keep_the_base_they_were_written_in() {
+        let graph = import(
+            "/dts-v1/;\n/ {\n\
+             \tfreq = <24000000>;\n\
+             \tmask = <0x00ff 0 1>;\n\
+             \tmode = <0644>;\n\
+             \tsmall = <0 1>;\n\
+             };\n",
+        );
+        let base = |name: &str| {
+            node(&graph, "/")
+                .properties
+                .iter()
+                .find(|p| p.name == name)
+                .unwrap()
+                .base
+        };
+        assert_eq!(base("freq"), Some(NumberBase::Dec));
+        assert_eq!(base("mask"), Some(NumberBase::Hex));
+        assert_eq!(base("mode"), Some(NumberBase::Oct));
+        assert_eq!(
+            base("small"),
+            None,
+            "small numbers read alike in every base"
+        );
+        let dts = crate::to_dts(&graph).unwrap();
+        assert!(dts.contains("freq = <24000000>;"), "{dts}");
+        assert!(dts.contains("mask = <0xff 0 1>;"), "{dts}");
+        assert!(dts.contains("mode = <0644>;"), "{dts}");
     }
 }

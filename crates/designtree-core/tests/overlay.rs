@@ -54,6 +54,7 @@ fn set(node: &mut Node, name: &str, value: PropertyValue) {
     node.properties.push(Property {
         name: name.into(),
         value,
+        base: None,
     });
 }
 

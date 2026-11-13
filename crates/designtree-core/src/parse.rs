@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-use crate::model::{Cell, ValueChunk};
+use crate::model::{Cell, NumberBase, ValueChunk};
 
 /// 1-based line and column (in characters) in a source file.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -129,6 +129,8 @@ pub struct PropertyDef {
     pub value: Vec<ValueChunk>,
     /// Every reference in `value`, in order, with its position.
     pub references: Vec<Reference>,
+    /// The base its numbers were written in, when it tells (US-17.3).
+    pub base: Option<NumberBase>,
     pub pos: Pos,
 }
 
@@ -209,6 +211,9 @@ struct Parser {
     /// Nesting of operands that are parsed but not evaluated (the right of
     /// `0 && x`); division by zero there is not an error.
     unevaluated: u32,
+    /// Literals of the property being read, by base: hex, octal, and
+    /// decimal of 10 or more (smaller ones read the same in any base).
+    literals: [u32; 3],
 }
 
 impl Parser {
@@ -225,6 +230,7 @@ impl Parser {
             signed: false,
             nesting: 0,
             unevaluated: 0,
+            literals: [0; 3],
         }
     }
 
@@ -620,6 +626,7 @@ impl Parser {
                 self.error(label_pos, "`/omit-if-no-ref/` applies to nodes only")
             }
             Some('=' | ';') => {
+                self.literals = [0; 3];
                 let (value, references) = if self.eat('=')? {
                     self.value()?
                 } else {
@@ -630,6 +637,7 @@ impl Parser {
                     name,
                     value,
                     references,
+                    base: self.written_base(),
                     pos,
                 }))
             }
@@ -909,6 +917,18 @@ impl Parser {
         }
     }
 
+    /// The base most of the property's telling literals were written in.
+    fn written_base(&self) -> Option<NumberBase> {
+        let [hex, oct, dec] = self.literals;
+        let most = hex.max(oct).max(dec);
+        match most {
+            0 => None,
+            _ if hex == most => Some(NumberBase::Hex),
+            _ if dec == most => Some(NumberBase::Dec),
+            _ => Some(NumberBase::Oct),
+        }
+    }
+
     /// Decimal, hex (`0x`) or octal (leading `0`) literal with optional C
     /// suffixes (`U`, `L`, `UL`, `ULL`).
     fn literal(&mut self) -> Result<u64> {
@@ -928,7 +948,21 @@ impl Parser {
         } else {
             digits.parse()
         };
-        parsed.or_else(|_| self.error(pos, format!("invalid number `{text}`")))
+        let value = parsed.or_else(|_| self.error(pos, format!("invalid number `{text}`")))?;
+        let hex = digits.len() > 1 && digits[1..].starts_with(['x', 'X']);
+        let kind = if hex {
+            Some(0)
+        } else if digits.len() > 1 && digits.starts_with('0') {
+            Some(1)
+        } else if value >= 10 {
+            Some(2)
+        } else {
+            None
+        };
+        if let Some(k) = kind {
+            self.literals[k] += 1;
+        }
+        Ok(value)
     }
 
     /// A C integer expression, evaluated on 64-bit unsigned values as dtc

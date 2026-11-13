@@ -53,7 +53,7 @@ async function parseSpecifier(text: string): Promise<number[]> {
 }
 
 export function SpecifierEditor({ args, expected, onChange, compact, disabled }: Props) {
-  const shown = args.map(formatCell).join(" ");
+  const shown = args.map((c) => formatCell(c)).join(" ");
   const [text, setText] = useState(shown);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DtMacro[]>([]);

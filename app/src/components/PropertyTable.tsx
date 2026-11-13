@@ -7,7 +7,7 @@
 import { ChevronDown, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
-import type { DtMacro, Property, PropertySpec, PropertyValue } from "../model";
+import { baseOf, type DtMacro, type NumberBase, type Property, type PropertySpec, type PropertyValue } from "../model";
 import {
   KIND_TITLES,
   blank,
@@ -95,7 +95,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
       setErrors(({ [key]: _, ...rest }) => rest);
       if (result === null) onChange(properties.filter((p) => p.name !== name));
       else if (Array.isArray(result)) onChange(result);
-      else onChange(properties.map((p) => (p.name === name ? { name, value: result } : p)));
+      else onChange(properties.map((p) => (p.name === name ? { ...p, value: result } : p)));
     } catch (e) {
       setErrors((s) => ({ ...s, [key]: (e as Error).message }));
     }
@@ -171,7 +171,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
             </div>
           </th>
           <td className="type">{refs.length > 1 ? "Phandle list" : "Phandle"}</td>
-          <td className="ref-summary">{refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map(formatNumber).join(" ")}` : ""}`).join(", ")}</td>
+          <td className="ref-summary">{refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map((c) => formatNumber(c)).join(" ")}` : ""}`).join(", ")}</td>
           <td />
         </tr>
         {expanded &&
@@ -208,7 +208,8 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
           // A scalar keeps its item rows only when it somehow holds several.
-          const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind);
+          const base = baseOf(p);
+          const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind, base);
           const expanded = open.has(p.name) && items !== null;
           const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, p.name === "reg" ? regCells : undefined);
           const isTodo = todo?.includes(p.name);
@@ -267,11 +268,28 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       ))}
                     </select>
                   )}
+                  {hasNumbers(p.value) && (
+                    <select
+                      className="base-select"
+                      aria-label={`Number base of ${p.name}`}
+                      title="Show and write the numbers in decimal, hexadecimal or octal"
+                      value={base}
+                      disabled={locked}
+                      onChange={(e) => onChange(properties.map((q) => (q.name === p.name ? { ...q, base: e.target.value as NumberBase } : q)))}
+                    >
+                      {BASES.map(([b, title]) => (
+                        <option key={b} value={b}>
+                          {title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td>
                   <ValueCell
                     name={p.name}
                     value={p.value}
+                    base={base}
                     kind={kind}
                     spec={spec}
                     disabled={locked}
@@ -424,7 +442,7 @@ function MissingRow({
           <select aria-label={spec.name} value="" disabled={locked} onChange={(e) => commit(e.target.value)}>
             <option value="">(select)</option>
             {spec.enum.map((v) => (
-              <option key={String(v)} value={typeof v === "number" ? formatNumber(v) : String(v)}>
+              <option key={String(v)} value={typeof v === "number" ? formatNumber(v, baseOf(spec)) : String(v)}>
                 {String(v)}
               </option>
             ))}
@@ -456,6 +474,18 @@ function parseUntyped(text: string): PropertyValue {
   }
 }
 
+const BASES: [NumberBase, string][] = [
+  ["dec", "Dec"],
+  ["hex", "Hex"],
+  ["oct", "Oct"],
+];
+
+/** Whether a value holds a number a base applies to. */
+function hasNumbers(v: PropertyValue): boolean {
+  if (v.type === "cells") return v.value.length > 0;
+  return v.type === "mixed" && v.value.some((c) => c.type === "cells" && c.cells.some((x) => typeof x === "number"));
+}
+
 const isCellList = (v: PropertyValue) =>
   v.type === "cells" || (v.type === "mixed" && v.value.length === 1 && v.value[0].type === "cells");
 
@@ -470,6 +500,7 @@ function itemKind(v: PropertyValue): string {
 function ValueCell({
   name,
   value,
+  base,
   kind,
   spec,
   disabled,
@@ -481,6 +512,7 @@ function ValueCell({
   labels: string[];
   name: string;
   value: PropertyValue;
+  base: NumberBase;
   kind: ValueKind;
   spec: PropertySpec | undefined;
   disabled: boolean;
@@ -518,19 +550,19 @@ function ValueCell({
     );
   }
   if (kind === "cells" && spec?.enum?.length && spec.enum.every((v) => typeof v === "number") && isCellList(value) && summaryOf(value).split(" ").length <= 1) {
-    const current = summaryOf(value);
+    const current = summaryOf(value, kind, base);
     return (
       <select aria-label={name} value={current} disabled={disabled} onChange={(e) => onCommit(e.target.value)}>
-        {!spec.enum.map((v) => formatNumber(v as number)).includes(current) && <option value={current}>{current || "(select)"}</option>}
+        {!spec.enum.map((v) => formatNumber(v as number, base)).includes(current) && <option value={current}>{current || "(select)"}</option>}
         {spec.enum.map((v) => (
-          <option key={String(v)} value={formatNumber(v as number)}>
+          <option key={String(v)} value={formatNumber(v as number, base)}>
             {String(v)}
           </option>
         ))}
       </select>
     );
   }
-  return <CommitInput value={summaryOf(value, kind)} label={name} disabled={disabled} onCommit={onCommit} />;
+  return <CommitInput value={summaryOf(value, kind, base)} label={name} disabled={disabled} onCommit={onCommit} />;
 }
 
 /** A text input that applies its value on Enter or when it loses focus. */

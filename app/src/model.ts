@@ -19,6 +19,7 @@ import type {
   InterruptTree,
   LinkKind,
   MemReserve,
+  NumberBase,
   Node as GraphNode,
   Edge as GraphEdge,
   Position,
@@ -52,6 +53,7 @@ export type {
   DtMacro,
   Inherited,
   MemReserve,
+  NumberBase,
   Position,
   Problem,
   Property,
@@ -295,8 +297,18 @@ export function keepUnchanged(parsed: Property[], text: string, previous: Proper
   });
 }
 
-export function formatCell(c: number): string {
-  return c < 10 ? String(c) : `0x${c.toString(16)}`;
+export function formatCell(c: number, base: NumberBase = "hex"): string {
+  if (base === "oct") return c > 0 ? `0${c.toString(8)}` : "0";
+  return base === "dec" || c < 10 ? String(c) : `0x${c.toString(16)}`;
+}
+
+// Addresses read best in hex, everything else (frequencies, counts) in
+// decimal: the same list as `NumberBase::default_for` in the core.
+const HEX_PROPERTIES = new Set(["reg", "ranges", "dma-ranges", "interrupt-map", "interrupt-map-mask"]);
+
+/** The base a property's numbers are shown and written in. */
+export function baseOf(p: Pick<Property, "name" | "base">): NumberBase {
+  return p.base ?? (HEX_PROPERTIES.has(p.name) ? "hex" : "dec");
 }
 
 function formatBytes(bytes: number[]): string {
@@ -311,11 +323,11 @@ function formatReference(target: string): string {
   return target.startsWith("/") ? `&{${target}}` : `&${target}`;
 }
 
-function formatChunk(chunk: ValueChunk): string {
+function formatChunk(chunk: ValueChunk, base: NumberBase): string {
   switch (chunk.type) {
     case "cells": {
       const cells = chunk.cells.map((c) =>
-        typeof c === "number" ? formatCell(c) : typeof c === "string" ? c : formatReference(c.phandle),
+        typeof c === "number" ? formatCell(c, base) : typeof c === "string" ? c : formatReference(c.phandle),
       );
       return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${cells.join(" ")}>`;
     }
@@ -329,17 +341,18 @@ function formatChunk(chunk: ValueChunk): string {
 }
 
 function formatProperty(p: Property): string {
+  const base = baseOf(p);
   switch (p.value.type) {
     case "empty":
       return p.name;
     case "cells":
-      return `${p.name} = ${formatChunk({ type: "cells", bits: 32, cells: p.value.value })}`;
+      return `${p.name} = ${formatChunk({ type: "cells", bits: 32, cells: p.value.value }, base)}`;
     case "strings":
       return `${p.name} = ${p.value.value.map(formatString).join(", ")}`;
     case "bytes":
       return `${p.name} = ${formatBytes(p.value.value)}`;
     case "mixed":
-      return `${p.name} = ${p.value.value.map(formatChunk).join(", ")}`;
+      return `${p.name} = ${p.value.value.map((c) => formatChunk(c, base)).join(", ")}`;
   }
 }
 
