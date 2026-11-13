@@ -35,6 +35,13 @@ pub enum ValidationError {
         property: String,
         target: String,
     },
+    /// A reference value whose node is not picked yet (US-17.5).
+    #[error("property `{property}` of node `{path}` does not name a node yet")]
+    MissingReference {
+        node: NodeId,
+        path: String,
+        property: String,
+    },
     /// What dtc's grammar would refuse, so the editor can say it before a build.
     #[error("node `{path}`: `{name}` is not a valid {what}")]
     InvalidName {
@@ -75,6 +82,7 @@ impl ValidationError {
             | UnlabeledTarget { node, .. }
             | DuplicateLabel { node, .. }
             | UnknownReference { node, .. }
+            | MissingReference { node, .. }
             | InvalidName { node, .. }
             | DuplicateProperty { node, .. }
             | DuplicateChild { node, .. }
@@ -440,6 +448,14 @@ fn check_value_references(
                 _ => vec![],
             });
             for target in targets {
+                if target.is_empty() {
+                    errors.push(ValidationError::MissingReference {
+                        node: node.id.clone(),
+                        path: path_of(&node.id),
+                        property: property.name.clone(),
+                    });
+                    continue;
+                }
                 let known = if target.starts_with('/') {
                     known_paths
                         .get_or_insert_with(|| paths.values().collect())

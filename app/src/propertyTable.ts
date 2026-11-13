@@ -7,7 +7,7 @@
 import { formatCell, type Cell, type PropertyValue, type ValueChunk } from "./model";
 
 /** The types the table offers for a property. */
-export type ValueKind = "flag" | "string" | "strings" | "cells" | "bytes" | "mixed";
+export type ValueKind = "flag" | "string" | "strings" | "cells" | "bytes" | "reference" | "mixed";
 
 export const KIND_TITLES: Record<ValueKind, string> = {
   flag: "Boolean",
@@ -15,6 +15,7 @@ export const KIND_TITLES: Record<ValueKind, string> = {
   strings: "String list",
   cells: "Cells",
   bytes: "Bytes",
+  reference: "Reference",
   mixed: "Mixed",
 };
 
@@ -34,9 +35,21 @@ export function kindOf(value: PropertyValue, list = false): ValueKind {
     case "bytes":
       return "bytes";
     case "mixed":
-      return "mixed";
+      return referenceOf(value) !== null ? "reference" : "mixed";
   }
 }
+
+/**
+ * The node a reference value names (US-17.5): one `&label` or `&{/path}`
+ * outside cells, which the DTS expands to the node's path (`aliases`,
+ * `stdout-path`). "" for a reference not picked yet; null for any other
+ * value.
+ */
+export function referenceOf(value: PropertyValue): string | null {
+  return value.type === "mixed" && value.value.length === 1 && value.value[0].type === "path" ? value.value[0].target : null;
+}
+
+export const referenceTo = (target: string): PropertyValue => ({ type: "mixed", value: [{ type: "path", target }] });
 
 // ---------------------------------------------------------------------------
 // Text of single items
@@ -137,6 +150,7 @@ export function itemsOf(value: PropertyValue, kind = kindOf(value)): string[] | 
     case "bytes":
       return value.value.map(formatByte);
     case "mixed":
+      if (referenceOf(value) !== null) return null;
       // One chunk of cells is shown as its cells, like a plain cell list.
       return cellChunk(value)?.cells.map(cellText) ?? value.value.map(chunkText);
   }
@@ -232,6 +246,11 @@ export function parseSummary(kind: ValueKind, text: string, current?: PropertyVa
       return cellsValue(words.map(parseCellText));
     case "bytes":
       return { type: "bytes", value: words.map(parseByte) };
+    case "reference": {
+      const ref = parseCellText(text.trim().startsWith("&") ? text : `&${text.trim()}`);
+      if (typeof ref !== "object") throw new Error(`"${text}" is not a &label or &{/path}`);
+      return referenceTo(ref.phandle);
+    }
     case "mixed": {
       // A bare list of cells (`GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH`) is how a
       // one-chunk cell value reads in the row; anything else is chunks.
@@ -289,6 +308,10 @@ export function convert(value: PropertyValue, to: ValueKind): PropertyValue {
       case "bytes":
         if (value.type === "cells" && value.value.every((n) => n <= 0xff)) return { type: "bytes", value: value.value };
         return parseSummary("bytes", text);
+      case "reference":
+        // A path written as a string (`"/soc/serial@0"`) names the same node.
+        if (value.type === "strings" && value.value.length === 1 && value.value[0].startsWith("/")) return referenceTo(value.value[0]);
+        return blank("reference");
       case "mixed":
         if (value.type === "empty") return { type: "mixed", value: [] };
         if (value.type === "cells") return { type: "mixed", value: [{ type: "cells", bits: 32, cells: value.value }] };
@@ -314,6 +337,8 @@ export function blank(kind: ValueKind): PropertyValue {
       return { type: "cells", value: [] };
     case "bytes":
       return { type: "bytes", value: [] };
+    case "reference":
+      return referenceTo("");
     case "mixed":
       return { type: "mixed", value: [] };
   }

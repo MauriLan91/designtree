@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { PropertyValue } from "./model";
 import {
+  blank,
   convert,
   itemsOf,
   kindOf,
   parseCellText,
   parseChunkText,
   parseSummary,
+  referenceOf,
+  referenceTo,
   summaryOf,
   withItem,
   withoutItem,
@@ -118,5 +121,25 @@ describe("convert", () => {
   it("starts empty instead of failing", () => {
     expect(convert({ type: "strings", value: ["hello"] }, "cells")).toEqual({ type: "cells", value: [] });
     expect(convert(values.cells, "flag")).toEqual({ type: "empty" });
+  });
+});
+
+describe("reference values (US-17.5)", () => {
+  it("reads one path chunk as a reference to a node", () => {
+    const alias = referenceTo("uart0");
+    expect(kindOf(alias)).toBe("reference");
+    expect(referenceOf(alias)).toBe("uart0");
+    expect(itemsOf(alias)).toBeNull();
+    expect(summaryOf(alias)).toBe("&uart0");
+    expect(kindOf({ type: "mixed", value: [{ type: "path", target: "a" }, { type: "string", value: "b" }] })).toBe("mixed");
+  });
+
+  it("parses &label and &{/path}, and turns a path string into a reference", () => {
+    expect(parseSummary("reference", "&uart_a")).toEqual(referenceTo("uart_a"));
+    expect(parseSummary("reference", "uart_a")).toEqual(referenceTo("uart_a"));
+    expect(parseSummary("reference", "&{/soc/serial@0}")).toEqual(referenceTo("/soc/serial@0"));
+    expect(() => parseSummary("reference", "12")).toThrow();
+    expect(convert({ type: "strings", value: ["/soc/serial@0"] }, "reference")).toEqual(referenceTo("/soc/serial@0"));
+    expect(blank("reference")).toEqual(referenceTo(""));
   });
 });

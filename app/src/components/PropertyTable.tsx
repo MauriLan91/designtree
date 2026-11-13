@@ -18,6 +18,8 @@ import {
   kindOf,
   parseCellText,
   parseSummary,
+  referenceOf,
+  referenceTo,
   summaryOf,
   withItem,
   withoutItem,
@@ -48,6 +50,10 @@ interface Props {
   onReferenceChange: (id: string, args: number[]) => void;
   /** Cells of one `reg` entry, from the parent's #address-cells and #size-cells. */
   regCells?: number;
+  /** The labels of the design, which a Reference value picks from. */
+  labels?: string[];
+  /** Every property is a node reference, as under `/aliases` (US-17.5). */
+  referencesOnly?: boolean;
 }
 
 const KINDS = Object.keys(KIND_TITLES) as ValueKind[];
@@ -67,7 +73,7 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
 /** A schema type that holds one number, edited as one field with no item rows. */
 const isScalar = (spec: PropertySpec | undefined) => /^u?int(8|16|32|64)$/.test(spec?.type ?? "");
 
-export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, regCells }: Props) {
+export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, regCells, labels = [], referencesOnly }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
   // One-string values the user made a list; the binding says so for its own.
@@ -108,9 +114,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
   const add = (name: string) => {
     const n = name.trim();
     if (!n || properties.some((p) => p.name === n) || references.some((r) => r.property === n)) return;
-    const kind = specKind(specOf(n)) ?? "flag";
+    const kind = referencesOnly ? "reference" : (specKind(specOf(n)) ?? "flag");
     onChange([...properties, { name: n, value: blank(kind) }]);
-    if (kind !== "flag") setOpen((s) => new Set(s).add(n));
+    if (kind !== "flag" && kind !== "reference") setOpen((s) => new Set(s).add(n));
   };
 
   const refGroups = new Map<string, Reference[]>();
@@ -234,6 +240,10 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     <span className="type" title={`Type from the binding: ${spec!.type}`}>
                       {spec!.type}
                     </span>
+                  ) : referencesOnly && kind === "reference" ? (
+                    <span className="type" title="Every property of this node is a reference">
+                      Reference
+                    </span>
                   ) : (
                     <select
                       aria-label={`Type of ${p.name}`}
@@ -250,7 +260,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                         attempt(p.name, () => convert(p.value, to));
                       }}
                     >
-                      {KINDS.map((k) => (
+                      {(referencesOnly ? [kind, "reference" as const] : KINDS).map((k) => (
                         <option key={k} value={k}>
                           {KIND_TITLES[k]}
                         </option>
@@ -271,6 +281,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
                     }}
                     onSet={(value) => attempt(p.name, () => value)}
+                    labels={labels}
                     onClear={() => (spec?.required ? reset(p.name) : attempt(p.name, () => null))}
                   />
                   {warning && <span className="row-error">{warning}</span>}
@@ -465,7 +476,9 @@ function ValueCell({
   onCommit,
   onSet,
   onClear,
+  labels,
 }: {
+  labels: string[];
   name: string;
   value: PropertyValue;
   kind: ValueKind;
@@ -477,6 +490,20 @@ function ValueCell({
   onClear: () => void;
 }): ReactNode {
   if (kind === "flag") return <input type="checkbox" aria-label={name} checked disabled={disabled} onChange={onClear} title="Untick to remove it" />;
+  if (kind === "reference") {
+    const target = referenceOf(value) ?? "";
+    const shown = (t: string) => (t.startsWith("/") ? `&{${t}}` : `&${t}`);
+    return (
+      <select aria-label={name} value={target} disabled={disabled} onChange={(e) => onSet(referenceTo(e.target.value))}>
+        {!labels.includes(target) && <option value={target}>{target ? shown(target) : "(select a node)"}</option>}
+        {labels.map((l) => (
+          <option key={l} value={l}>
+            {shown(l)}
+          </option>
+        ))}
+      </select>
+    );
+  }
   if (kind === "string" && spec?.enum?.length && spec.enum.every((v) => typeof v === "string")) {
     const current = summaryOf(value);
     return (
