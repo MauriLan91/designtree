@@ -7,6 +7,7 @@ import {
   withEntry,
   withoutEntry,
   itemsOf,
+  itemRows,
   kindOf,
   parseCellText,
   parseChunkText,
@@ -173,5 +174,21 @@ describe("cell entries (US-17.4)", () => {
     // A short last entry is filled before the new one.
     expect(withEntry({ type: "cells", value: [1, 2, 3] }, 2)).toEqual({ type: "cells", value: [1, 2, 3, 0, 0, 0] });
     expect(withoutEntry(reg, 0, 2)).toEqual({ type: "cells", value: [0x1c82000, 0x2000] });
+  });
+});
+
+describe("itemRows", () => {
+  const one: PropertyValue = { type: "cells", value: [1] };
+  it("gives one number no item rows, with or without a schema type (#186)", () => {
+    expect(itemRows(one, "cells", "hex")).toBeNull();
+    expect(itemRows(one, "cells", "hex", "uint32")).toBeNull();
+    expect(itemRows({ type: "mixed", value: [{ type: "cells", bits: 32, cells: ["GIC_SPI"] }] }, "mixed", "hex")).toEqual(["GIC_SPI"]);
+  });
+  it("keeps the row of a single item where the schema declares a list", () => {
+    expect(itemRows(one, "cells", "hex", "uint32-array")).toEqual(["1"]);
+    expect(itemRows(one, "cells", "dec", "uint32-matrix")).toEqual(["1"]);
+  });
+  it("lists two numbers or more", () => {
+    expect(itemRows({ type: "cells", value: [1, 2] }, "cells", "dec", "uint32")).toEqual(["1", "2"]);
   });
 });

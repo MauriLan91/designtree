@@ -11,7 +11,10 @@ Select a node to edit it in the inspector.
     have an arrow that opens one child row per item. Edit an item in place,
     remove it with its ×, or add one with **Add cell**. A cell takes a number,
     a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
-    suggested as you type when the kernel bindings are loaded.
+    suggested as you type when the kernel bindings are loaded. A cell
+    property holding one number, such as `#address-cells = <1>`, is a single
+    field with no arrow, unless its binding declares a list; type a second
+    number after the first to make it a list.
   - A cell list made of entries opens one row per entry instead, with a
     field for each cell: `reg` and `ranges` take their entry size from
     `#address-cells` and `#size-cells`, `interrupts` from the interrupt

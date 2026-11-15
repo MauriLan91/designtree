@@ -15,13 +15,13 @@ import {
   convert,
   entriesOf,
   formatNumber,
-  itemsOf,
   kindOf,
   parseCellText,
   parseSummary,
   referenceOf,
   referenceTo,
   summaryOf,
+  itemRows,
   withEntry,
   withItem,
   withoutEntry,
@@ -74,8 +74,6 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
   return null;
 }
 
-/** A schema type that holds one number, edited as one field with no item rows. */
-const isScalar = (spec: PropertySpec | undefined) => /^u?int(8|16|32|64)$/.test(spec?.type ?? "");
 
 export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, entryCells, labels = [], referencesOnly }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
@@ -211,9 +209,8 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
-          // A scalar keeps its item rows only when it somehow holds several.
           const base = baseOf(p);
-          const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind, base);
+          const items = itemRows(p.value, kind, base, spec?.type);
           // A cell list with a known entry width expands into its entries.
           const width = entryCells?.[p.name] ?? spec?.entry_cells;
           const entries = width && width > 1 && items && isCellList(p.value) ? entriesOf(items, width) : null;

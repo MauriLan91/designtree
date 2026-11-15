@@ -137,6 +137,18 @@ export function parseChunkText(text: string): ValueChunk {
 // ---------------------------------------------------------------------------
 // Rows
 
+/**
+ * The item rows a property expands into, or null for none. One number is
+ * one field with no item rows (`#address-cells = <1>`), whatever the
+ * schema says and when there is none, unless the schema's `type` declares a
+ * list; typing a second number makes it a list.
+ */
+export function itemRows(value: PropertyValue, kind: ValueKind, base: NumberBase, type?: string | null): string[] | null {
+  const items = itemsOf(value, kind, base);
+  if (kind === "cells" && (items?.length ?? 0) <= 1 && !/array|matrix/.test(type ?? "")) return null;
+  return items;
+}
+
 /** The child rows of a value, as the text each one edits; null when the
  * value has no parts (a flag, or a plain string). */
 export function itemsOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex"): string[] | null {
