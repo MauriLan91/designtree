@@ -11,8 +11,11 @@
   Hover a button for its name and shortcut.
 - **Tabs** hold the open designs. A dot marks unsaved changes; closing a tab
   or the window with unsaved changes asks first.
+- **Activity bar** (left edge): one button per side bar view, Library and
+  Outline, and Settings at the bottom. Click a view to show it; click the
+  view on show to collapse the side bar.
 - **Side bar** (left), with two views:
-  - **Library**: the elements of the loaded kernel checkout, with search,
+  - **Library** (Ctrl+Shift+E): the elements of the loaded kernel checkout, with search,
     categories, favorites and recent elements.
   - **Outline** (Ctrl+Shift+O): the whole devicetree as a tree. Click a node
     to select it on the canvas and in the source, wherever it is; double-click
@@ -33,16 +36,19 @@
 - **Bottom panel** (under the canvas, Ctrl+J): **Problems** (structural
   errors and the schema check), **Build** (dtc's output), **Interrupts** and
   **Address map**. A build opens it on Build.
-- **Status bar**: the loaded kernel, the dtc version and the error and
-  warning counts. Click one to go to its settings or to the problems.
+- **Status bar**: a button that opens and closes the bottom panel, the
+  loaded kernel, the dtc version and the error and warning counts. Click
+  one to go to its settings or to the problems.
 
 ## Arranging the panes
 
 Drag the edge of the library, the inspector or the bottom panel to resize it;
 double-click the edge for its default size, or focus it with Tab and use the
-arrow keys. The button in a pane's corner collapses it to a narrow rail, and
-the rail's button brings it back; **View** has the same toggles, with
-Ctrl+Shift+L (library), Ctrl+Shift+I (inspector) and Ctrl+J (bottom panel).
+arrow keys. The activity bar collapses and brings back the side bar; the
+button in the inspector's corner collapses it to a narrow rail, whose button
+brings it back; the button at the left of the status bar opens and closes
+the bottom panel. **View** has the same toggles, with Ctrl+Shift+E (library),
+Ctrl+Shift+O (outline), Ctrl+Shift+I (inspector) and Ctrl+J (bottom panel).
 Sizes and which panes are open are remembered.
 
 To open a design at start, pass its path: `designtree-app board.json`.

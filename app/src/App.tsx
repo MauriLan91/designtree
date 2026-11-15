@@ -54,6 +54,7 @@ import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
 import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
+import { ActivityBar } from "./components/ActivityBar";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
@@ -77,7 +78,7 @@ import {
   scopePath,
   treeRows,
 } from "./scopes";
-import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
+import type { EditorMode, Layout, PaneName, PanelTab, SideView } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
 import { ModeSwitch } from "./components/ModeSwitch";
@@ -92,13 +93,16 @@ import {
   AlignHorizontalSpaceAround,
   AlignVerticalSpaceAround,
   LayoutDashboard,
+  Grid2x2Plus,
   Grid3x3,
+  ListTree,
   FilePlus,
   FolderOpen,
   Hammer,
   Redo2,
   Save,
   Search,
+  Settings2,
   SquarePlus,
   Undo2,
   Workflow,
@@ -229,6 +233,8 @@ interface EditorProps {
   onLayout: (change: (l: Layout) => Layout) => void;
   /** Where the navigator goes in the side bar; the visible tab draws it. */
   outlineSlot: HTMLElement | null;
+  /** Where the activity bar's buttons go; the visible tab draws them. */
+  activitySlot: HTMLElement | null;
   onResetLayout: () => void;
   /** The user's settings; changes are saved by the workspace. */
   settings: Settings;
@@ -260,6 +266,7 @@ export function Editor({
   layout,
   onLayout,
   outlineSlot,
+  activitySlot,
   onResetLayout,
   settings,
   settingsLoaded,
@@ -1340,6 +1347,14 @@ export function Editor({
   /** Shows `tab`, or closes the panel when that tab is already on show. */
   const togglePanel = (tab: PanelTab) =>
     onLayout((l) => ({ ...l, panel: { ...l.panel, open: !(l.panel.open && l.panel.tab === tab), tab } }));
+  /** The side bar's view on show, or null when it is collapsed. */
+  const sideView = layout.library.open ? layout.library.view : null;
+  // Choosing the view on show collapses the side bar, as in the activity bar.
+  const toggleSideView = (view: SideView) =>
+    onLayout((l) => {
+      const shown = l.library.open && l.library.view === view;
+      return { ...l, library: { ...l.library, open: !shown, view } };
+    });
   const togglePane = (pane: PaneName) => onLayout((l) => ({ ...l, [pane]: { ...l[pane], open: !l[pane].open } }));
 
   const placeOnBoard = (positions: Map<string, XYPosition | null>) =>
@@ -1563,12 +1578,8 @@ export function Editor({
       menu: "View",
       group: 2,
       hint: "The whole devicetree as a tree, in the side bar",
-      checked: layout.library.open && layout.library.view === "outline",
-      run: () =>
-        onLayout((l) => {
-          const shown = l.library.open && l.library.view === "outline";
-          return { ...l, library: { ...l.library, open: true, view: shown ? "library" : "outline" } };
-        }),
+      checked: sideView === "outline",
+      run: () => toggleSideView("outline"),
     },
     { id: "mode-graph", title: "Graph", shortcut: "Ctrl+1", menu: "View", group: 1, checked: mode === "graph", run: () => setMode("graph") },
     {
@@ -1587,8 +1598,9 @@ export function Editor({
       shortcut: PANE_SHORTCUTS.library,
       menu: "View",
       group: 2,
-      checked: layout.library.open,
-      run: () => togglePane("library"),
+      hint: "The elements of the kernel checkout, in the side bar",
+      checked: sideView === "library",
+      run: () => toggleSideView("library"),
     },
     {
       id: "inspector",
@@ -1599,7 +1611,16 @@ export function Editor({
       checked: layout.inspector.open,
       run: () => togglePane("inspector"),
     },
-    { id: "panel", title: "Bottom panel", shortcut: "Ctrl+J", menu: "View", group: 2, checked: layout.panel.open, run: () => togglePane("panel") },
+    {
+      id: "panel",
+      title: "Bottom panel",
+      shortcut: "Ctrl+J",
+      menu: "View",
+      group: 2,
+      hint: "Problems, build output, interrupt tree and address map",
+      checked: layout.panel.open,
+      run: () => togglePane("panel"),
+    },
     {
       id: "problems",
       title: "Problems",
@@ -1691,6 +1712,7 @@ export function Editor({
     { id: "updates", title: "Check for updates now", menu: "Help", disabled: !inTauri, run: onCheckUpdates },
   ];
   const commands = withShortcuts(registry, settings.shortcuts, FIXED_SHORTCUTS);
+  const commandById = (id: string) => commands.find((c) => c.id === id)!;
   const byId = (id: string) => commands.find((c) => c.id === id)!;
   const shortcutList: [string, string][] = [
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
@@ -1817,6 +1839,18 @@ export function Editor({
               This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
               Bindings may differ; pick another checkout under Kernels…
             </div>
+          )}
+          {active &&
+          activitySlot &&
+          createPortal(
+            <ActivityBar
+              views={[
+                { command: commandById("library"), icon: Grid2x2Plus, active: sideView === "library" },
+                { command: commandById("outline"), icon: ListTree, active: sideView === "outline" },
+              ]}
+              footer={[{ command: commandById("settings"), icon: Settings2, active: !!settingsSection }]}
+            />,
+            activitySlot,
           )}
           {active &&
           outlineSlot &&
@@ -2013,6 +2047,7 @@ export function Editor({
         onKernels={() => onOpenSettings("Kernel")}
         onDtc={() => onOpenSettings("Build")}
         onProblems={() => showPanel("problems")}
+        panel={commandById("panel")}
       />
       {showPalette && (
         <CommandPalette

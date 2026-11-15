@@ -13,7 +13,7 @@ Top to bottom, VSCode-like:
 | --- | --- | --- |
 | Menu bar | 30 px | File, Edit, View, Insert, Arrange, Tools, Help (US-15.2, Arrange from US-9.5) |
 | Toolbar | 40 px | New, Open, Save · Undo, Redo · Add node, Tidy this canvas · command search (Ctrl+K, the existing palette shortcut) · Build .dtb as the one primary button |
-| Activity bar | 48 px wide | Library, Outline, Board view, Kernel schemas; Settings at the bottom |
+| Activity bar | 48 px wide | Library, Outline; Settings at the bottom (US-15.7). Board view and Kernel schemas are not views yet |
 | Side bar | 248 px (200–480) | The active view; library search with results, recents |
 | Editor area | rest | Tabs of open designs with an unsaved dot; Graph / Split / DTS switch at the right of the tab row (US-15.4); zoom controls bottom left, minimap bottom right |
 | Inspector | 288 px (240–560) | Category chip, node name and schema; name, unit address, label, compatible; properties; schema hints with a fix action |

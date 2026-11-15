@@ -1,7 +1,8 @@
 // The status bar (US-15.3): what the build depends on (kernel, dtc) and how
 // many problems the design has, each a button to where it is fixed.
-import { CircleAlert, TriangleAlert } from "lucide-react";
+import { CircleAlert, PanelBottom, TriangleAlert } from "lucide-react";
 import type { Kernel } from "../App";
+import { tooltipOf, type Command } from "../commands";
 
 interface Props {
   kernel: Kernel | null;
@@ -14,11 +15,22 @@ interface Props {
   onKernels: () => void;
   onDtc: () => void;
   onProblems: () => void;
+  /** The command that opens and closes the bottom panel (US-15.7). */
+  panel: Command;
 }
 
-export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selected, onKernels, onDtc, onProblems }: Props) {
+export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selected, onKernels, onDtc, onProblems, panel }: Props) {
   return (
     <footer className="statusbar">
+      <button
+        className={panel.checked ? "panel-toggle on" : "panel-toggle"}
+        onClick={() => panel.run()}
+        aria-label={panel.title}
+        aria-pressed={!!panel.checked}
+        title={tooltipOf(panel)}
+      >
+        <PanelBottom size={14} strokeWidth={1.75} aria-hidden />
+      </button>
       <button onClick={onKernels} title="Kernel checkouts">
         <span className={kernel ? "dot ok" : "dot"} aria-hidden />
         {kernel ? `Linux ${kernel.version ?? "(unknown version)"}` : "No kernel loaded"}
