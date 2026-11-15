@@ -189,6 +189,12 @@ pub struct Node {
     pub omit_if_no_ref: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub compatible: Vec<String>,
+    /// Where `compatible` stood among `properties` in the imported source:
+    /// how many of them came before it, so that an unmodified import
+    /// exports with its properties in the original order. `None` writes it
+    /// first, as for a new node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatible_at: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
     /// Set when the node comes from an included file (an SoC `.dtsi`).
@@ -224,6 +230,12 @@ pub struct Inherited {
 }
 
 impl Node {
+    /// Where `compatible` goes among `properties` on export.
+    pub fn compatible_index(&self) -> usize {
+        self.compatible_at
+            .map_or(0, |at| (at as usize).min(self.properties.len()))
+    }
+
     /// Full node name as it appears in DTS (`name@unit-address`).
     pub fn full_name(&self) -> String {
         match &self.unit_address {

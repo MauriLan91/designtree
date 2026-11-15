@@ -64,7 +64,14 @@ extra_labels?: Array<string>,
 /**
  * `/omit-if-no-ref/`: dtc drops the node unless something references it.
  */
-omit_if_no_ref?: boolean, compatible?: Array<string>, properties?: Array<Property>, 
+omit_if_no_ref?: boolean, compatible?: Array<string>, 
+/**
+ * Where `compatible` stood among `properties` in the imported source:
+ * how many of them came before it, so that an unmodified import
+ * exports with its properties in the original order. `None` writes it
+ * first, as for a new node.
+ */
+compatible_at?: number | null, properties?: Array<Property>, 
 /**
  * Set when the node comes from an included file (an SoC `.dtsi`).
  * Export then writes only what differs from that definition, as an
@@ -338,9 +345,9 @@ path: string,
 category: string, title?: string | null, compatibles?: Array<string>, 
 /**
  * The compatibles of `compatibles` this schema lists only after a more
- * specific one (`"airoha,en7581-scu", "syscon"`) and another schema
- * documents. A node with such a compatible is not described here, and
- * the library does not list it here.
+ * specific one (`"airoha,en7581-scu", "syscon"`). A node with such a
+ * compatible is not described here, and the library does not list it
+ * here.
  */
 fallbacks?: Array<string>, properties?: Array<PropertySpec>, 
 /**

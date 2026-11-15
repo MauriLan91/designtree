@@ -33,6 +33,7 @@ fn new_node(id: &str, name: &str, unit: Option<&str>, label: Option<&str>) -> No
         extra_labels: vec![],
         omit_if_no_ref: false,
         compatible: vec![],
+        compatible_at: None,
         properties: vec![],
         inherited: None,
         position: Position::default(),

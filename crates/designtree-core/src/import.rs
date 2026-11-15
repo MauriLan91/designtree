@@ -469,7 +469,11 @@ impl Tree {
                     Classified::Value(PropertyValue::Strings(strings))
                         if def.name == "compatible" =>
                     {
-                        graph.nodes[graph_index].compatible = strings
+                        let node = &mut graph.nodes[graph_index];
+                        node.compatible = strings;
+                        // First is where a new node has it anyway.
+                        let before = node.properties.len() as u32;
+                        node.compatible_at = (before > 0).then_some(before);
                     }
                     Classified::Value(mut value) => {
                         self.canonical_paths(&mut value, &graph, &index);
@@ -595,6 +599,7 @@ impl Tree {
             extra_labels: tree_node.labels.iter().skip(1).cloned().collect(),
             omit_if_no_ref: tree_node.omit_if_no_ref,
             compatible: Vec::new(),
+            compatible_at: None,
             properties: Vec::new(),
             inherited: None,
             position: Position::default(),

@@ -274,6 +274,7 @@ mod tests {
             extra_labels: vec![],
             omit_if_no_ref: false,
             compatible: vec![],
+            compatible_at: None,
             properties: vec![],
             inherited: None,
             position: Position::default(),

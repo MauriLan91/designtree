@@ -434,20 +434,24 @@ fn with_primary_labels(
     value
 }
 
-/// Properties of `node` in output order: `compatible`, the others, then
-/// phandle lists from reference edges. `None` is a boolean property.
+/// Properties of `node` in output order: the properties with `compatible`
+/// where the source had it (first for a new node), then phandle lists from
+/// reference edges. `None` is a boolean property.
 fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>)> {
     let mut props = Vec::new();
-    if !node.compatible.is_empty() {
-        let items = node.compatible.iter().map(|s| Item::single(quote(s)));
-        props.push(("compatible".to_owned(), Some(items.collect())));
-    }
     for prop in &node.properties {
         let mut items = property_items(&prop.value, base_of(prop));
         if let (Some(items), Some(width)) = (&mut items, entry_cells(graph, node, &prop.name)) {
             *items = in_entries(std::mem::take(items), width);
         }
         props.push((prop.name.clone(), items));
+    }
+    if !node.compatible.is_empty() {
+        let items = node.compatible.iter().map(|s| Item::single(quote(s)));
+        props.insert(
+            node.compatible_index(),
+            ("compatible".to_owned(), Some(items.collect())),
+        );
     }
     // Reference edges with the same property form one phandle list.
     let mut phandle_lists: Vec<(&str, Vec<Item>)> = Vec::new();
@@ -731,6 +735,7 @@ mod tests {
             extra_labels: vec![],
             omit_if_no_ref: false,
             compatible: vec![],
+            compatible_at: None,
             properties: vec![],
             inherited: None,
             position: Position::default(),

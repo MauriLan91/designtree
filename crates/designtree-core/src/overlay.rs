@@ -73,15 +73,17 @@ pub fn overlay_on(base: &Graph, base_file: &str) -> Graph {
     }
     let mut graph = base.clone();
     for node in &mut graph.nodes {
-        let mut properties = Vec::new();
+        let mut properties = node.properties.clone();
         if !node.compatible.is_empty() {
-            properties.push(Property {
-                name: "compatible".into(),
-                value: PropertyValue::Strings(node.compatible.clone()),
-                base: None,
-            });
+            properties.insert(
+                node.compatible_index(),
+                Property {
+                    name: "compatible".into(),
+                    value: PropertyValue::Strings(node.compatible.clone()),
+                    base: None,
+                },
+            );
         }
-        properties.extend(node.properties.iter().cloned());
         // Phandle lists, written the way an import keeps inherited ones.
         let mut lists: Vec<(String, Vec<ValueChunk>)> = Vec::new();
         for &(property, args, to) in references.get(&node.id).into_iter().flatten() {

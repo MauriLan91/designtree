@@ -113,14 +113,17 @@ impl<'a> Writer<'a> {
     /// The properties of a node in output order (see `dts::node_properties`).
     fn properties(&self, node: &Node) -> Vec<(String, Value)> {
         let mut props = Vec::new();
-        if !node.compatible.is_empty() {
-            props.push((
-                "compatible".to_owned(),
-                self.encode(&PropertyValue::Strings(node.compatible.clone())),
-            ));
-        }
         for prop in &node.properties {
             props.push((prop.name.clone(), self.encode(&prop.value)));
+        }
+        if !node.compatible.is_empty() {
+            props.insert(
+                node.compatible_index(),
+                (
+                    "compatible".to_owned(),
+                    self.encode(&PropertyValue::Strings(node.compatible.clone())),
+                ),
+            );
         }
         let mut lists: Vec<(String, Value)> = Vec::new();
         for edge in self.graph.references(&node.id) {
