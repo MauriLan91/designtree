@@ -13,7 +13,6 @@ import { checkForUpdate, type Update } from "./updates";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "./settings";
 import type { Section } from "./components/SettingsPanel";
 import { DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./layout";
-import { PaneRail } from "./components/PaneRail";
 import { Splitter } from "./components/Splitter";
 
 interface Tab {
@@ -65,6 +64,7 @@ export default function Workspace() {
   const [update, setUpdate] = useState<{ update: Update | null; error?: string } | null>(null);
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [outlineSlot, setOutlineSlot] = useState<HTMLDivElement | null>(null);
+  const [activitySlot, setActivitySlot] = useState<HTMLElement | null>(null);
   const changeLayout = useCallback((change: (l: Layout) => Layout) => {
     setLayout((l) => {
       const next = change(l);
@@ -106,7 +106,15 @@ export default function Workspace() {
   const setStatus = useCallback((id: number, status: EditorStatus) => {
     setStatuses((m) => {
       const old = m.get(id);
-      if (old && old.title === status.title && old.dirty === status.dirty && old.fresh === status.fresh) return m;
+      if (
+        old &&
+        old.title === status.title &&
+        old.dirty === status.dirty &&
+        old.fresh === status.fresh &&
+        old.fit?.cls === status.fit?.cls &&
+        old.fit?.name === status.fit?.name
+      )
+        return m;
       return new Map(m).set(id, status);
     });
   }, []);
@@ -225,7 +233,7 @@ export default function Workspace() {
       className="app"
       style={
         {
-          "--library-w": layout.library.open ? `${layout.library.size}px` : "var(--rail-w)",
+          "--library-w": layout.library.open ? `${layout.library.size}px` : "0px",
           "--inspector-w": layout.inspector.open ? `${layout.inspector.size}px` : "var(--rail-w)",
           "--panel-h": layout.panel.open ? `min(${layout.panel.size}px, 60vh)` : "0px",
         } as CSSProperties
@@ -263,23 +271,14 @@ export default function Workspace() {
           +
         </button>
       </nav>
-      <div className="pane library-pane">
+      {/* The active editor draws the buttons here, from its commands (US-15.7). */}
+      <nav className="activity-bar" aria-label="Side bar views" ref={setActivitySlot} />
+      <div className={layout.library.open ? "pane library-pane" : "pane library-pane collapsed"}>
         {/* Kept mounted while collapsed, so the search and the loaded kernel stay. */}
         <div className="pane-body" hidden={!layout.library.open}>
-          <div className="side-views" role="tablist" aria-label="Side bar">
-            {(["library", "outline"] as const).map((v) => (
-              <button
-                key={v}
-                role="tab"
-                aria-selected={layout.library.view === v}
-                onClick={() => changeLayout((l) => ({ ...l, library: { ...l.library, view: v } }))}
-              >
-                {v === "library" ? "Library" : "Outline"}
-              </button>
-            ))}
-          </div>
           <div className="side-view" hidden={layout.library.view !== "library"}>
             <Palette
+              fit={statuses.get(active)?.fit ?? null}
               onAdd={(b) => apis.current.get(active)?.addNode(b)}
               requestedKernel={requestedKernel}
               onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}
@@ -294,7 +293,6 @@ export default function Workspace() {
             onResize={(size) => changeLayout((l) => ({ ...l, library: { ...l.library, size } }))}
           />
         </div>
-        <PaneRail pane="library" layout={layout} onLayout={changeLayout} />
       </div>
       {tabs.map((t) => (
         <ReactFlowProvider key={t.id}>
@@ -311,6 +309,7 @@ export default function Workspace() {
             layout={layout}
             onLayout={changeLayout}
             outlineSlot={outlineSlot}
+            activitySlot={activitySlot}
             onResetLayout={() => changeLayout(() => DEFAULT_LAYOUT)}
             settings={settings}
             settingsLoaded={settingsLoaded}
@@ -379,6 +378,7 @@ interface TabEditorProps {
   layout: Layout;
   onLayout: (change: (l: Layout) => Layout) => void;
   outlineSlot: HTMLElement | null;
+  activitySlot: HTMLElement | null;
   onResetLayout: () => void;
   settings: Settings;
   settingsLoaded: boolean;

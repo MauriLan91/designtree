@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Binding, PropertySpec } from "./model";
-import { checkValue, initialProperties, regEntryCells, specDefault } from "./schemaProps";
+import { checkValue, entryCellsOf, initialProperties, regEntryCells, specDefault } from "./schemaProps";
 
 const binding: Binding = {
   path: "serial/8250.yaml",
@@ -75,5 +75,32 @@ describe("reg placeholders and counts (#136, #140)", () => {
     expect(checkValue(interrupts, cells([0, 0, 4]))).toBeNull();
     const list = { name: "x", required: false, type: "uint32-array", max_items: 2 } as PropertySpec;
     expect(checkValue(list, cells([1, 2, 3]))).toBe("at most 2 items");
+  });
+});
+
+describe("entryCellsOf", () => {
+  const cells = (name: string, n: number) => ({ name, value: { type: "cells" as const, value: [n] } });
+  const props: Record<string, { name: string; value: { type: "cells"; value: number[] } }[]> = {
+    "/": [cells("#address-cells", 1), cells("#size-cells", 1)],
+    "/gic": [cells("#interrupt-cells", 3)],
+    "/soc": [cells("#address-cells", 2), cells("#size-cells", 2), cells("#interrupt-cells", 2)],
+    "/soc/uart": [],
+  };
+  const parent: Record<string, string> = { "/gic": "/", "/soc": "/", "/soc/uart": "/soc" };
+
+  it("takes reg and ranges from the cells above, interrupts from the interrupt parent", () => {
+    const w = entryCellsOf("/soc", (id) => props[id], (id) => parent[id], () => undefined);
+    // Its own #interrupt-cells is for its children, not its interrupts.
+    expect(w).toEqual({ reg: 2, ranges: 2 + 1 + 2 });
+    const uart = entryCellsOf("/soc/uart", (id) => props[id], (id) => parent[id], (id) => (id === "/soc/uart" ? "/gic" : undefined));
+    expect(uart.reg).toBe(4);
+    expect(uart.interrupts).toBe(3);
+  });
+
+  it("counts entries in the item warnings", () => {
+    const spec = { name: "interrupts", required: false, max_items: 1 };
+    const irq = { type: "mixed", value: [{ type: "cells", bits: 32, cells: ["GIC_SPI", 37, 4] }] } as const;
+    expect(checkValue(spec, irq as never, 3)).toBeNull();
+    expect(checkValue(spec, { type: "cells", value: [0, 1, 4, 0, 2, 4] }, 3)).toBe("at most 1 item");
   });
 });

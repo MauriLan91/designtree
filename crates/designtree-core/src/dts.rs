@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use crate::entries::entry_cells;
 use crate::model::{
     Cell, EdgeKind, Graph, Node, NodeId, NumberBase, Property, PropertyValue, ValueChunk,
 };
@@ -442,10 +443,11 @@ fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>
         props.push(("compatible".to_owned(), Some(items.collect())));
     }
     for prop in &node.properties {
-        props.push((
-            prop.name.clone(),
-            property_items(&prop.value, base_of(prop)),
-        ));
+        let mut items = property_items(&prop.value, base_of(prop));
+        if let (Some(items), Some(width)) = (&mut items, entry_cells(graph, node, &prop.name)) {
+            *items = in_entries(std::mem::take(items), width);
+        }
+        props.push((prop.name.clone(), items));
     }
     // Reference edges with the same property form one phandle list.
     let mut phandle_lists: Vec<(&str, Vec<Item>)> = Vec::new();
@@ -468,6 +470,23 @@ fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>
         props.push((property.to_owned(), Some(items)));
     }
     props
+}
+
+/// A plain cell list split into one `<…>` per entry of `width` cells
+/// (`reg = <0x1000 0x100>, <0x2000 0x100>;`). A list that is not a whole
+/// number of entries stays as it is, so the mistake shows in the source.
+fn in_entries(items: Vec<Item>, width: usize) -> Vec<Item> {
+    match items.as_slice() {
+        [item]
+            if item.open == "<" && item.tokens.len() > width && item.tokens.len() % width == 0 =>
+        {
+            item.tokens
+                .chunks(width)
+                .map(|cells| Item::cells("<".into(), cells.to_vec()))
+                .collect()
+        }
+        _ => items,
+    }
 }
 
 /// The base a property's numbers are written in.

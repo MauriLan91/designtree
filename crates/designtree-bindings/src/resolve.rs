@@ -355,6 +355,31 @@ fn fill_constraints(property: &mut PropertySpec, spec: &Value) {
     if property.max_items.is_none() {
         property.max_items = spec.get("maxItems").and_then(Value::as_u64).or(listed);
     }
+    if property.entry_cells.is_none() {
+        property.entry_cells = entry_cells(spec);
+    }
+}
+
+/// The fixed length of each entry of a matrix schema: the inner `items`
+/// list, or equal inner `minItems` and `maxItems`, the same for every entry.
+fn entry_cells(spec: &Value) -> Option<u64> {
+    let width = |entry: &Value| -> Option<u64> {
+        if let Some(seq) = entry.get("items").and_then(Value::as_sequence) {
+            return Some(seq.len() as u64);
+        }
+        let min = entry.get("minItems").and_then(Value::as_u64)?;
+        (entry.get("maxItems").and_then(Value::as_u64) == Some(min)).then_some(min)
+    };
+    let width = match spec.get("items")? {
+        entry @ Value::Mapping(_) => width(entry)?,
+        Value::Sequence(entries) => {
+            let mut widths = entries.iter().map(width);
+            let first = widths.next()??;
+            widths.all(|w| w == Some(first)).then_some(first)?
+        }
+        _ => return None,
+    };
+    (width > 1).then_some(width)
 }
 
 /// The allowed values of a schema: its `const` or `enum`, or those of every

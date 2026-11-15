@@ -47,7 +47,7 @@ specifier cells with names from the kernel's `dt-bindings` headers, such as
 
 ## Groups
 
-Select nodes (Shift+drag selects an area) and choose **Edit › Group selection** (Ctrl+G) to
+Select nodes (drag a rectangle on the empty canvas) and choose **Edit › Group selection** (Ctrl+G) to
 frame them, for example "SoC peripherals". Groups are only visual and never
 reach the devicetree. The triangle in a group's header collapses it into a
 block, like a Simulink subsystem: edges that cross its border become ports
@@ -56,7 +56,8 @@ on the block. **Edit › Ungroup** (Ctrl+Shift+G) removes the frame.
 ## Layout
 
 The **Arrange** menu tidies the canvas in one step; every command is one
-undo.
+undo. The same commands are in the Arrange drop-down of the toolbar, with
+their icons.
 
 - **Tidy this canvas** (Ctrl+L, also in the toolbar) lays out the level on
   show in columns along the references, left to right the way a devicetree
@@ -69,9 +70,19 @@ undo.
   nodes only, from where the selection starts, and leaves the rest alone.
 - **Lay out the whole tree** arranges every node of the design from the
   root down, with a group for each bus; references go back to curves. Imported designs are laid out this way on import.
-- **Align** left, centre, right, top, middle or bottom lines up the selected
-  nodes (two or more); **Distribute horizontally** or **vertically** spaces
-  three or more evenly between the outer two.
+- **Grid** puts the nodes in rows of equal cells, as square as it gets, in
+  reading order.
+- **Tree, top down** and **Tree, left to right** hang each node under (or
+  right of) its parent in the devicetree, centred on its children.
+- **Star** rings the nodes around one: the selected node if you selected
+  one, else the one most referenced (an interrupt controller, often).
+- **Align** left, centre, right, top, middle or bottom lines up the nodes;
+  **Distribute horizontally** or **vertically** spaces them evenly between
+  the outer two.
+
+Grid, tree, star, align and distribute work on the selection when two or
+more nodes are selected, and on every node of the level on show otherwise.
+References into what moved go back to curves.
 
 **View › Fit the design in view** frames everything on show. Positions and
 the places where references turn are saved in the design file. Moving a

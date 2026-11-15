@@ -3,6 +3,9 @@ import type { PropertyValue } from "./model";
 import {
   blank,
   convert,
+  entriesOf,
+  withEntry,
+  withoutEntry,
   itemsOf,
   kindOf,
   parseCellText,
@@ -141,5 +144,34 @@ describe("reference values (US-17.5)", () => {
     expect(() => parseSummary("reference", "12")).toThrow();
     expect(convert({ type: "strings", value: ["/soc/serial@0"] }, "reference")).toEqual(referenceTo("/soc/serial@0"));
     expect(blank("reference")).toEqual(referenceTo(""));
+  });
+});
+
+describe("cell entries (US-17.4)", () => {
+  const reg: PropertyValue = { type: "cells", value: [0x1c81000, 0x1000, 0x1c82000, 0x2000] };
+
+  it("reads a cell list as groups of its entry width", () => {
+    expect(summaryOf(reg, "cells", "hex", 2)).toBe("<0x1c81000 0x1000>, <0x1c82000 0x2000>");
+    expect(summaryOf(reg, "cells", "hex")).toBe("0x1c81000 0x1000 0x1c82000 0x2000");
+    expect(entriesOf([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("parses typed groups back into the same cells", () => {
+    expect(parseSummary("cells", "<0x1c81000 0x1000>, <0x1c82000 0x2000>")).toEqual(reg);
+    // A one-chunk mixed value (macros) takes groups too, kept as one list.
+    const irq = { type: "mixed", value: [{ type: "cells", bits: 32, cells: ["GIC_SPI", 37, 4] }] } as PropertyValue;
+    expect(parseSummary("mixed", "<GIC_SPI 37 4>, <GIC_SPI 38 4>", irq)).toEqual({
+      type: "mixed",
+      value: [{ type: "cells", bits: 32, cells: ["GIC_SPI", 37, 4, "GIC_SPI", 38, 4] }],
+    });
+    // Groups with references stay apart: each starts a phandle entry.
+    expect(parseSummary("mixed", "<&a 1>, <&b 2>").type === "mixed" && (parseSummary("mixed", "<&a 1>, <&b 2>") as { value: unknown[] }).value).toHaveLength(2);
+  });
+
+  it("adds and removes whole entries", () => {
+    expect(withEntry(reg, 2)).toEqual({ type: "cells", value: [...reg.value as number[], 0, 0] });
+    // A short last entry is filled before the new one.
+    expect(withEntry({ type: "cells", value: [1, 2, 3] }, 2)).toEqual({ type: "cells", value: [1, 2, 3, 0, 0, 0] });
+    expect(withoutEntry(reg, 0, 2)).toEqual({ type: "cells", value: [0x1c82000, 0x2000] });
   });
 });

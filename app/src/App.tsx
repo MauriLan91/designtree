@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -22,7 +22,7 @@ import type { SourceError, Span } from "./components/DtsEditor";
 import { reconcileEdges, reconcileNodes } from "./textSync";
 import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "./collapse";
 import { GroupNode } from "./components/GroupNode";
-import { initialProperties, regEntryCells } from "./schemaProps";
+import { entryCellsOf, initialProperties, regEntryCells } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
 import { AddressMapPanel } from "./components/AddressMapPanel";
 import { SocPicker } from "./components/SocPicker";
@@ -30,6 +30,7 @@ import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
 import { ProblemList } from "./components/ProblemList";
 import { NodeProblems } from "./nodeProblems";
+import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
 import {
   accepts,
@@ -49,12 +50,15 @@ import { DRAG_MIME } from "./components/Palette";
 import { bindingOf as entryBinding } from "./library";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
-import { align, cornerOf, distribute, layered, type Alignment, type Box, type Link } from "./tidy";
+import { align, cornerOf, distribute, grid, layered, mostReferenced, star, tree, type Alignment, type Box, type Link, type Positions } from "./tidy";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
 import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
+import { ActivityBar } from "./components/ActivityBar";
 import { Splitter } from "./components/Splitter";
+import { SplitHandle } from "./components/SplitHandle";
+import { ArrangeMenu } from "./components/ArrangeMenu";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
 import { BoundaryNode } from "./components/BoundaryNode";
@@ -77,7 +81,7 @@ import {
   scopePath,
   treeRows,
 } from "./scopes";
-import type { EditorMode, Layout, PaneName, PanelTab } from "./layout";
+import type { EditorMode, Layout, PaneName, PanelTab, SideView } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
 import { ModeSwitch } from "./components/ModeSwitch";
@@ -92,13 +96,21 @@ import {
   AlignHorizontalSpaceAround,
   AlignVerticalSpaceAround,
   LayoutDashboard,
+  Grid2x2,
+  Grid2x2Plus,
   Grid3x3,
+  ListTree,
+  Network,
+  Orbit,
   FilePlus,
   FolderOpen,
   Hammer,
+  Hand,
+  MousePointer2,
   Redo2,
   Save,
   Search,
+  Settings2,
   SquarePlus,
   Undo2,
   Workflow,
@@ -198,6 +210,9 @@ export interface EditorStatus {
   dirty: boolean;
   /** A new empty design nobody touched: opening a design may replace it. */
   fresh: boolean;
+  /** The bus class of the scope on show and its node's name, which the
+   * library's "Fits here" section follows (US-18.4). */
+  fit?: { cls: string; name: string } | null;
 }
 
 /** What the workspace asks of an editor. */
@@ -229,6 +244,8 @@ interface EditorProps {
   onLayout: (change: (l: Layout) => Layout) => void;
   /** Where the navigator goes in the side bar; the visible tab draws it. */
   outlineSlot: HTMLElement | null;
+  /** Where the activity bar's buttons go; the visible tab draws them. */
+  activitySlot: HTMLElement | null;
   onResetLayout: () => void;
   /** The user's settings; changes are saved by the workspace. */
   settings: Settings;
@@ -244,7 +261,10 @@ interface EditorProps {
 
 /** Commands whose shortcuts have handlers of their own (undo knows about
  * text fields, the palette toggles from inside itself), so they stay fixed. */
-const FIXED_SHORTCUTS: ReadonlySet<string> = new Set(["undo", "redo", "palette"]);
+const FIXED_SHORTCUTS: ReadonlySet<string> = new Set(["undo", "redo", "palette", "select-all"]);
+
+/** Ctrl or Shift on a click adds a node to the selection or takes it out. */
+const MULTI_SELECT_KEYS = ["Control", "Meta", "Shift"];
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
@@ -260,6 +280,7 @@ export function Editor({
   layout,
   onLayout,
   outlineSlot,
+  activitySlot,
   onResetLayout,
   settings,
   settingsLoaded,
@@ -440,7 +461,13 @@ export function Editor({
   }, []);
 
   const { dirty, markSaved } = history;
-  useEffect(() => onStatus({ title, dirty, fresh: fresh && !dirty }), [title, dirty, fresh, onStatus]);
+  const scopeNode = nodes.find((n) => n.id === scope);
+  const fitCls = scopeNode && isDtNode(scopeNode) ? scopeClass(scopeNode) : null;
+  const fitName = scopeNode && isDtNode(scopeNode) ? (scopeNode.data.unitAddress ? `${scopeNode.data.name}@${scopeNode.data.unitAddress}` : scopeNode.data.name) : "";
+  useEffect(
+    () => onStatus({ title, dirty, fresh: fresh && !dirty, fit: fitCls ? { cls: fitCls, name: fitName } : null }),
+    [title, dirty, fresh, onStatus, fitCls, fitName],
+  );
 
   const kernelWarning = !!extras.kernel && !!kernel?.version && extras.kernel !== kernel.version;
 
@@ -556,13 +583,6 @@ export function Editor({
     return () => clearTimeout(t);
   }, [schemaKey, kernel]);
 
-  const nodeProblems = useMemo(() => {
-    const byNode = new Map<string, string[]>();
-    for (const p of [...errors, ...(schema.problems ?? [])]) {
-      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
-    }
-    return byNode;
-  }, [errors, schema.problems]);
 
   useEffect(() => {
     if (!showInterrupts || !inTauri) return;
@@ -698,6 +718,36 @@ export function Editor({
       data.binding ?? data.compatible.map((c) => bindingsByCompatible.get(c)).find((b) => b) ?? undefined,
     [bindingsByCompatible],
   );
+
+  // Nodes under a parent their binding does not expect (US-18.4).
+  const placementFound = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const name = (id: string) => {
+      const n = byId.get(id);
+      return n && isDtNode(n) ? (n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name) : id;
+    };
+    const out: Problem[] = [];
+    for (const n of nodes) {
+      const binding = isDtNode(n) ? bindingOf(n.data) : undefined;
+      if (!isDtNode(n) || !binding?.buses?.length) continue;
+      const parent = byId.get(parents.get(n.id) ?? "");
+      const problem = parent && isDtNode(parent) ? placementProblem(n, binding, parent, name) : null;
+      if (problem) out.push(problem);
+    }
+    return out;
+  }, [nodes, parents, bindingOf]);
+  // Dragging changes `nodes` every frame; the warnings, and the node badges
+  // that read them, only change when the messages do.
+  const placementKey = placementFound.map((p) => `${p.node}\t${p.message}`).join("\n");
+  const placement = useMemo(() => placementFound, [placementKey]);
+
+  const nodeProblems = useMemo(() => {
+    const byNode = new Map<string, string[]>();
+    for (const p of [...errors, ...placement, ...(schema.problems ?? [])]) {
+      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
+    }
+    return byNode;
+  }, [errors, placement, schema.problems]);
 
   // Ports only depend on node data, bindings and references: moving or
   // selecting nodes reuses the previous sets, so nodes do not re-render.
@@ -1050,9 +1100,21 @@ export function Editor({
    * routes change in one edit, so one undo restores both.
    */
   const tidy = (onlySelected: boolean) => {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const tops = onlySelected ? tidyable() : nodes.filter((n) => shown.has(n.id) && !n.parentId);
+    const tops = onlySelected ? tidyable() : scopeTops();
     if (tops.length < (onlySelected ? 2 : 1)) return;
+    const boxes = tops.map(boxOf);
+    const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes));
+    placeMoved(positions, routes);
+    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+  };
+
+  /** The top-level nodes of the scope on show: groups and ungrouped nodes. */
+  const scopeTops = () => nodes.filter((n) => shown.has(n.id) && !n.parentId);
+
+  /** The references between `tops`, each from and to the drawn top-level
+   * node it leaves or enters. */
+  const refLinks = (tops: FlowNode[]): Link[] => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
     const ids = new Set(tops.map((n) => n.id));
     const links: Link[] = [];
     for (const e of edges) {
@@ -1061,12 +1123,18 @@ export function Editor({
       const t = topOf(e.target, byId)?.id;
       if (s && t && s !== t && ids.has(s) && ids.has(t)) links.push({ id: e.id, source: s, target: t });
     }
-    const boxes = tops.map(boxOf);
-    const { positions, routes } = layered(boxes, links, cornerOf(boxes));
+    return links;
+  };
+
+  /** Moves nodes in one edit. A reference into or out of what moved without
+   * a route of its own would turn in the wrong place: it goes back to a curve. */
+  const placeMoved = (positions: Positions, routes = new Map<string, number>()) => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const moved = (id: string) => {
+      for (let n = byId.get(id); n; n = n.parentId ? byId.get(n.parentId) : undefined) if (positions.has(n.id)) return true;
+      return false;
+    };
     place(positions);
-    // A reference into or out of what moved without a route of its own
-    // would turn in the wrong place: it goes back to a curve.
-    const moved = (id: string) => ids.has(topOf(id, byId)?.id ?? "");
     setEdges((es) =>
       es.map((e) => {
         if (e.type !== "ref") return e;
@@ -1077,7 +1145,39 @@ export function Editor({
         return e;
       }),
     );
-    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+  };
+
+  /** What an Arrange layout moves (US-9.8): the selected top-level nodes when
+   * there are two or more, else every top-level node of the scope. */
+  const layoutTargets = () => {
+    const sel = tidyable();
+    return sel.length >= 2 ? sel : scopeTops();
+  };
+  /** Likewise for align and distribute, whose selection stays in one frame. */
+  const lineTargets = () => {
+    const sel = arrangeable();
+    return sel.length >= 2 ? sel : scopeTops();
+  };
+
+  type Arrangement = "grid" | "tree-vertical" | "tree-horizontal" | "star";
+  const arrange = (how: Arrangement) => {
+    const tops = layoutTargets();
+    if (tops.length < 2) return;
+    const boxes = tops.map(boxOf);
+    if (how === "grid") placeMoved(grid(boxes, cornerOf(boxes)));
+    else if (how === "star") {
+      // One selected node is the hub; otherwise the one most pointed at.
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const picked = nodes.filter((n) => n.selected);
+      const hub = picked.length === 1 ? topOf(picked[0].id, byId)?.id : undefined;
+      const centre = hub && tops.some((n) => n.id === hub) ? hub : mostReferenced(boxes, refLinks(tops));
+      if (centre) placeMoved(star(boxes, centre));
+    } else {
+      const direction = how === "tree-vertical" ? "vertical" : "horizontal";
+      placeMoved(tree(boxes, (id) => parents.get(id), cornerOf(boxes), direction));
+    }
+    // A whole scope rearranged may have moved out of view.
+    if (tidyable().length < 2) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
   };
 
   /** The selected top-level nodes on show, which tidying the selection moves. */
@@ -1090,8 +1190,8 @@ export function Editor({
   };
   const place = (positions: Map<string, { x: number; y: number }>) =>
     setNodes((ns) => ns.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)));
-  const alignSelection = (how: Alignment) => place(align(arrangeable().map(boxOf), how));
-  const distributeSelection = (axis: "horizontal" | "vertical") => place(distribute(arrangeable().map(boxOf), axis));
+  const alignSelection = (how: Alignment) => placeMoved(align(lineTargets().map(boxOf), how));
+  const distributeSelection = (axis: "horizontal" | "vertical") => placeMoved(distribute(lineTargets().map(boxOf), axis));
 
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
@@ -1246,6 +1346,12 @@ export function Editor({
     }
     return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
   }, [nodes, portEdges, shownEdges, shownKey, scope]);
+  /** The nodes Select all picks: those drawn in the scope on show, not the
+   * ports that stand for nodes elsewhere. */
+  const scopeNodeIds = useMemo(
+    () => view.nodes.filter((n) => isDtNode(n) && realId(n.id) === n.id).map((n) => n.id),
+    [view.nodes],
+  );
 
   /**
    * Shows `id`'s scope (null: the main canvas). `pin` keeps a tab for it;
@@ -1310,8 +1416,17 @@ export function Editor({
       : selectedNodes.length === 0 && !selectedEdge && scope
         ? (nodes.find((n) => n.id === scope) ?? null)
         : null;
-  const inspectedParent = nodes.find((n) => n.id === edges.find((e) => e.sourceHandle === CHILD_HANDLE && e.target === inspected?.id)?.source);
-  const inspectedRegCells = inspectedParent && isDtNode(inspectedParent) ? regEntryCells(inspectedParent.data.properties) : undefined;
+  const inspectedEntryCells = useMemo(() => {
+    if (!inspected || !isDtNode(inspected)) return undefined;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const propertiesOf = (id: string) => {
+      const n = byId.get(id);
+      return n && isDtNode(n) ? n.data.properties : undefined;
+    };
+    const interruptParentOf = (id: string) =>
+      edges.find((e) => e.type === "ref" && e.source === id && (e.data as RefData | undefined)?.property === "interrupt-parent")?.target;
+    return entryCellsOf(inspected.id, propertiesOf, (id) => parents.get(id), interruptParentOf);
+  }, [inspected, nodes, edges, parents]);
   const designLabels = useMemo(
     () => nodes.filter(isDtNode).flatMap((n) => [n.data.label, ...(n.data.extraLabels ?? [])]).filter((l): l is string => !!l).sort(),
     [nodes],
@@ -1340,6 +1455,14 @@ export function Editor({
   /** Shows `tab`, or closes the panel when that tab is already on show. */
   const togglePanel = (tab: PanelTab) =>
     onLayout((l) => ({ ...l, panel: { ...l.panel, open: !(l.panel.open && l.panel.tab === tab), tab } }));
+  /** The side bar's view on show, or null when it is collapsed. */
+  const sideView = layout.library.open ? layout.library.view : null;
+  // Choosing the view on show collapses the side bar, as in the activity bar.
+  const toggleSideView = (view: SideView) =>
+    onLayout((l) => {
+      const shown = l.library.open && l.library.view === view;
+      return { ...l, library: { ...l.library, open: !shown, view } };
+    });
   const togglePane = (pane: PaneName) => onLayout((l) => ({ ...l, [pane]: { ...l[pane], open: !l[pane].open } }));
 
   const placeOnBoard = (positions: Map<string, XYPosition | null>) =>
@@ -1387,15 +1510,18 @@ export function Editor({
   // Structural errors block the build; schema problems are errors or warnings.
   const problemCount = {
     errors: errors.length + (schema.problems ?? []).filter((p) => p.severity === "error").length,
-    warnings: (schema.problems ?? []).filter((p) => p.severity !== "error").length,
+    warnings: placement.length + (schema.problems ?? []).filter((p) => p.severity !== "error").length,
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
   // What the arrange commands would move, for their enabled state; only
   // the selection matters, so most renders skip the scan.
   const anySelected = nodes.some((n) => n.selected);
-  const arrangeCount = anySelected ? arrangeable().length : 0;
   const tidyCount = anySelected ? tidyable().length : 0;
+  // Arrange works on the selection when it has two nodes, else on the scope.
+  const scopeTopCount = scopeTops().length;
+  const arrangeCount = anySelected && arrangeable().length >= 2 ? arrangeable().length : scopeTopCount;
+  const layoutCount = tidyCount >= 2 ? tidyCount : scopeTopCount;
   const registry: Command[] = [
     { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
     {
@@ -1468,6 +1594,36 @@ export function Editor({
       run: groupSelection,
     },
     {
+      id: "select-all",
+      title: "Select all",
+      shortcut: "Ctrl+A",
+      menu: "Edit",
+      group: 2,
+      hint: "The nodes of the scope on show",
+      disabled: boardView || scopeNodeIds.length === 0,
+      run: () => selectOnly(scopeNodeIds),
+    },
+    {
+      id: "tool-select",
+      title: "Select tool",
+      menu: "Edit",
+      group: 2,
+      icon: MousePointer2,
+      hint: "Drag on the empty canvas to select; pan with the middle button or Space+drag",
+      checked: layout.tool === "select",
+      run: () => onLayout((l) => ({ ...l, tool: "select" })),
+    },
+    {
+      id: "tool-pan",
+      title: "Pan tool",
+      menu: "Edit",
+      group: 2,
+      icon: Hand,
+      hint: "Drag to move the view; Shift+drag to select",
+      checked: layout.tool === "pan",
+      run: () => onLayout((l) => ({ ...l, tool: "pan" })),
+    },
+    {
       id: "ungroup",
       title: "Ungroup",
       shortcut: "Ctrl+Shift+G",
@@ -1494,6 +1650,23 @@ export function Editor({
       disabled: boardView || tidyCount < 2,
       run: () => tidy(true),
     },
+    ...(
+      [
+        ["grid", "Grid", Grid2x2, "Rows of equal cells, in reading order"],
+        ["tree-vertical", "Tree, top down", Network, "Each node under its parent in the devicetree"],
+        ["tree-horizontal", "Tree, left to right", ListTree, "Each node right of its parent in the devicetree"],
+        ["star", "Star", Orbit, "A ring around the selected node, or the one most referenced"],
+      ] as const
+    ).map(([how, title, icon, hint]) => ({
+      id: `arrange-${how}`,
+      title,
+      menu: "Arrange" as const,
+      group: 1,
+      icon,
+      hint: `${hint}. Arranges the selection, or the whole scope when fewer than two nodes are selected`,
+      disabled: boardView || layoutCount < 2,
+      run: () => arrange(how),
+    })),
     {
       id: "layout",
       title: "Lay out the whole tree",
@@ -1516,7 +1689,7 @@ export function Editor({
       id: `align-${how}`,
       title,
       menu: "Arrange" as const,
-      group: how === "left" || how === "center" || how === "right" ? 1 : 2,
+      group: how === "left" || how === "center" || how === "right" ? 2 : 3,
       icon,
       disabled: boardView || arrangeCount < 2,
       run: () => alignSelection(how),
@@ -1525,7 +1698,7 @@ export function Editor({
       id: "distribute-horizontal",
       title: "Distribute horizontally",
       menu: "Arrange",
-      group: 3,
+      group: 4,
       icon: AlignHorizontalSpaceAround,
       disabled: boardView || arrangeCount < 3,
       run: () => distributeSelection("horizontal"),
@@ -1534,7 +1707,7 @@ export function Editor({
       id: "distribute-vertical",
       title: "Distribute vertically",
       menu: "Arrange",
-      group: 3,
+      group: 4,
       icon: AlignVerticalSpaceAround,
       disabled: boardView || arrangeCount < 3,
       run: () => distributeSelection("vertical"),
@@ -1563,12 +1736,8 @@ export function Editor({
       menu: "View",
       group: 2,
       hint: "The whole devicetree as a tree, in the side bar",
-      checked: layout.library.open && layout.library.view === "outline",
-      run: () =>
-        onLayout((l) => {
-          const shown = l.library.open && l.library.view === "outline";
-          return { ...l, library: { ...l.library, open: true, view: shown ? "library" : "outline" } };
-        }),
+      checked: sideView === "outline",
+      run: () => toggleSideView("outline"),
     },
     { id: "mode-graph", title: "Graph", shortcut: "Ctrl+1", menu: "View", group: 1, checked: mode === "graph", run: () => setMode("graph") },
     {
@@ -1587,8 +1756,9 @@ export function Editor({
       shortcut: PANE_SHORTCUTS.library,
       menu: "View",
       group: 2,
-      checked: layout.library.open,
-      run: () => togglePane("library"),
+      hint: "The elements of the kernel checkout, in the side bar",
+      checked: sideView === "library",
+      run: () => toggleSideView("library"),
     },
     {
       id: "inspector",
@@ -1599,7 +1769,16 @@ export function Editor({
       checked: layout.inspector.open,
       run: () => togglePane("inspector"),
     },
-    { id: "panel", title: "Bottom panel", shortcut: "Ctrl+J", menu: "View", group: 2, checked: layout.panel.open, run: () => togglePane("panel") },
+    {
+      id: "panel",
+      title: "Bottom panel",
+      shortcut: "Ctrl+J",
+      menu: "View",
+      group: 2,
+      hint: "Problems, build output, interrupt tree and address map",
+      checked: layout.panel.open,
+      run: () => togglePane("panel"),
+    },
     {
       id: "problems",
       title: "Problems",
@@ -1691,6 +1870,7 @@ export function Editor({
     { id: "updates", title: "Check for updates now", menu: "Help", disabled: !inTauri, run: onCheckUpdates },
   ];
   const commands = withShortcuts(registry, settings.shortcuts, FIXED_SHORTCUTS);
+  const commandById = (id: string) => commands.find((c) => c.id === id)!;
   const byId = (id: string) => commands.find((c) => c.id === id)!;
   const shortcutList: [string, string][] = [
     ...commands.filter((c) => c.shortcut).map((c): [string, string] => [c.shortcut!, c.title.replace(/…$/, "")]),
@@ -1701,7 +1881,9 @@ export function Editor({
     ["Ctrl+W", "Close the tab"],
     ["Alt+letter", "Open a menu (Alt+F: File)"],
     ["Delete", "Delete the selection"],
-    ["Shift+drag", "Select an area"],
+    ["Ctrl+click, Shift+click", "Add a node to the selection or take it out"],
+    ["Space+drag, middle drag", "Move the view with the select tool"],
+    ["Shift+drag", "Select an area with the pan tool"],
   ];
   const commandsRef = useRef(commands);
   commandsRef.current = commands;
@@ -1772,7 +1954,7 @@ export function Editor({
           />
         </div>
         <div className="toolbar-row" role="toolbar" aria-label="Main actions">
-          {[["new", "open", "save"], ["undo", "redo"], ["add", "tidy", "snap"]].map((ids, g) => (
+          {[["new", "open", "save"], ["undo", "redo"], ["tool-select", "tool-pan"], ["add", "tidy", "snap"]].map((ids, g) => (
             <div className="tool-group" key={g}>
               {ids.map((id) => {
                 const c = byId(id);
@@ -1791,6 +1973,7 @@ export function Editor({
                   </button>
                 );
               })}
+              {ids.includes("tidy") && <ArrangeMenu commands={commands} />}
             </div>
           ))}
           <button className="command-search" onClick={() => setShowPalette(true)} title={tooltipOf(byId("palette"))}>
@@ -1809,7 +1992,7 @@ export function Editor({
           })()}
         </div>
       </header>
-      <main className={`canvas mode-${mode}`}>
+      <main className={`canvas mode-${mode}`} style={{ "--split": layout.split } as CSSProperties}>
         <ModeSwitch mode={mode} onMode={setMode} />
         <div ref={canvasRef} className="graph" hidden={mode === "dts"} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
           {kernelWarning && (
@@ -1817,6 +2000,18 @@ export function Editor({
               This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
               Bindings may differ; pick another checkout under Kernels…
             </div>
+          )}
+          {active &&
+          activitySlot &&
+          createPortal(
+            <ActivityBar
+              views={[
+                { command: commandById("library"), icon: Grid2x2Plus, active: sideView === "library" },
+                { command: commandById("outline"), icon: ListTree, active: sideView === "outline" },
+              ]}
+              footer={[{ command: commandById("settings"), icon: Settings2, active: !!settingsSection }]}
+            />,
+            activitySlot,
           )}
           {active &&
           outlineSlot &&
@@ -1902,6 +2097,14 @@ export function Editor({
                 setShowPalette(true);
               }}
               zoomOnDoubleClick={false}
+              // The select tool draws a rectangle on a left drag and pans with
+              // the middle button (or Space, React Flow's pan key); the pan
+              // tool keeps the left drag and selects with Shift (US-9.7).
+              selectionOnDrag={layout.tool === "select"}
+              panOnDrag={layout.tool === "select" ? [1] : true}
+              selectionKeyCode={layout.tool === "select" ? null : "Shift"}
+              multiSelectionKeyCode={MULTI_SELECT_KEYS}
+              className={layout.tool === "pan" ? "tool-pan" : undefined}
             >
               {settings.snapToGrid ? (
                 <Background variant={BackgroundVariant.Lines} gap={settings.gridSize} color="var(--grid)" />
@@ -1915,6 +2118,7 @@ export function Editor({
             </NodeProblems.Provider>
           )}
         </div>
+        {mode === "split" && <SplitHandle ratio={layout.split} onRatio={(split) => onLayout((l) => ({ ...l, split }))} />}
         {/* Kept mounted in graph mode, so the cursor and scroll stay put. */}
         <div className="source-pane" hidden={mode === "graph"}>
           <DtsPreview
@@ -1945,7 +2149,7 @@ export function Editor({
               onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
               onEdgeChange={updateEdgeData}
               providerCells={providerCells}
-              regCells={inspectedRegCells}
+              entryCells={inspectedEntryCells}
               labels={designLabels}
             />
           </aside>
@@ -1973,6 +2177,15 @@ export function Editor({
           onClose={() => togglePane("panel")}
         >
           {layout.panel.tab === "problems" && errors.length > 0 && <ProblemList problems={errors} nodeName={nodeName} onFocusNode={focusNode} />}
+          {layout.panel.tab === "problems" && placement.length > 0 && (
+            <section className="build placement">
+              <h2>Placement</h2>
+              <p className="hint">
+                {placement.length} node{placement.length === 1 ? " is" : "s are"} under a parent their binding does not expect
+              </p>
+              <ProblemList problems={placement} nodeName={nodeName} onFocusNode={focusNode} />
+            </section>
+          )}
           {layout.panel.tab === "problems" &&
             (kernel ? (
               <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />
@@ -2013,6 +2226,7 @@ export function Editor({
         onKernels={() => onOpenSettings("Kernel")}
         onDtc={() => onOpenSettings("Build")}
         onProblems={() => showPanel("problems")}
+        panel={commandById("panel")}
       />
       {showPalette && (
         <CommandPalette

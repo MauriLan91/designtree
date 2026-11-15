@@ -10,6 +10,7 @@
 //! which are embedded because the kernel tree does not ship them.
 //! Files that fail to parse are reported, not fatal.
 
+mod buses;
 mod check;
 mod kernel;
 mod macros;
@@ -20,6 +21,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use buses::bus_class;
 pub use check::{parse_fdt, Checker, FdtError, FdtNode, SchemaProblem, SchemaSet};
 pub use kernel::{index_kernel_tree_cached, kernel_version, CacheStatus};
 pub use macros::{index_dt_macros, DtMacro};
@@ -155,6 +157,11 @@ pub struct PropertySpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(type = "number", optional)]
     pub max_items: Option<u64>,
+    /// Cells per entry of a matrix value, when the schema fixes it
+    /// (`items: { items: [a, b] }`); the property table groups by it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub entry_cells: Option<u64>,
 }
 
 /// One entry of the element library, derived from one schema file.
@@ -174,6 +181,10 @@ pub struct Binding {
     /// (`/`, `cpus`, `memory@0`); `None` for a device binding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_name: Option<String>,
+    /// The bus classes the schema's examples put its nodes under (`i2c`,
+    /// `spi`, `cpus`, `mmio`; see [`bus_class`]); empty when they do not say.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -333,6 +344,12 @@ fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding
     }
     compatibles.sort();
     compatibles.dedup();
+    let examples: Vec<&str> = doc
+        .get("examples")
+        .and_then(Value::as_sequence)
+        .map(|seq| seq.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let buses = buses::example_buses(&examples, &compatibles);
 
     Some(Binding {
         path: rel.to_owned(),
@@ -349,6 +366,7 @@ fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding
         compatibles,
         properties: schemas.properties(&format!("/schemas/{rel}"), doc),
         node_name: None,
+        buses,
     })
 }
 
@@ -435,6 +453,7 @@ pub fn basic_bindings() -> Vec<Binding> {
                 compatibles: Vec::new(),
                 properties,
                 node_name: Some(name.to_owned()),
+                buses: Vec::new(),
             })
         })
         .collect()

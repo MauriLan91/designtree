@@ -122,6 +122,7 @@ impl Hit<'_> {
             category: self.binding.category.clone(),
             title: self.binding.title.clone(),
             compatible: self.compatible.map(str::to_string),
+            buses: self.binding.buses.clone(),
         }
     }
 }
@@ -138,6 +139,9 @@ pub struct LibraryEntry {
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compatible: Option<String>,
+    /// Where the schema's examples put it (US-18.4), for "Fits here".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<String>,
 }
 
 /// The library entries of one schema: one per compatible, or the schema
@@ -221,6 +225,7 @@ mod tests {
             compatibles: compatibles.iter().map(|c| c.to_string()).collect(),
             properties: Vec::new(),
             node_name: None,
+            buses: Vec::new(),
         }
     }
 

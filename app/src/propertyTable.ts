@@ -214,8 +214,15 @@ export function blankItem(value: PropertyValue): string {
   }
 }
 
-/** The one-line text of a value, as the row shows and edits it. */
-export function summaryOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex"): string {
+/** The one-line text of a value, as the row shows and edits it. A cell
+ * list `width` cells per entry reads as its groups, `<a b>, <c d>`. */
+export function summaryOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex", width?: number): string {
+  const cells = cellsOf(value);
+  if (cells && width && width > 1 && cells.length > width) {
+    return entriesOf(cells.map((c) => cellText(c, base)), width)
+      .map((e) => `<${e.join(" ")}>`)
+      .join(", ");
+  }
   switch (value.type) {
     case "empty":
       return "";
@@ -243,7 +250,8 @@ export function parseSummary(kind: ValueKind, text: string, current?: PropertyVa
     case "strings":
       return { type: "strings", value: splitList(text).map((s) => (/^".*"$/.test(s) ? (JSON.parse(s) as string) : s)) };
     case "cells":
-      return cellsValue(words.map(parseCellText));
+      // Entries may be typed as groups, `<a b>, <c d>`: the same cells.
+      return cellsValue(cellWords(text).map(parseCellText));
     case "bytes":
       return { type: "bytes", value: words.map(parseByte) };
     case "reference": {
@@ -259,9 +267,51 @@ export function parseSummary(kind: ValueKind, text: string, current?: PropertyVa
       if (parts.length === 1 && !/^[<"[]|^\/bits\//.test(parts[0]) && (chunk || /\s/.test(parts[0].trim()))) {
         return cellsValue(words.map(parseCellText), chunk?.bits);
       }
-      return { type: "mixed", value: parts.map(parseChunkText) };
+      const chunks = parts.map(parseChunkText);
+      // Groups of plain cells are one list, as the import reads them; the
+      // grouping into entries is only how it is written.
+      // References keep their groups: each starts a phandle entry.
+      const plain = (c: ValueChunk) => c.type === "cells" && c.bits === 32 && c.cells.every((x) => typeof x !== "object");
+      if (chunks.length > 1 && chunks.every(plain)) {
+        return cellsValue(chunks.flatMap((c) => (c.type === "cells" ? c.cells : [])));
+      }
+      return { type: "mixed", value: chunks };
     }
   }
+}
+
+const cellWords = (text: string) => text.replace(/[<>,]/g, " ").trim().split(/\s+/).filter(Boolean);
+
+// ---------------------------------------------------------------------------
+// Entries (US-17.4): a cell list read as groups of `width` cells, such as
+// `reg` (#address-cells + #size-cells per entry) or `interrupts`.
+
+/** The cells of a plain cell list, or of a value that is one chunk of cells. */
+export function cellsOf(value: PropertyValue): Cell[] | null {
+  if (value.type === "cells") return value.value;
+  return cellChunk(value)?.cells ?? null;
+}
+
+/** Items in groups of `width`; the last is short when they do not divide. */
+export function entriesOf<T>(items: T[], width: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += width) out.push(items.slice(i, i + width));
+  return out;
+}
+
+/** The value without entry `index`. */
+export function withoutEntry(value: PropertyValue, index: number, width: number): PropertyValue {
+  const cells = cellsOf(value);
+  if (!cells) return value;
+  const rest = [...cells.slice(0, index * width), ...cells.slice((index + 1) * width)];
+  return cellsValue(rest, cellChunk(value)?.bits);
+}
+
+/** The value with an entry of zeros appended, after filling a short last one. */
+export function withEntry(value: PropertyValue, width: number): PropertyValue {
+  const cells = cellsOf(value) ?? [];
+  const full = Math.ceil(cells.length / width) * width;
+  return cellsValue([...cells, ...Array<Cell>(full - cells.length + width).fill(0)], cellChunk(value)?.bits);
 }
 
 /** Splits at commas outside quotes and brackets. */

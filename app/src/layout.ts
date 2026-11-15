@@ -18,9 +18,24 @@ export interface Layout {
   library: Pane & { view: SideView };
   inspector: Pane;
   panel: Pane & { tab: PanelTab };
+  /** The graph's share of the canvas width in Split mode (US-15.8). */
+  split: number;
+  /** What a left drag on the empty canvas does (US-9.7). */
+  tool: CanvasTool;
 }
 
-export type PaneName = keyof Layout;
+/** `select` draws a selection rectangle, `pan` moves the view. */
+export type CanvasTool = "select" | "pan";
+
+export type PaneName = "library" | "inspector" | "panel";
+
+/** The narrowest either half of the split may get, in px. */
+export const SPLIT_MIN = 240;
+/** The stored ratio's range; the drawn one is also kept to `SPLIT_MIN`. */
+const SPLIT_RANGE = { min: 0.1, max: 0.9 };
+
+export const clampSplit = (ratio: number) =>
+  Math.round(Math.min(SPLIT_RANGE.max, Math.max(SPLIT_RANGE.min, ratio)) * 1000) / 1000;
 
 /** The size range of each pane. The bottom panel's upper bound is also
  * capped at 60% of the window when it is drawn. */
@@ -34,6 +49,8 @@ export const DEFAULT_LAYOUT: Layout = {
   library: { size: 248, open: true, view: "library" },
   inspector: { size: 320, open: true },
   panel: { size: 200, open: false, tab: "problems" },
+  split: 0.5,
+  tool: "select",
 };
 
 const KEY = "designtree.layout";
@@ -60,6 +77,8 @@ export function parseLayout(raw: unknown): Layout {
     library: { ...pane("library"), view: view === "outline" ? "outline" : "library" },
     inspector: pane("inspector"),
     panel: { ...pane("panel"), tab: TABS.includes(tab as PanelTab) ? (tab as PanelTab) : DEFAULT_LAYOUT.panel.tab },
+    split: typeof obj.split === "number" && Number.isFinite(obj.split) ? clampSplit(obj.split) : DEFAULT_LAYOUT.split,
+    tool: obj.tool === "pan" ? "pan" : "select",
   };
 }
 

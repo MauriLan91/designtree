@@ -18,6 +18,21 @@ Each design has its own tab with its own undo history. Ctrl+Tab and
 Ctrl+Shift+Tab switch tabs, Ctrl+W closes one, middle-click closes the tab
 under the mouse.
 
+## Selecting
+
+The two tool buttons in the toolbar (also in **Edit**) choose what a drag on
+the empty canvas does:
+
+- **Select tool** (the arrow, the default): the drag draws a rectangle and
+  selects the nodes inside it. Move the view with the middle mouse button,
+  or hold Space and drag.
+- **Pan tool** (the hand): the drag moves the view; Shift+drag selects.
+
+With either tool, Ctrl+click or Shift+click adds a node to the selection or
+takes it out, and **Edit › Select all** (Ctrl+A) selects the nodes of the
+scope on show. The status bar counts the selected nodes. The tool is
+remembered.
+
 ## Snap to grid
 
 **View › Snap to grid**, the grid button in the toolbar or Ctrl+' makes
@@ -47,6 +62,7 @@ F1 lists them in the app.
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z, Ctrl+Y | Redo |
 | Ctrl+C / Ctrl+V | Copy / paste nodes |
+| Ctrl+A | Select all the nodes of the scope |
 | Ctrl+G | Group selection |
 | Ctrl+Shift+G | Ungroup |
 | Ctrl+L | Tidy this canvas |
@@ -55,5 +71,7 @@ F1 lists them in the app.
 | Ctrl+Tab | Next tab (Ctrl+Shift+Tab: previous) |
 | Ctrl+W | Close the tab |
 | Delete | Delete the selection, child nodes included |
-| Shift+drag | Select an area |
+| Ctrl+click, Shift+click | Add to the selection or take out |
+| Space+drag, middle drag | Move the view (select tool) |
+| Shift+drag | Select an area (pan tool) |
 | F1 | Keyboard shortcuts |

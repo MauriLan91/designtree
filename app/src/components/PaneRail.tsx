@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const PANE_TITLES = { library: "Library", inspector: "Inspector" } as const;
-export const PANE_SHORTCUTS = { library: "Ctrl+Shift+L", inspector: "Ctrl+Shift+I" } as const;
+export const PANE_SHORTCUTS = { library: "Ctrl+Shift+E", inspector: "Ctrl+Shift+I" } as const;
 
 export function PaneRail({ pane, layout, onLayout }: Props) {
   const open = layout[pane].open;

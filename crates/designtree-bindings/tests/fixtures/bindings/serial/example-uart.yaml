@@ -44,6 +44,32 @@ properties:
     minimum: 1
     maximum: 100
 
+  vendor,dma-windows:
+    $ref: /schemas/types.yaml#/definitions/uint32-matrix
+    description: Address and length of each DMA window.
+    items:
+      items:
+        - description: start
+        - description: length
+
 required:
   - compatible
   - reg
+
+examples:
+  - |
+    // A UART on the SoC's bus.
+    serial@1c28000 {
+        compatible = "vendor,uart-a";
+        reg = <0x1c28000 0x400>;
+    };
+  - |
+    spi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        uart@0 {
+            compatible = "vendor,uart-b", "vendor,uart-b1";
+            reg = <0>;
+        };
+    };
