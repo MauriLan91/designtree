@@ -49,7 +49,7 @@ import { DRAG_MIME } from "./components/Palette";
 import { bindingOf as entryBinding } from "./library";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
-import { align, cornerOf, distribute, layered, type Alignment, type Box, type Link } from "./tidy";
+import { align, cornerOf, distribute, grid, layered, mostReferenced, star, tree, type Alignment, type Box, type Link, type Positions } from "./tidy";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -57,6 +57,7 @@ import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { ActivityBar } from "./components/ActivityBar";
 import { Splitter } from "./components/Splitter";
 import { SplitHandle } from "./components/SplitHandle";
+import { ArrangeMenu } from "./components/ArrangeMenu";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
 import { BoundaryNode } from "./components/BoundaryNode";
@@ -94,9 +95,12 @@ import {
   AlignHorizontalSpaceAround,
   AlignVerticalSpaceAround,
   LayoutDashboard,
+  Grid2x2,
   Grid2x2Plus,
   Grid3x3,
   ListTree,
+  Network,
+  Orbit,
   FilePlus,
   FolderOpen,
   Hammer,
@@ -1063,9 +1067,21 @@ export function Editor({
    * routes change in one edit, so one undo restores both.
    */
   const tidy = (onlySelected: boolean) => {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const tops = onlySelected ? tidyable() : nodes.filter((n) => shown.has(n.id) && !n.parentId);
+    const tops = onlySelected ? tidyable() : scopeTops();
     if (tops.length < (onlySelected ? 2 : 1)) return;
+    const boxes = tops.map(boxOf);
+    const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes));
+    placeMoved(positions, routes);
+    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+  };
+
+  /** The top-level nodes of the scope on show: groups and ungrouped nodes. */
+  const scopeTops = () => nodes.filter((n) => shown.has(n.id) && !n.parentId);
+
+  /** The references between `tops`, each from and to the drawn top-level
+   * node it leaves or enters. */
+  const refLinks = (tops: FlowNode[]): Link[] => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
     const ids = new Set(tops.map((n) => n.id));
     const links: Link[] = [];
     for (const e of edges) {
@@ -1074,12 +1090,18 @@ export function Editor({
       const t = topOf(e.target, byId)?.id;
       if (s && t && s !== t && ids.has(s) && ids.has(t)) links.push({ id: e.id, source: s, target: t });
     }
-    const boxes = tops.map(boxOf);
-    const { positions, routes } = layered(boxes, links, cornerOf(boxes));
+    return links;
+  };
+
+  /** Moves nodes in one edit. A reference into or out of what moved without
+   * a route of its own would turn in the wrong place: it goes back to a curve. */
+  const placeMoved = (positions: Positions, routes = new Map<string, number>()) => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const moved = (id: string) => {
+      for (let n = byId.get(id); n; n = n.parentId ? byId.get(n.parentId) : undefined) if (positions.has(n.id)) return true;
+      return false;
+    };
     place(positions);
-    // A reference into or out of what moved without a route of its own
-    // would turn in the wrong place: it goes back to a curve.
-    const moved = (id: string) => ids.has(topOf(id, byId)?.id ?? "");
     setEdges((es) =>
       es.map((e) => {
         if (e.type !== "ref") return e;
@@ -1090,7 +1112,39 @@ export function Editor({
         return e;
       }),
     );
-    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+  };
+
+  /** What an Arrange layout moves (US-9.8): the selected top-level nodes when
+   * there are two or more, else every top-level node of the scope. */
+  const layoutTargets = () => {
+    const sel = tidyable();
+    return sel.length >= 2 ? sel : scopeTops();
+  };
+  /** Likewise for align and distribute, whose selection stays in one frame. */
+  const lineTargets = () => {
+    const sel = arrangeable();
+    return sel.length >= 2 ? sel : scopeTops();
+  };
+
+  type Arrangement = "grid" | "tree-vertical" | "tree-horizontal" | "star";
+  const arrange = (how: Arrangement) => {
+    const tops = layoutTargets();
+    if (tops.length < 2) return;
+    const boxes = tops.map(boxOf);
+    if (how === "grid") placeMoved(grid(boxes, cornerOf(boxes)));
+    else if (how === "star") {
+      // One selected node is the hub; otherwise the one most pointed at.
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const picked = nodes.filter((n) => n.selected);
+      const hub = picked.length === 1 ? topOf(picked[0].id, byId)?.id : undefined;
+      const centre = hub && tops.some((n) => n.id === hub) ? hub : mostReferenced(boxes, refLinks(tops));
+      if (centre) placeMoved(star(boxes, centre));
+    } else {
+      const direction = how === "tree-vertical" ? "vertical" : "horizontal";
+      placeMoved(tree(boxes, (id) => parents.get(id), cornerOf(boxes), direction));
+    }
+    // A whole scope rearranged may have moved out of view.
+    if (tidyable().length < 2) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
   };
 
   /** The selected top-level nodes on show, which tidying the selection moves. */
@@ -1103,8 +1157,8 @@ export function Editor({
   };
   const place = (positions: Map<string, { x: number; y: number }>) =>
     setNodes((ns) => ns.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)));
-  const alignSelection = (how: Alignment) => place(align(arrangeable().map(boxOf), how));
-  const distributeSelection = (axis: "horizontal" | "vertical") => place(distribute(arrangeable().map(boxOf), axis));
+  const alignSelection = (how: Alignment) => placeMoved(align(lineTargets().map(boxOf), how));
+  const distributeSelection = (axis: "horizontal" | "vertical") => placeMoved(distribute(lineTargets().map(boxOf), axis));
 
   const openDesign = async () => {
     const path = await dialogs.pickDesignToOpen();
@@ -1421,8 +1475,11 @@ export function Editor({
   // What the arrange commands would move, for their enabled state; only
   // the selection matters, so most renders skip the scan.
   const anySelected = nodes.some((n) => n.selected);
-  const arrangeCount = anySelected ? arrangeable().length : 0;
   const tidyCount = anySelected ? tidyable().length : 0;
+  // Arrange works on the selection when it has two nodes, else on the scope.
+  const scopeTopCount = scopeTops().length;
+  const arrangeCount = anySelected && arrangeable().length >= 2 ? arrangeable().length : scopeTopCount;
+  const layoutCount = tidyCount >= 2 ? tidyCount : scopeTopCount;
   const registry: Command[] = [
     { id: "new", title: "New design", shortcut: "Ctrl+N", menu: "File", icon: FilePlus, run: onNew },
     {
@@ -1551,6 +1608,23 @@ export function Editor({
       disabled: boardView || tidyCount < 2,
       run: () => tidy(true),
     },
+    ...(
+      [
+        ["grid", "Grid", Grid2x2, "Rows of equal cells, in reading order"],
+        ["tree-vertical", "Tree, top down", Network, "Each node under its parent in the devicetree"],
+        ["tree-horizontal", "Tree, left to right", ListTree, "Each node right of its parent in the devicetree"],
+        ["star", "Star", Orbit, "A ring around the selected node, or the one most referenced"],
+      ] as const
+    ).map(([how, title, icon, hint]) => ({
+      id: `arrange-${how}`,
+      title,
+      menu: "Arrange" as const,
+      group: 1,
+      icon,
+      hint: `${hint}. Arranges the selection, or the whole scope when fewer than two nodes are selected`,
+      disabled: boardView || layoutCount < 2,
+      run: () => arrange(how),
+    })),
     {
       id: "layout",
       title: "Lay out the whole tree",
@@ -1573,7 +1647,7 @@ export function Editor({
       id: `align-${how}`,
       title,
       menu: "Arrange" as const,
-      group: how === "left" || how === "center" || how === "right" ? 1 : 2,
+      group: how === "left" || how === "center" || how === "right" ? 2 : 3,
       icon,
       disabled: boardView || arrangeCount < 2,
       run: () => alignSelection(how),
@@ -1582,7 +1656,7 @@ export function Editor({
       id: "distribute-horizontal",
       title: "Distribute horizontally",
       menu: "Arrange",
-      group: 3,
+      group: 4,
       icon: AlignHorizontalSpaceAround,
       disabled: boardView || arrangeCount < 3,
       run: () => distributeSelection("horizontal"),
@@ -1591,7 +1665,7 @@ export function Editor({
       id: "distribute-vertical",
       title: "Distribute vertically",
       menu: "Arrange",
-      group: 3,
+      group: 4,
       icon: AlignVerticalSpaceAround,
       disabled: boardView || arrangeCount < 3,
       run: () => distributeSelection("vertical"),
@@ -1857,6 +1931,7 @@ export function Editor({
                   </button>
                 );
               })}
+              {ids.includes("tidy") && <ArrangeMenu commands={commands} />}
             </div>
           ))}
           <button className="command-search" onClick={() => setShowPalette(true)} title={tooltipOf(byId("palette"))}>

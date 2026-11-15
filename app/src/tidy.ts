@@ -223,3 +223,149 @@ export function distribute(boxes: Box[], axis: "horizontal" | "vertical"): Map<s
   }
   return out;
 }
+
+// More layouts for the Arrange menu (US-9.8). Like the ones above they
+// only compute places; the editor applies them as one undoable edit.
+
+export type Positions = Map<string, { x: number; y: number }>;
+
+/** Room between cells of a grid and between the boxes of a star. */
+export const GRID_GAP = 40;
+/** Room between the levels of a tree. */
+export const LEVEL_GAP = 80;
+
+/** The boxes in rows of equal cells, as square as it gets, in reading order
+ * (top to bottom, then left to right) so the arrangement is predictable. */
+export function grid(boxes: Box[], origin: { x: number; y: number }): Positions {
+  const sorted = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
+  const columns = Math.max(1, Math.ceil(Math.sqrt(sorted.length)));
+  const cellW = Math.max(0, ...sorted.map((b) => b.width)) + GRID_GAP;
+  const cellH = Math.max(0, ...sorted.map((b) => b.height)) + GRID_GAP;
+  return new Map(
+    sorted.map((b, i) => [b.id, { x: origin.x + (i % columns) * cellW, y: origin.y + Math.floor(i / columns) * cellH }]),
+  );
+}
+
+/**
+ * The boxes as the devicetree hangs them: each under (or right of, for a
+ * `horizontal` tree) its nearest ancestor among the boxes, centred on its
+ * children. `parentOf` gives a node's parent in the devicetree; boxes with no
+ * ancestor among the boxes are roots, side by side. Siblings keep their
+ * current order across the tree.
+ */
+export function tree(
+  boxes: Box[],
+  parentOf: (id: string) => string | undefined,
+  origin: { x: number; y: number },
+  direction: "vertical" | "horizontal",
+): Positions {
+  const ids = new Set(boxes.map((b) => b.id));
+  const byId = new Map(boxes.map((b) => [b.id, b]));
+  const up = (id: string) => {
+    const seen = new Set([id]);
+    for (let p = parentOf(id); p !== undefined && !seen.has(p); p = parentOf(p)) {
+      if (ids.has(p)) return p;
+      seen.add(p);
+    }
+    return undefined;
+  };
+  const v = direction === "vertical";
+  // Along a level (`across`) and from one level to the next (`down`).
+  const across = (b: Box) => (v ? b.width : b.height);
+  const down = (b: Box) => (v ? b.height : b.width);
+  const at = (b: Box) => (v ? b.x : b.y);
+
+  const children = new Map<string | undefined, string[]>();
+  for (const b of boxes) {
+    const p = up(b.id);
+    children.set(p, [...(children.get(p) ?? []), b.id]);
+  }
+  for (const list of children.values()) list.sort((a, b) => at(byId.get(a)!) - at(byId.get(b)!));
+
+  // Each level is as deep as its deepest box.
+  const depth = new Map<string, number>();
+  const levels: number[] = [];
+  const walk = (id: string, d: number) => {
+    depth.set(id, d);
+    levels[d] = Math.max(levels[d] ?? 0, down(byId.get(id)!));
+    for (const c of children.get(id) ?? []) walk(c, d + 1);
+  };
+  const roots = children.get(undefined) ?? [];
+  for (const r of roots) walk(r, 0);
+  const levelAt: number[] = [];
+  levels.reduce((acc, size, d) => ((levelAt[d] = acc), acc + size + LEVEL_GAP), 0);
+
+  const span = new Map<string, number>();
+  const spanOf = (id: string): number => {
+    const kids = children.get(id) ?? [];
+    const kidsSpan = kids.reduce((s, c) => s + spanOf(c), 0) + GRID_GAP * Math.max(0, kids.length - 1);
+    const s = Math.max(across(byId.get(id)!), kidsSpan);
+    span.set(id, s);
+    return s;
+  };
+  const out: Positions = new Map();
+  const place = (id: string, start: number) => {
+    const b = byId.get(id)!;
+    const s = span.get(id)!;
+    const kids = children.get(id) ?? [];
+    const kidsSpan = kids.reduce((sum, c) => sum + span.get(c)!, 0) + GRID_GAP * Math.max(0, kids.length - 1);
+    let k = start + (s - kidsSpan) / 2;
+    for (const c of kids) {
+      place(c, k);
+      k += span.get(c)! + GRID_GAP;
+    }
+    const a = start + (s - across(b)) / 2;
+    const d = levelAt[depth.get(id)!];
+    out.set(id, v ? { x: origin.x + a, y: origin.y + d } : { x: origin.x + d, y: origin.y + a });
+  };
+  for (const r of roots) spanOf(r);
+  let start = 0;
+  for (const r of roots) {
+    place(r, start);
+    start += span.get(r)! + GRID_GAP;
+  }
+  return out;
+}
+
+/** The box most of `links` point at, ties to the one with more links of
+ * any kind, then to the first. */
+export function mostReferenced(boxes: Box[], links: Link[]): string | undefined {
+  const score = (id: string) => {
+    const into = links.filter((l) => l.target === id && l.source !== id).length;
+    const any = links.filter((l) => l.source === id || l.target === id).length;
+    return into * 1000 + any;
+  };
+  let best: string | undefined;
+  for (const b of boxes) if (best === undefined || score(b.id) > score(best)) best = b.id;
+  return best;
+}
+
+/** The boxes in a ring around `centre`, which stays where it is. The others
+ * keep their order around it, starting at the top, each given room by its
+ * size, and the ring is wide enough that none overlap the centre or each other. */
+export function star(boxes: Box[], centre: string): Positions {
+  const hub = boxes.find((b) => b.id === centre);
+  if (!hub) return new Map();
+  const cx = hub.x + hub.width / 2;
+  const cy = hub.y + hub.height / 2;
+  const angleOf = (b: Box) => {
+    // From the top, clockwise, so the current order reads like a clock.
+    const a = Math.atan2(b.y + b.height / 2 - cy, b.x + b.width / 2 - cx) + Math.PI / 2;
+    return (a + 2 * Math.PI) % (2 * Math.PI);
+  };
+  const ring = boxes.filter((b) => b.id !== centre).sort((a, b) => angleOf(a) - angleOf(b));
+  const out: Positions = new Map([[centre, { x: hub.x, y: hub.y }]]);
+  if (!ring.length) return out;
+  const room = (b: Box) => Math.hypot(b.width, b.height) + GRID_GAP;
+  const total = ring.reduce((s, b) => s + room(b), 0);
+  const radius = Math.max(total / (2 * Math.PI), (Math.hypot(hub.width, hub.height) + Math.max(...ring.map(room))) / 2);
+  let angle = -Math.PI / 2;
+  for (const b of ring) {
+    const step = (room(b) / total) * 2 * Math.PI;
+    // A single box sits straight above; more share the ring by their size.
+    const a = ring.length === 1 ? angle : angle + step / 2;
+    out.set(b.id, { x: cx + radius * Math.cos(a) - b.width / 2, y: cy + radius * Math.sin(a) - b.height / 2 });
+    angle += step;
+  }
+  return out;
+}

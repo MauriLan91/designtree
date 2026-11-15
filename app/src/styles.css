@@ -254,6 +254,10 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 .menu-title { flex: 1; white-space: nowrap; }
 .menu-shortcut { font: 11px var(--mono); color: var(--muted); background: none; border: none; padding: 0; }
 .menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+/* The toolbar's Arrange drop-down (US-9.8). */
+.arrange-menu { position: relative; display: flex; }
+.arrange-menu .tool.arrange-button { width: auto; gap: 2px; padding: 0 6px; }
+.arrange-menu .menu-check { color: var(--icon); }
 .toolbar-row { display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 8px; }
 .tool-group { display: flex; gap: 2px; padding-right: 6px; margin-right: 4px; border-right: 1px solid var(--border); }
 .tool-group:last-of-type { border-right: none; }
