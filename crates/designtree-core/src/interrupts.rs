@@ -120,7 +120,7 @@ fn has_property(node: &Node, name: &str) -> bool {
     node.properties.iter().any(|p| p.name == name)
 }
 
-fn cells_of(node: &Node, name: &str) -> Option<Vec<u64>> {
+pub(crate) fn cells_of(node: &Node, name: &str) -> Option<Vec<u64>> {
     node.properties
         .iter()
         .find(|p| p.name == name)
@@ -166,7 +166,7 @@ fn phandle_target<'a>(graph: &'a Graph, node: &Node, property: &str) -> Option<&
     })
 }
 
-fn tree_parent<'a>(graph: &'a Graph, node: &Node) -> Option<&'a Node> {
+pub(crate) fn tree_parent<'a>(graph: &'a Graph, node: &Node) -> Option<&'a Node> {
     graph
         .edges
         .iter()
@@ -176,7 +176,7 @@ fn tree_parent<'a>(graph: &'a Graph, node: &Node) -> Option<&'a Node> {
 
 /// The node `node`'s interrupts go to: its `interrupt-parent`, else its
 /// parent in the tree, and on up until a node with `#interrupt-cells`.
-fn interrupt_parent<'a>(graph: &'a Graph, node: &Node) -> Option<&'a Node> {
+pub(crate) fn interrupt_parent<'a>(graph: &'a Graph, node: &Node) -> Option<&'a Node> {
     let mut seen = HashSet::new();
     let mut child = node;
     loop {

@@ -320,7 +320,12 @@ minimum?: number, maximum?: number,
 /**
  * Bounds on the number of entries of an array value.
  */
-min_items?: number, max_items?: number, };
+min_items?: number, max_items?: number, 
+/**
+ * Cells per entry of a matrix value, when the schema fixes it
+ * (`items: { items: [a, b] }`); the property table groups by it.
+ */
+entry_cells?: number, };
 
 export type Binding = { 
 /**

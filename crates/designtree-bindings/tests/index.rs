@@ -86,6 +86,10 @@ fn captures_constraints() {
 
     let reg = property(&catalog, "vendor,uart-a", "reg");
     assert_eq!(reg.max_items, Some(1));
+    // A matrix whose entries list their cells (US-17.4).
+    let windows = property(&catalog, "vendor,uart-a", "vendor,dma-windows");
+    assert_eq!(windows.entry_cells, Some(2));
+    assert_eq!(turnaround.entry_cells, None);
     // dt-core.yaml bounds every `#...-cells` property.
     let cells = property(&catalog, "fixed-clock", "#clock-cells");
     assert_eq!(cells.maximum, Some(8.into()));

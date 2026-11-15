@@ -22,7 +22,7 @@ import type { SourceError, Span } from "./components/DtsEditor";
 import { reconcileEdges, reconcileNodes } from "./textSync";
 import { collapsedAncestors, collapseView, isGroupNode, toggleCollapsed } from "./collapse";
 import { GroupNode } from "./components/GroupNode";
-import { initialProperties, regEntryCells } from "./schemaProps";
+import { entryCellsOf, initialProperties, regEntryCells } from "./schemaProps";
 import { InterruptPanel } from "./components/InterruptPanel";
 import { AddressMapPanel } from "./components/AddressMapPanel";
 import { SocPicker } from "./components/SocPicker";
@@ -1383,8 +1383,17 @@ export function Editor({
       : selectedNodes.length === 0 && !selectedEdge && scope
         ? (nodes.find((n) => n.id === scope) ?? null)
         : null;
-  const inspectedParent = nodes.find((n) => n.id === edges.find((e) => e.sourceHandle === CHILD_HANDLE && e.target === inspected?.id)?.source);
-  const inspectedRegCells = inspectedParent && isDtNode(inspectedParent) ? regEntryCells(inspectedParent.data.properties) : undefined;
+  const inspectedEntryCells = useMemo(() => {
+    if (!inspected || !isDtNode(inspected)) return undefined;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const propertiesOf = (id: string) => {
+      const n = byId.get(id);
+      return n && isDtNode(n) ? n.data.properties : undefined;
+    };
+    const interruptParentOf = (id: string) =>
+      edges.find((e) => e.type === "ref" && e.source === id && (e.data as RefData | undefined)?.property === "interrupt-parent")?.target;
+    return entryCellsOf(inspected.id, propertiesOf, (id) => parents.get(id), interruptParentOf);
+  }, [inspected, nodes, edges, parents]);
   const designLabels = useMemo(
     () => nodes.filter(isDtNode).flatMap((n) => [n.data.label, ...(n.data.extraLabels ?? [])]).filter((l): l is string => !!l).sort(),
     [nodes],
@@ -2107,7 +2116,7 @@ export function Editor({
               onOverride={(id) => setOverriding((s) => new Set(s).add(id))}
               onEdgeChange={updateEdgeData}
               providerCells={providerCells}
-              regCells={inspectedRegCells}
+              entryCells={inspectedEntryCells}
               labels={designLabels}
             />
           </aside>

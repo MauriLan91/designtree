@@ -155,6 +155,11 @@ pub struct PropertySpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(type = "number", optional)]
     pub max_items: Option<u64>,
+    /// Cells per entry of a matrix value, when the schema fixes it
+    /// (`items: { items: [a, b] }`); the property table groups by it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub entry_cells: Option<u64>,
 }
 
 /// One entry of the element library, derived from one schema file.

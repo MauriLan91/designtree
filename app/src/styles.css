@@ -936,6 +936,13 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .twisty { display: flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; padding: 0; border: none; background: none; color: var(--muted); }
 .prop-table .item-row th { padding-left: 22px; }
 .prop-table .item-index { display: inline-block; padding: 0 4px; color: var(--muted); font-family: var(--mono); }
+/* An entry's cells side by side (US-17.4), each its own field. */
+.prop-table .entry-row > td:first-child { padding-left: 22px; }
+.prop-table .entry { display: flex; align-items: flex-start; gap: 4px; }
+.prop-table .entry .item-index { line-height: 24px; min-width: 2ch; }
+.prop-table .entry-cells { flex: 1; display: flex; flex-wrap: wrap; gap: 2px 4px; min-width: 0; }
+/* Wide enough for a 32-bit cell in hex; more cells than fit wrap. */
+.prop-table .entry-cells > input:not([type="checkbox"]) { flex: 1 1 11ch; width: auto; min-width: 11ch; }
 .prop-table .ref-target { color: var(--ref); }
 .prop-table .ref-summary { padding: 0 4px; font-family: var(--mono); color: var(--ref); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prop-table .item-row td label { font-size: 11px; }

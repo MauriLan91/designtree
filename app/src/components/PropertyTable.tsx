@@ -13,6 +13,7 @@ import {
   blank,
   blankItem,
   convert,
+  entriesOf,
   formatNumber,
   itemsOf,
   kindOf,
@@ -21,7 +22,9 @@ import {
   referenceOf,
   referenceTo,
   summaryOf,
+  withEntry,
   withItem,
+  withoutEntry,
   withoutItem,
   type ValueKind,
 } from "../propertyTable";
@@ -48,8 +51,9 @@ interface Props {
   locked: boolean;
   onChange: (properties: Property[]) => void;
   onReferenceChange: (id: string, args: number[]) => void;
-  /** Cells of one `reg` entry, from the parent's #address-cells and #size-cells. */
-  regCells?: number;
+  /** Cells per entry of `reg`, `ranges` and `interrupts`, from the
+   * devicetree around the node; other properties take the schema's. */
+  entryCells?: Record<string, number>;
   /** The labels of the design, which a Reference value picks from. */
   labels?: string[];
   /** Every property is a node reference, as under `/aliases` (US-17.5). */
@@ -73,7 +77,7 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
 /** A schema type that holds one number, edited as one field with no item rows. */
 const isScalar = (spec: PropertySpec | undefined) => /^u?int(8|16|32|64)$/.test(spec?.type ?? "");
 
-export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, regCells, labels = [], referencesOnly }: Props) {
+export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, entryCells, labels = [], referencesOnly }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
   // One-string values the user made a list; the binding says so for its own.
@@ -210,8 +214,11 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           // A scalar keeps its item rows only when it somehow holds several.
           const base = baseOf(p);
           const items = isScalar(spec) && summaryOf(p.value, kind).split(" ").length <= 1 ? null : itemsOf(p.value, kind, base);
+          // A cell list with a known entry width expands into its entries.
+          const width = entryCells?.[p.name] ?? spec?.entry_cells;
+          const entries = width && width > 1 && items && isCellList(p.value) ? entriesOf(items, width) : null;
           const expanded = open.has(p.name) && items !== null;
-          const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, p.name === "reg" ? regCells : undefined);
+          const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, width);
           const isTodo = todo?.includes(p.name);
           return (
             <Fragment key={p.name}>
@@ -291,6 +298,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     value={p.value}
                     base={base}
                     kind={kind}
+                    width={entries ? width : undefined}
                     spec={spec}
                     disabled={locked}
                     // Clearing a value removes the property, as deleting its line in the DTS
@@ -317,6 +325,41 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                 </td>
               </tr>
               {expanded &&
+                entries?.map((cells, i) => {
+                  const key = `${p.name}[${i}]`;
+                  return (
+                    <tr key={key} className="item-row entry-row">
+                      {/* One cell across key, type and value: an entry is a few
+                          numbers side by side, and the inspector is narrow. */}
+                      <td colSpan={3}>
+                        <div className="entry">
+                          <span className="item-index">{i}</span>
+                          <div className="entry-cells" role="group" aria-label={`${p.name} entry ${i}`}>
+                            {cells.map((text, j) => (
+                              <CellInput
+                                key={j}
+                                value={text}
+                                label={`${p.name} entry ${i} cell ${j}`}
+                                disabled={locked}
+                                onCommit={(t) => attempt(key, () => withItem(p.value, i * width! + j, t), p.name)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {errors[key] && <span className="row-error">{errors[key]}</span>}
+                      </td>
+                      <td>
+                        {!locked && (
+                          <button className="row-remove" aria-label={`Remove entry ${i}`} onClick={() => attempt(key, () => withoutEntry(p.value, i, width!), p.name)}>
+                            <X size={12} aria-hidden />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              {expanded &&
+                !entries &&
                 items!.map((text, i) => {
                   const key = `${p.name}[${i}]`;
                   return (
@@ -357,12 +400,18 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                 <tr className="item-row add-item">
                   <th scope="row" />
                   <td colSpan={3}>
-                    <button
-                      className="link"
-                      onClick={() => attempt(p.name, () => withItem(p.value, items!.length, blankItem(p.value)))}
-                    >
-                      <Plus size={12} aria-hidden /> Add {itemKind(p.value).toLowerCase()}
-                    </button>
+                    {entries ? (
+                      <button className="link" onClick={() => attempt(p.name, () => withEntry(p.value, width!))}>
+                        <Plus size={12} aria-hidden /> Add entry
+                      </button>
+                    ) : (
+                      <button
+                        className="link"
+                        onClick={() => attempt(p.name, () => withItem(p.value, items!.length, blankItem(p.value)))}
+                      >
+                        <Plus size={12} aria-hidden /> Add {itemKind(p.value).toLowerCase()}
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}
@@ -502,6 +551,7 @@ function ValueCell({
   value,
   base,
   kind,
+  width,
   spec,
   disabled,
   onCommit,
@@ -514,6 +564,8 @@ function ValueCell({
   value: PropertyValue;
   base: NumberBase;
   kind: ValueKind;
+  /** Cells per entry, when the value reads as `<…>, <…>` groups. */
+  width?: number;
   spec: PropertySpec | undefined;
   disabled: boolean;
   onCommit: (text: string) => void;
@@ -562,7 +614,7 @@ function ValueCell({
       </select>
     );
   }
-  return <CommitInput value={summaryOf(value, kind, base)} label={name} disabled={disabled} onCommit={onCommit} />;
+  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} disabled={disabled} onCommit={onCommit} />;
 }
 
 /** A text input that applies its value on Enter or when it loses focus. */

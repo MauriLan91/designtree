@@ -9,6 +9,7 @@ pub mod address_map;
 pub mod board;
 pub mod dtc;
 pub mod dts;
+pub mod entries;
 pub mod fdt;
 pub mod import;
 pub mod interrupts;

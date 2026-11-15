@@ -12,6 +12,14 @@ Select a node to edit it in the inspector.
     remove it with its ×, or add one with **Add cell**. A cell takes a number,
     a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
     suggested as you type when the kernel bindings are loaded.
+  - A cell list made of entries opens one row per entry instead, with a
+    field for each cell: `reg` and `ranges` take their entry size from
+    `#address-cells` and `#size-cells`, `interrupts` from the interrupt
+    parent's `#interrupt-cells`, other properties from the binding. **Add
+    entry** appends one of zeros. The row itself reads and takes the groups
+    as in the source, `<0x1c81000 0x1000>, <0x1c82000 0x2000>`, and the DTS
+    source writes `reg`, `ranges` and `interrupts` the same way. Warnings
+    about the number of items count entries.
   - With a kernel checkout loaded, the binding fixes the type of the
     properties it describes. An enum is a dropdown, a single number one
     field, and a boolean a checkbox: untick it to remove the property. Hover a key for the schema's description; values outside the

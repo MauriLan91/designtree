@@ -31,13 +31,14 @@ interface Props {
   onOverride: (id: string) => void;
   /** The references of the inspected node, shown in its property table. */
   references: Reference[];
-  /** Cells of one `reg` entry of the inspected node, from its parent. */
-  regCells?: number;
+  /** Cells per entry of the inspected node's `reg`, `ranges` and
+   * `interrupts`, from the devicetree around it (US-17.4). */
+  entryCells?: Record<string, number>;
   /** Every label of the design, for reference values. */
   labels?: string[];
 }
 
-export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references, regCells, labels }: Props) {
+export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCells, overriding, onOverride, references, entryCells, labels }: Props) {
   if (node?.type === "dt") {
     return (
       <NodeInspector
@@ -47,7 +48,7 @@ export function Inspector({ node, edge, onNodeChange, onEdgeChange, providerCell
         overriding={overriding.has(node.id)}
         onOverride={() => onOverride(node.id)}
         references={references}
-        regCells={regCells}
+        entryCells={entryCells}
         labels={labels}
         onReferenceChange={(id, args) => {
           const ref = references.find((r) => r.id === id);
@@ -99,7 +100,7 @@ function NodeInspector({
   onOverride,
   references,
   onReferenceChange,
-  regCells,
+  entryCells,
   labels,
 }: {
   node: DtFlowNode;
@@ -108,7 +109,7 @@ function NodeInspector({
   onOverride: () => void;
   references: Reference[];
   onReferenceChange: (id: string, args: number[]) => void;
-  regCells?: number;
+  entryCells?: Record<string, number>;
   labels?: string[];
 }) {
   const { data } = node;
@@ -236,7 +237,7 @@ function NodeInspector({
           locked={locked}
           onChange={setProps}
           onReferenceChange={onReferenceChange}
-          regCells={regCells}
+          entryCells={entryCells}
           labels={labels}
           // `aliases` maps names to nodes and nothing else.
           referencesOnly={data.name === "aliases"}

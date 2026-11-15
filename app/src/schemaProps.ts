@@ -34,12 +34,20 @@ const items = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
 /**
  * Problems with a value against the spec's limits, for inline warnings.
  * The binding counts the entries of a matrix (`reg`, `interrupts`), each
- * `entryCells` wide; without that width the count is left to the schema
- * check, which knows it.
+ * `entryCells` wide (US-17.4); without that width the count is left to the
+ * schema check, which knows it.
  */
 export function checkValue(spec: PropertySpec, value: PropertyValue | undefined, entryCells?: number): string | null {
   if (!value) return null;
-  if (value.type === "cells") {
+  // One chunk of cells with macros or references counts its entries too.
+  const chunk = value.type === "mixed" && value.value.length === 1 && value.value[0].type === "cells" ? value.value[0] : null;
+  if (chunk) {
+    const width = /-array$/.test(spec.type ?? "") ? 1 : entryCells;
+    if (!width) return null;
+    const count = Math.ceil(chunk.cells.length / width);
+    if (spec.min_items != null && count < spec.min_items) return `at least ${items(spec.min_items)}`;
+    if (spec.max_items != null && count > spec.max_items) return `at most ${items(spec.max_items)}`;
+  } else if (value.type === "cells") {
     const n = value.value;
     if (spec.minimum !== undefined && n.some((x) => x < spec.minimum!)) return `minimum is ${spec.minimum}`;
     if (spec.maximum !== undefined && n.some((x) => x > spec.maximum!)) return `maximum is ${spec.maximum}`;
@@ -96,6 +104,45 @@ export function regEntryCells(properties: Property[] | undefined): number {
     return p?.value.type === "cells" && p.value.value.length === 1 ? p.value.value[0] : fallback;
   };
   return cell("#address-cells", 2) + cell("#size-cells", 1);
+}
+
+/** One cell of `name`, when the node sets it to a single number. */
+function oneCell(properties: Property[] | undefined, name: string): number | undefined {
+  const p = properties?.find((q) => q.name === name);
+  return p?.value.type === "cells" && p.value.value.length === 1 ? p.value.value[0] : undefined;
+}
+
+/**
+ * The cells per entry of a node's `reg`, `ranges` and `interrupts` (US-17.4),
+ * as the core's DTS writer groups them: from the parent's `#address-cells`
+ * and `#size-cells` (and the node's own, for `ranges`), and from the
+ * `#interrupt-cells` of the interrupt parent, its `interrupt-parent` or
+ * else the nearest ancestor that has one.
+ */
+export function entryCellsOf(
+  id: string,
+  propertiesOf: (id: string) => Property[] | undefined,
+  parentOf: (id: string) => string | undefined,
+  interruptParentOf: (id: string) => string | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  const parent = parentOf(id);
+  if (parent !== undefined) {
+    const up = propertiesOf(parent);
+    const own = propertiesOf(id);
+    out.reg = regEntryCells(up);
+    out.ranges = (oneCell(own, "#address-cells") ?? 2) + (oneCell(up, "#address-cells") ?? 2) + (oneCell(own, "#size-cells") ?? 1);
+  }
+  const seen = new Set([id]);
+  for (let at = interruptParentOf(id) ?? parentOf(id); at !== undefined && !seen.has(at); at = interruptParentOf(at) ?? parentOf(at)) {
+    const cells = oneCell(propertiesOf(at), "#interrupt-cells");
+    if (cells !== undefined || propertiesOf(at)?.some((p) => p.name === "#interrupt-cells")) {
+      if (cells) out.interrupts = cells;
+      break;
+    }
+    seen.add(at);
+  }
+  return out;
 }
 
 /**
