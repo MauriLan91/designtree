@@ -43,3 +43,10 @@ describe("split ratio", () => {
     expect(clampSplit(0.01)).toBe(0.1);
   });
 });
+
+describe("canvas tool", () => {
+  it("keeps pan and falls back to select", () => {
+    expect(parseLayout({ tool: "pan" }).tool).toBe("pan");
+    expect(parseLayout({ tool: "lasso" }).tool).toBe("select");
+  });
+});

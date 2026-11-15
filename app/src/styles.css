@@ -351,6 +351,13 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .mode-split .source-pane { min-width: 240px; }
 .splitter.splitter-split { position: relative; flex: 0 0 7px; margin: 0 -4px 0 -3px; cursor: col-resize; }
 .splitter-split::after { width: 2px; }
+/* The select tool keeps the arrow; the pan tool shows a hand (US-9.7). */
+.react-flow:not(.tool-pan) .react-flow__pane { cursor: default; }
+/* React Flow's box around a rectangle selection would swallow the clicks
+   that add or remove nodes; the selected nodes drag together without it. */
+.react-flow__nodesselection-rect { display: none; }
+.react-flow.tool-pan .react-flow__pane { cursor: grab; }
+.react-flow.tool-pan .react-flow__pane.dragging { cursor: grabbing; }
 /* Clear of the mode switch above it. */
 .source-pane .preview { padding-top: 14px; }
 .mode-switch {

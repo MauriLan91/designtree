@@ -20,7 +20,12 @@ export interface Layout {
   panel: Pane & { tab: PanelTab };
   /** The graph's share of the canvas width in Split mode (US-15.8). */
   split: number;
+  /** What a left drag on the empty canvas does (US-9.7). */
+  tool: CanvasTool;
 }
+
+/** `select` draws a selection rectangle, `pan` moves the view. */
+export type CanvasTool = "select" | "pan";
 
 export type PaneName = "library" | "inspector" | "panel";
 
@@ -45,6 +50,7 @@ export const DEFAULT_LAYOUT: Layout = {
   inspector: { size: 320, open: true },
   panel: { size: 200, open: false, tab: "problems" },
   split: 0.5,
+  tool: "select",
 };
 
 const KEY = "designtree.layout";
@@ -72,6 +78,7 @@ export function parseLayout(raw: unknown): Layout {
     inspector: pane("inspector"),
     panel: { ...pane("panel"), tab: TABS.includes(tab as PanelTab) ? (tab as PanelTab) : DEFAULT_LAYOUT.panel.tab },
     split: typeof obj.split === "number" && Number.isFinite(obj.split) ? clampSplit(obj.split) : DEFAULT_LAYOUT.split,
+    tool: obj.tool === "pan" ? "pan" : "select",
   };
 }
 

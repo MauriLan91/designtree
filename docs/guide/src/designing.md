@@ -47,7 +47,7 @@ specifier cells with names from the kernel's `dt-bindings` headers, such as
 
 ## Groups
 
-Select nodes (Shift+drag selects an area) and choose **Edit › Group selection** (Ctrl+G) to
+Select nodes (drag a rectangle on the empty canvas) and choose **Edit › Group selection** (Ctrl+G) to
 frame them, for example "SoC peripherals". Groups are only visual and never
 reach the devicetree. The triangle in a group's header collapses it into a
 block, like a Simulink subsystem: edges that cross its border become ports

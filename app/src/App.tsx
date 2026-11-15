@@ -100,6 +100,8 @@ import {
   FilePlus,
   FolderOpen,
   Hammer,
+  Hand,
+  MousePointer2,
   Redo2,
   Save,
   Search,
@@ -251,7 +253,10 @@ interface EditorProps {
 
 /** Commands whose shortcuts have handlers of their own (undo knows about
  * text fields, the palette toggles from inside itself), so they stay fixed. */
-const FIXED_SHORTCUTS: ReadonlySet<string> = new Set(["undo", "redo", "palette"]);
+const FIXED_SHORTCUTS: ReadonlySet<string> = new Set(["undo", "redo", "palette", "select-all"]);
+
+/** Ctrl or Shift on a click adds a node to the selection or takes it out. */
+const MULTI_SELECT_KEYS = ["Control", "Meta", "Shift"];
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
@@ -1254,6 +1259,12 @@ export function Editor({
     }
     return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
   }, [nodes, portEdges, shownEdges, shownKey, scope]);
+  /** The nodes Select all picks: those drawn in the scope on show, not the
+   * ports that stand for nodes elsewhere. */
+  const scopeNodeIds = useMemo(
+    () => view.nodes.filter((n) => isDtNode(n) && realId(n.id) === n.id).map((n) => n.id),
+    [view.nodes],
+  );
 
   /**
    * Shows `id`'s scope (null: the main canvas). `pin` keeps a tab for it;
@@ -1482,6 +1493,36 @@ export function Editor({
       group: 1,
       disabled: !selectedNodes.some((n) => !n.parentId),
       run: groupSelection,
+    },
+    {
+      id: "select-all",
+      title: "Select all",
+      shortcut: "Ctrl+A",
+      menu: "Edit",
+      group: 2,
+      hint: "The nodes of the scope on show",
+      disabled: boardView || scopeNodeIds.length === 0,
+      run: () => selectOnly(scopeNodeIds),
+    },
+    {
+      id: "tool-select",
+      title: "Select tool",
+      menu: "Edit",
+      group: 2,
+      icon: MousePointer2,
+      hint: "Drag on the empty canvas to select; pan with the middle button or Space+drag",
+      checked: layout.tool === "select",
+      run: () => onLayout((l) => ({ ...l, tool: "select" })),
+    },
+    {
+      id: "tool-pan",
+      title: "Pan tool",
+      menu: "Edit",
+      group: 2,
+      icon: Hand,
+      hint: "Drag to move the view; Shift+drag to select",
+      checked: layout.tool === "pan",
+      run: () => onLayout((l) => ({ ...l, tool: "pan" })),
     },
     {
       id: "ungroup",
@@ -1724,7 +1765,9 @@ export function Editor({
     ["Ctrl+W", "Close the tab"],
     ["Alt+letter", "Open a menu (Alt+F: File)"],
     ["Delete", "Delete the selection"],
-    ["Shift+drag", "Select an area"],
+    ["Ctrl+click, Shift+click", "Add a node to the selection or take it out"],
+    ["Space+drag, middle drag", "Move the view with the select tool"],
+    ["Shift+drag", "Select an area with the pan tool"],
   ];
   const commandsRef = useRef(commands);
   commandsRef.current = commands;
@@ -1795,7 +1838,7 @@ export function Editor({
           />
         </div>
         <div className="toolbar-row" role="toolbar" aria-label="Main actions">
-          {[["new", "open", "save"], ["undo", "redo"], ["add", "tidy", "snap"]].map((ids, g) => (
+          {[["new", "open", "save"], ["undo", "redo"], ["tool-select", "tool-pan"], ["add", "tidy", "snap"]].map((ids, g) => (
             <div className="tool-group" key={g}>
               {ids.map((id) => {
                 const c = byId(id);
@@ -1937,6 +1980,14 @@ export function Editor({
                 setShowPalette(true);
               }}
               zoomOnDoubleClick={false}
+              // The select tool draws a rectangle on a left drag and pans with
+              // the middle button (or Space, React Flow's pan key); the pan
+              // tool keeps the left drag and selects with Shift (US-9.7).
+              selectionOnDrag={layout.tool === "select"}
+              panOnDrag={layout.tool === "select" ? [1] : true}
+              selectionKeyCode={layout.tool === "select" ? null : "Shift"}
+              multiSelectionKeyCode={MULTI_SELECT_KEYS}
+              className={layout.tool === "pan" ? "tool-pan" : undefined}
             >
               {settings.snapToGrid ? (
                 <Background variant={BackgroundVariant.Lines} gap={settings.gridSize} color="var(--grid)" />
