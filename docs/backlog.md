@@ -1,6 +1,6 @@
 # Product backlog
 
-> Status: **draft v0.4** (2026-11-10, M6 added from the second round of UX feedback). Product decisions below were taken
+> Status: **draft v0.5** (2026-11-15, M7 and M8 added from a large vendor tree and the third round of feedback). Product decisions below were taken
 > with the product owner; story details can still change during refinement.
 > Every milestone is mirrored as a
 > [GitHub milestone](https://github.com/MauriLan91/designtree/milestones) and
@@ -21,6 +21,8 @@
 | D7 | The canvas shows **one scope at a time**: the root is the main canvas, double-clicking a node opens its children in a tab with a breadcrumb, and double-clicking a node that cannot have children opens its property editor. Edges are only for ports, buses and phandle references; the parent/child edge goes away. | 2026-11-06 |
 | D8 | In a bus controller's scope (I²C, SPI, ...) the controller is drawn as a **bus bar** with generated, read-only bus edges to its children. | 2026-11-06 |
 | D9 | The menu bar is drawn **in HTML** inside the window, from the same command registry as the command palette, the toolbar and the shortcuts. | 2026-11-06 |
+| D10 | **Decompiled vendor trees** (a `.dtb`, or the DTS `dtc` writes from one) are a supported input: their numeric phandles are restored to references. | 2026-11-15 |
+| D11 | The number base (hex, decimal, octal) is kept **per cell**, not per property. | 2026-11-15 |
 
 ## Product vision
 
@@ -61,6 +63,8 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
 | **M6 v1.2 Editing comfort** ✅ | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | done 2026-11-15 |
+| **M7 v1.3 Large trees** | Trees of thousands of nodes and decompiled blobs: restored references, node search, compact property table, library by device class with filters, problems at scale | G5 | 2027-01-29 |
+| **M8 v2.0 Beyond the editor** | Usage and diff views, validation profiles and quick fixes, pin multiplexing, Zephyr, web demo, assistant | – | 2027-09-30 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
 following milestone. To be adjusted to the team's real capacity.
@@ -87,6 +91,7 @@ draft PR. The **model** column says which Claude model should drive it; the
 | `init` | Creating and maintaining `CLAUDE.md`. |
 | `dataviz` | Stories that draw charts or maps (address map, benchmark reports). |
 | `artifact-design` | Design mock-ups and the project landing page. |
+| `claude-api` | Stories that call the Claude API (the assistant of US-22.1). |
 
 From M5 on, stories also name skills installed on the maintainer's machine (they are not
 available in cloud sessions unless installed there):
@@ -320,11 +325,124 @@ while US-17.4 below brings them to the table.
 | US-18.4 | As a bring-up engineer, I want the library to put first the elements that fit the node I am in so that I pick a device that belongs there. | A "Fits here" section on top of the library and of search results, from the open scope's schema (child node patterns, bus type: I²C, SPI, `cpus`, ...); everything else stays available below; a node placed under a parent whose schema does not allow it gets a warning on the node and in the problems panel, naming the parent and the reason. | 8 | Opus 5.5 | run, code-review, design-everyday-things |
 | US-18.5 | As a user, I want a button that clears the library search so that I get back to the full list in one click. | A clear (×) button inside the search field while it holds text; Escape does the same; focus stays in the field. | 1 | Haiku 5.5 | run |
 
+## M7 · v1.3 Large trees
+
+Stories from loading a real vendor tree (a decompiled Qualcomm board, 4,663
+nodes, 2026-11-15) and from the third round of hands-on feedback (8 notes).
+Seven defects found on the way are tracked as bugs in v1.0: the canvas is
+empty after importing a large tree, a bus scope is one group that cannot be
+tidied, a generic compatible (`simple-bus`, `syscon`) picks another device's
+schema, the address map reports overlaps of zero-size regions, clicking the
+open scope's node in the outline does not go back to its parent, a single
+number without a schema type is shown with a "Cell" child row, and export
+moves `compatible` before the other properties.
+
+### F1 Devicetree import (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-1.6 | As a BSP maintainer, I want a decompiled devicetree to open with its references restored so that I see what points at what. | Numeric phandles in known phandle properties (`interrupt-parent`, `clocks`, `*-gpios`, `*-supply`, schema `phandle` and `phandle-array` types, specifier lengths from the provider's `#*-cells`) become references and reference edges; `phandle` properties and `__symbols__`, `__fixups__`, `__local_fixups__` are hidden and regenerated on build; labels are taken from `__symbols__` when the source has none; export writes `&label`; the rebuilt `.dtb` equals the original. | 8 | Opus 5.5 | code-review, simplify |
+| US-1.7 | As a BSP maintainer, I want to open a `.dtb` directly so that I can inspect the tree a device boots with. | File > Import accepts `.dtb`, and so does `designtree import`; the result is the same as importing its decompiled source, through US-1.6. | 3 | Sonnet 5.5 | run, code-review, security-review |
+
+### F9 Editing ergonomics (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-9.9 | As a user, I want a scope I open for the first time to be already arranged so that I never land on an empty canvas. | A scope the user never arranged is tidied when first shown; nodes without references fill a grid shaped like the viewport instead of four columns; Fit view always shows the scope (the zoom floor follows its size). | 2 | Sonnet 5.5 | run |
+
+### F16 Composition (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-16.6 | As a BSP maintainer, I want to search the nodes of my design so that I reach one of thousands in seconds. | Go to node (Ctrl+P) searches name, label, compatible, path and phandle; the Outline has a filter field that keeps the matching rows with their ancestors; Enter shows the node in its scope. | 3 | Sonnet 5.5 | run, ux-heuristics |
+| US-16.7 | As a user, I want a node card to show what is inside and whether it is enabled so that I know where to drill down. | Cards show the number of children with an open affordance; nodes whose `status` is not `okay` or `ok` are drawn dimmed with a "disabled" mark, in the Outline too; a View toggle hides disabled nodes. | 2 | Sonnet 5.5 | run, refactoring-ui |
+
+### F17 Property table (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-17.6 | As a user, I want to switch a number between hex, decimal and octal from inside its field so that the base does not take a row of its own. | A small h/d/o toggle inside every numeric field replaces the base selector of US-17.3; one click cycles the base and re-renders the value; the base is kept per cell (D11) in the design file, read from the imported DTS and written on export; designs saved with a base per property still open. | 3 | Opus 5.5 | run, code-review, microinteractions |
+| US-17.7 | As a user, I want a compact, aligned property table so that I can read a node at a glance. | One row height for every property; the type is a short chip that opens the type list; the key column is resizable, the full key and value show in a tooltip and long keys are elided in the middle; the items of a list are edited inline with "+" at the end and "−" beside each item, with no "Add cell" row; Text mode fills the panel. | 5 | Sonnet 5.5 | run, refactoring-ui, web-typography |
+| US-17.8 | As a BSP maintainer, I want long values to stay readable so that init sequences and tables do not flood the panel. | Byte arrays are edited as a hex grid (16 per line, offsets, ASCII column); cell lists over 64 items are paged or drawn only where in view; long strings open a multi-line editor; a row shows the size of its value. | 5 | Sonnet 5.5 | run, code-review |
+
+### F18 Library browser (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-18.6 | As a bring-up engineer, I want the library grouped by what a device is so that I browse dozens of entries, not thousands. | Root-node schemas (boards and SoCs, 4,213 of the 4,770 "arm" entries of kernel 7.3) leave the device list and feed the root's `compatible` picker; the kernel's binding folders map to about 15 device classes (CPU, memory, clock and reset, power, bus, storage, network, display, audio, sensor, input, ...); a class with more than 200 entries is sub-grouped by vendor; every header shows its count. | 5 | Opus 5.5 | run, code-review, ux-heuristics |
+| US-18.7 | As a bring-up engineer, I want to filter the library by class, vendor and bus so that I narrow it without knowing a name. | Filter chips for class, vendor (names from `vendor-prefixes.yaml`) and bus (I²C, SPI, MMIO, ...), combined with the search; "Fits here" becomes one of the filters and ranks by the scope's bus instead of listing everything a permissive parent allows (15,754 of 26,712 under `/` today); filters are remembered per user. | 5 | Sonnet 5.5 | run, ux-heuristics |
+
+### F15 Workbench (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-15.10 | As a user, I want a design to remember the kernel it was made with so that reopening it brings back the same library. | The design file stores the kernel checkout (path and version); opening it loads that checkout when it exists and offers the registered checkouts otherwise; a version mismatch warns as today; the kernel can be changed from the status bar. | 3 | Sonnet 5.5 | run, security-review |
+
+### F5 Schema validation (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-5.3 | As a BSP maintainer, I want to group and filter the problems so that thousands of them are workable. | Problems grouped by rule, by node or by property, with counts; filters for severity, source (structure, schema, `dtc`) and text; undocumented vendor properties are one collapsible class; rows show the node path; printable byte values are shown as text. | 5 | Sonnet 5.5 | run, ux-heuristics |
+
+### F11 Performance (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-11.3 | As a user, I want lists to stay fast on a 5,000-node design so that large boards remain fluid. | Outline, problem list and property table draw only the rows in view; the design file is written compactly (an array of numbers on one line); a 5,000-node design with 8,000 problems joins the G5 benchmark. | 3 | Sonnet 5.5 | run, high-perf-browser |
+
+## M8 · v2.0 Beyond the editor
+
+The ideas kept aside until now, planned as the release after 1.0: seeing how
+a tree is wired and how it changed, validation that fits downstream trees,
+pin multiplexing, other sources and platforms, and an assistant. Stories are
+coarse and will be refined when the milestone starts.
+
+### F19 Insight
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-19.1 | As a BSP maintainer, I want to see who uses a node and what it uses so that I can judge the effect of a change. | The inspector lists the consumers and the providers of the selected node, by kind (clock, interrupt, GPIO, supply, ...) with the specifier; clicking one shows it in its scope; a "Used by" count on the card; works on references restored by US-1.6. | 5 | Sonnet 5.5 | run, code-review |
+| US-19.2 | As a BSP maintainer, I want to compare two trees so that I see what a new BSP drop changed. | Compare two designs, `.dts` or `.dtb` files, or a design with a git revision of itself; added, removed and changed nodes and properties as a list and as marks on the canvas and the outline; nodes are matched by path, then by label; `designtree diff` prints the same. | 13 | Opus 5.5 | run, code-review, simplify, design-everyday-things |
+
+### F5 Schema validation (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-5.4 | As a BSP maintainer of a downstream tree, I want a validation profile so that undocumented vendor properties do not bury the real problems. | Profiles "mainline" and "downstream" chosen per design and saved in it; "downstream" silences undocumented properties and compatibles and keeps type, length and structure checks; single rules can be switched off per design; the CLI takes `--profile`. | 5 | Opus 5.5 | code-review |
+| US-5.5 | As a user, I want one-click fixes for mechanical problems so that I do not correct hundreds of them by hand. | Quick fixes from the problems panel, each undoable and applicable to one problem or to all of its kind: unit address taken from `reg`, `ok` to `okay`, upper-case and `0x` unit addresses normalized, a boolean written with a value made a flag. | 5 | Sonnet 5.5 | run, code-review |
+
+### F1 Devicetree import (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-1.8 | As a BSP maintainer, I want exported numbers written as they were so that re-exporting a file changes only what I edited. | The spelling of every imported number (`0x00`, leading zeros, case) and the position of `compatible` among the properties are kept and written back; an unmodified import exports textually identical except for whitespace on the G1 corpus. | 5 | Opus 5.5 | code-review |
+| US-1.9 | As a bring-up engineer, I want to import the devicetree of a running system so that I start from what the board really uses. | Import from a `/proc/device-tree` directory, local or copied from the target; same result as importing the equivalent `.dtb` (US-1.7). | 3 | Sonnet 5.5 | code-review, security-review |
+
+### F20 Pin multiplexing
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-20.1 | As a bring-up engineer, I want a pin multiplexing editor for my SoC so that I assign functions to pins without reading the pinctrl binding. | A pin view per pin controller listing pins, groups and functions from the SoC's pinctrl schema and `.dtsi`; assigning a function writes the `pinctrl-N` states and pin configuration nodes; conflicts between devices are flagged; extends the connector view of US-14.3. | 13 | Opus 5.5 | run, code-review, design-everyday-things |
+
+### F21 Platforms
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-21.1 | As a Zephyr developer, I want to use Zephyr's bindings so that I can edit Zephyr devicetrees. | A Zephyr tree can be chosen instead of a kernel checkout; its bindings (Zephyr's own YAML format) feed the library and the validation; overlays (`.overlay`) import and export. | 13 | Opus 5.5 | code-review, security-review |
+| US-21.2 | As a newcomer, I want to try DesignTree in a browser so that I can evaluate it without installing. | The Rust crates compiled to WASM behind the same commands as the Tauri shell; a demo on the project site with a sample board and a reduced library; no `dtc`, so export only. | 8 | Opus 5.5 | code-review, high-perf-browser |
+
+### F22 Assistant
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-22.1 | As a bring-up engineer, I want to describe a change in words so that the editor makes it for me. | An assistant panel takes a request ("add an I²C temperature sensor at 0x48 on i2c1"), proposes the edit as a preview on the canvas and applies it as one undoable step; it uses the loaded bindings to pick the compatible and required properties; the user supplies the API key, nothing is sent before the first request. | 13 | Opus 5.5 | run, code-review, security-review, claude-api |
+
+### F15 Workbench (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-15.11 | As a user, I want small conveniences around a design so that routine steps take no thought. | Build proposes `<design>.dtb` as the file name; the Compatible field shows one chip per string; the scope bar shows how many nodes each scope holds. | 2 | Sonnet 5.5 | run |
+
 ## Ideas not yet scheduled
 
-- Full pin multiplexing editor (`pinctrl`) per SoC, beyond the connector view of US-14.3.
-- Import from a running system (`/proc/device-tree` or a `.dtb`).
-- Git-aware diff of two designs, shown on the canvas.
-- Zephyr devicetree support (same format, different bindings).
-- Web build (the Rust crates compiled to WASM) for a try-in-browser demo.
-- Claude assistant inside the app: "add an I²C temperature sensor at 0x48 on i2c1".
+Nothing for now: the earlier ideas are planned in M8.
