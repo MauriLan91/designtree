@@ -335,7 +335,14 @@ path: string,
 /**
  * Library category, taken from the first directory component (`serial`).
  */
-category: string, title?: string | null, compatibles?: Array<string>, properties?: Array<PropertySpec>, 
+category: string, title?: string | null, compatibles?: Array<string>, 
+/**
+ * The compatibles of `compatibles` this schema lists only after a more
+ * specific one (`"airoha,en7581-scu", "syscon"`) and another schema
+ * documents. A node with such a compatible is not described here, and
+ * the library does not list it here.
+ */
+fallbacks?: Array<string>, properties?: Array<PropertySpec>, 
 /**
  * The node name a new node gets, for the basic nodes the name defines
  * (`/`, `cpus`, `memory@0`); `None` for a device binding.

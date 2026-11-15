@@ -144,7 +144,8 @@ pub struct LibraryEntry {
     pub buses: Vec<String>,
 }
 
-/// The library entries of one schema: one per compatible, or the schema
+/// The library entries of one schema: one per compatible it documents (not
+/// the fallbacks another schema documents, such as `syscon`), or the schema
 /// alone when it lists none.
 fn entries_of(binding: &Binding) -> impl Iterator<Item = Hit<'_>> {
     let alone = binding.compatibles.is_empty().then_some(Hit {
@@ -154,6 +155,7 @@ fn entries_of(binding: &Binding) -> impl Iterator<Item = Hit<'_>> {
     binding
         .compatibles
         .iter()
+        .filter(|c| !binding.fallbacks.contains(c))
         .map(move |c| Hit {
             binding,
             compatible: Some(c.as_str()),
@@ -223,6 +225,7 @@ mod tests {
             category: path.split('/').next().unwrap().to_string(),
             title: Some(title.to_string()),
             compatibles: compatibles.iter().map(|c| c.to_string()).collect(),
+            fallbacks: vec![],
             properties: Vec::new(),
             node_name: None,
             buses: Vec::new(),

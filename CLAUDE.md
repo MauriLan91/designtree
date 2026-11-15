@@ -41,7 +41,7 @@ CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, 
 
 - **Generated types**: `app/src/model.gen.ts` comes from the Rust types. After
   changing a serialized type in Rust, run
-  `UPDATE_TS=1 cargo test -p designtree --test typegen` and commit the result;
+  `UPDATE_TS=1 cargo test -p designtree-cli --test typegen` and commit the result;
   the test fails when the file is stale.
 - **G1 corpus** (round trip of 50 kernel board files): `scripts/fetch-kernel-dts.sh ~/linux-g1`,
   then `DESIGNTREE_LINUX_SRC=~/linux-g1 cargo test -p designtree-core --test g1_corpus -- --ignored --nocapture`.
