@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -56,6 +56,7 @@ import { BottomPanel } from "./components/BottomPanel";
 import { PaneRail, PANE_SHORTCUTS } from "./components/PaneRail";
 import { ActivityBar } from "./components/ActivityBar";
 import { Splitter } from "./components/Splitter";
+import { SplitHandle } from "./components/SplitHandle";
 import { StatusBar } from "./components/StatusBar";
 import { ScopeBar } from "./components/ScopeBar";
 import { BoundaryNode } from "./components/BoundaryNode";
@@ -1831,7 +1832,7 @@ export function Editor({
           })()}
         </div>
       </header>
-      <main className={`canvas mode-${mode}`}>
+      <main className={`canvas mode-${mode}`} style={{ "--split": layout.split } as CSSProperties}>
         <ModeSwitch mode={mode} onMode={setMode} />
         <div ref={canvasRef} className="graph" hidden={mode === "dts"} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
           {kernelWarning && (
@@ -1949,6 +1950,7 @@ export function Editor({
             </NodeProblems.Provider>
           )}
         </div>
+        {mode === "split" && <SplitHandle ratio={layout.split} onRatio={(split) => onLayout((l) => ({ ...l, split }))} />}
         {/* Kept mounted in graph mode, so the cursor and scroll stay put. */}
         <div className="source-pane" hidden={mode === "graph"}>
           <DtsPreview

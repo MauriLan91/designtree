@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LAYOUT, clampSize, parseLayout } from "./layout";
+import { DEFAULT_LAYOUT, clampSize, clampSplit, parseLayout } from "./layout";
 
 describe("parseLayout", () => {
   it("falls back to the defaults for nothing or junk", () => {
@@ -32,5 +32,14 @@ describe("side bar view", () => {
   it("keeps the outline and falls back to the library", () => {
     expect(parseLayout({ library: { view: "outline" } }).library.view).toBe("outline");
     expect(parseLayout({ library: { view: "files" } }).library.view).toBe("library");
+  });
+});
+
+describe("split ratio", () => {
+  it("keeps a stored ratio within range and defaults to even", () => {
+    expect(parseLayout({ split: 0.62 }).split).toBe(0.62);
+    expect(parseLayout({ split: 2 }).split).toBe(0.9);
+    expect(parseLayout({ split: "wide" }).split).toBe(0.5);
+    expect(clampSplit(0.01)).toBe(0.1);
   });
 });

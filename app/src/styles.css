@@ -345,6 +345,12 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .source-pane { flex: 1; min-width: 0; display: flex; background: var(--panel); }
 .mode-split .source-pane { border-left: 1px solid var(--border); }
 .graph[hidden], .source-pane[hidden] { display: none; }
+/* The graph takes the stored share of the width (US-15.8); both halves keep
+   240 px (SPLIT_MIN in layout.ts) however narrow the canvas gets. */
+.mode-split .graph { flex: 0 0 auto; width: clamp(240px, calc(var(--split, 0.5) * 100%), calc(100% - 240px)); }
+.mode-split .source-pane { min-width: 240px; }
+.splitter.splitter-split { position: relative; flex: 0 0 7px; margin: 0 -4px 0 -3px; cursor: col-resize; }
+.splitter-split::after { width: 2px; }
 /* Clear of the mode switch above it. */
 .source-pane .preview { padding-top: 14px; }
 .mode-switch {

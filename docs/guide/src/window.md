@@ -32,7 +32,10 @@
   sync with the canvas. The switch at the top right of the editor shows the
   graph, the graph and the source side by side, or the source alone
   (Ctrl+1, Ctrl+2, Ctrl+3, also in **View**). Each tab keeps its own mode;
-  new tabs start in the last one chosen.
+  new tabs start in the last one chosen. In Split mode, drag the line between the
+  graph and the source to give either more room (or focus it with Tab and
+  use the arrow keys); double-click it for an even split. The split is
+  remembered.
 - **Bottom panel** (under the canvas, Ctrl+J): **Problems** (structural
   errors and the schema check), **Build** (dtc's output), **Interrupts** and
   **Address map**. A build opens it on Build.
