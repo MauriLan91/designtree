@@ -5,6 +5,7 @@ import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from ".
 import { BASIC_CATEGORY, EMPTY_ENTRY, basicEntry, bindingOf, entryKey, entryOfKey, highlight } from "../library";
 import type { Binding, LibraryEntry } from "../model";
 import { KINDS, kindOf } from "../categories";
+import { fitting } from "../fits";
 import {
   TILE_WIDTH,
   categorySections,
@@ -24,6 +25,9 @@ export const DRAG_MIME = "application/x-designtree-entry";
 
 interface Props {
   onAdd: (binding: Binding | null) => void;
+  /** The bus class and name of the scope on show in the active tab, whose
+   * fitting elements come first (US-18.4). */
+  fit?: { cls: string; name: string } | null;
   /** Kernel tree to index now: from the startup arguments, or picked in the kernel settings. */
   requestedKernel?: string | null;
   /** Called with the summary of each kernel tree that was indexed. */
@@ -33,7 +37,7 @@ interface Props {
 /** Element library built from the kernel binding schemas: one entry per
  * compatible (US-18.1), grouped in collapsible sections by category and
  * drawn as a list or a grid (US-18.2). Only the rows in view are drawn. */
-export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
+export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) {
   const [summary, setSummary] = useState<CatalogSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,22 +192,35 @@ export function Palette({ onAdd, requestedKernel, onKernelLoaded }: Props) {
     () => ({ id: "basic", title: "Basic", category: BASIC_CATEGORY, entries: [...basics.map(basicEntry), EMPTY_ENTRY] }),
     [basics],
   );
+  // What fits the scope on show leads the library and the search results;
+  // everything else stays below it (US-18.4).
+  const fits = useMemo(() => (fit ? fitting(results.entries, fit.cls) : []), [fit, results]);
+  const fitsTitle = fit ? `Fits here · ${fit.name}` : "";
   const sections: Section[] = useMemo(() => {
-    if (searching && category) return [{ id: "matches", title: "Matches", entries: results.entries, headless: true }];
+    const matches = (entries: LibraryEntry[]): Section[] => {
+      if (!fits.length) return [{ id: "matches", title: "Matches", entries, headless: true }];
+      const fitSet = new Set(fits);
+      return [
+        { id: "fits", title: fitsTitle, entries: fits },
+        { id: "matches", title: "Other matches", entries: entries.filter((e) => !fitSet.has(e)) },
+      ];
+    };
+    if (searching && category) return matches(results.entries);
     if (searching) {
       const words = results.query.toLowerCase().split(/\s+/).filter(Boolean);
       const basicMatches = basicSection.entries.filter((e) =>
         words.every((w) => `${e.title} ${nodeNames.get(e.path) ?? ""}`.toLowerCase().includes(w)),
       );
-      return [{ id: "matches", title: "Matches", entries: [...basicMatches, ...results.entries], headless: true }];
+      return matches([...basicMatches, ...results.entries]);
     }
     // A picked category shows its elements, without the history of other ones.
     if (category) return categories;
-    return [basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
-  }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries]);
+    const fitsSection: Section[] = fits.length ? [{ id: "fits", title: fitsTitle, entries: fits }] : [];
+    return [...fitsSection, basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
+  }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries, fits, fitsTitle]);
 
   // Search matches include the basic nodes that match.
-  const shown = searching ? sections[0].entries.length : results.entries.length;
+  const shown = searching ? sections.reduce((n, s) => n + s.entries.length, 0) : results.entries.length;
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;

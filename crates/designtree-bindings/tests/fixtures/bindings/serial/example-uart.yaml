@@ -55,3 +55,21 @@ properties:
 required:
   - compatible
   - reg
+
+examples:
+  - |
+    // A UART on the SoC's bus.
+    serial@1c28000 {
+        compatible = "vendor,uart-a";
+        reg = <0x1c28000 0x400>;
+    };
+  - |
+    spi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        uart@0 {
+            compatible = "vendor,uart-b", "vendor,uart-b1";
+            reg = <0>;
+        };
+    };

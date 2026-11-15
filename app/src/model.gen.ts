@@ -340,13 +340,22 @@ category: string, title?: string | null, compatibles?: Array<string>, properties
  * The node name a new node gets, for the basic nodes the name defines
  * (`/`, `cpus`, `memory@0`); `None` for a device binding.
  */
-node_name?: string | null, };
+node_name?: string | null, 
+/**
+ * The bus classes the schema's examples put its nodes under (`i2c`,
+ * `spi`, `cpus`, `mmio`; see [`bus_class`]); empty when they do not say.
+ */
+buses?: Array<string>, };
 
 export type LibraryEntry = { 
 /**
  * Schema path, which the full binding is fetched by.
  */
-path: string, category: string, title?: string | null, compatible?: string | null, };
+path: string, category: string, title?: string | null, compatible?: string | null, 
+/**
+ * Where the schema's examples put it (US-18.4), for "Fits here".
+ */
+buses?: Array<string>, };
 
 export type DtMacro = { name: string, value: number, 
 /**

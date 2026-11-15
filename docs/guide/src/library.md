@@ -46,6 +46,22 @@ The star next to an element adds it to **Favorites**; elements you add show
 up under **Recent**. Both are kept between sessions. While a search is
 typed, the sections give way to one list of matches, best first.
 
+## What fits here
+
+The library follows the level open on the canvas. **Fits here**, on top
+of the library and of the search results, lists the elements that belong
+in it: I²C devices in an I²C controller, SPI devices in an SPI one, CPUs in
+`/cpus`, memory-mapped devices in `/` or a `soc` bus. The header names the
+node you are in. Everything else stays below, under its category or as
+**Other matches**.
+
+DesignTree learns where an element belongs from the examples of its
+binding schema, which show each device inside the node it hangs from. A
+node placed under a different kind of parent (an I²C sensor under an SPI
+controller, say) gets a warning on the node and under **Placement** in the
+Problems panel, naming the parent and the kind of bus the binding expects.
+It is a hint, not an error: the build is not blocked.
+
 ## Adding a node
 
 Double-click an element, or drag it to the canvas. The new node comes with

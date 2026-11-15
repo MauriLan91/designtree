@@ -30,6 +30,7 @@ import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
 import { ProblemList } from "./components/ProblemList";
 import { NodeProblems } from "./nodeProblems";
+import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
 import {
   accepts,
@@ -209,6 +210,9 @@ export interface EditorStatus {
   dirty: boolean;
   /** A new empty design nobody touched: opening a design may replace it. */
   fresh: boolean;
+  /** The bus class of the scope on show and its node's name, which the
+   * library's "Fits here" section follows (US-18.4). */
+  fit?: { cls: string; name: string } | null;
 }
 
 /** What the workspace asks of an editor. */
@@ -457,7 +461,13 @@ export function Editor({
   }, []);
 
   const { dirty, markSaved } = history;
-  useEffect(() => onStatus({ title, dirty, fresh: fresh && !dirty }), [title, dirty, fresh, onStatus]);
+  const scopeNode = nodes.find((n) => n.id === scope);
+  const fitCls = scopeNode && isDtNode(scopeNode) ? scopeClass(scopeNode) : null;
+  const fitName = scopeNode && isDtNode(scopeNode) ? (scopeNode.data.unitAddress ? `${scopeNode.data.name}@${scopeNode.data.unitAddress}` : scopeNode.data.name) : "";
+  useEffect(
+    () => onStatus({ title, dirty, fresh: fresh && !dirty, fit: fitCls ? { cls: fitCls, name: fitName } : null }),
+    [title, dirty, fresh, onStatus, fitCls, fitName],
+  );
 
   const kernelWarning = !!extras.kernel && !!kernel?.version && extras.kernel !== kernel.version;
 
@@ -573,13 +583,6 @@ export function Editor({
     return () => clearTimeout(t);
   }, [schemaKey, kernel]);
 
-  const nodeProblems = useMemo(() => {
-    const byNode = new Map<string, string[]>();
-    for (const p of [...errors, ...(schema.problems ?? [])]) {
-      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
-    }
-    return byNode;
-  }, [errors, schema.problems]);
 
   useEffect(() => {
     if (!showInterrupts || !inTauri) return;
@@ -715,6 +718,36 @@ export function Editor({
       data.binding ?? data.compatible.map((c) => bindingsByCompatible.get(c)).find((b) => b) ?? undefined,
     [bindingsByCompatible],
   );
+
+  // Nodes under a parent their binding does not expect (US-18.4).
+  const placementFound = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const name = (id: string) => {
+      const n = byId.get(id);
+      return n && isDtNode(n) ? (n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name) : id;
+    };
+    const out: Problem[] = [];
+    for (const n of nodes) {
+      const binding = isDtNode(n) ? bindingOf(n.data) : undefined;
+      if (!isDtNode(n) || !binding?.buses?.length) continue;
+      const parent = byId.get(parents.get(n.id) ?? "");
+      const problem = parent && isDtNode(parent) ? placementProblem(n, binding, parent, name) : null;
+      if (problem) out.push(problem);
+    }
+    return out;
+  }, [nodes, parents, bindingOf]);
+  // Dragging changes `nodes` every frame; the warnings, and the node badges
+  // that read them, only change when the messages do.
+  const placementKey = placementFound.map((p) => `${p.node}\t${p.message}`).join("\n");
+  const placement = useMemo(() => placementFound, [placementKey]);
+
+  const nodeProblems = useMemo(() => {
+    const byNode = new Map<string, string[]>();
+    for (const p of [...errors, ...placement, ...(schema.problems ?? [])]) {
+      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
+    }
+    return byNode;
+  }, [errors, placement, schema.problems]);
 
   // Ports only depend on node data, bindings and references: moving or
   // selecting nodes reuses the previous sets, so nodes do not re-render.
@@ -1477,7 +1510,7 @@ export function Editor({
   // Structural errors block the build; schema problems are errors or warnings.
   const problemCount = {
     errors: errors.length + (schema.problems ?? []).filter((p) => p.severity === "error").length,
-    warnings: (schema.problems ?? []).filter((p) => p.severity !== "error").length,
+    warnings: placement.length + (schema.problems ?? []).filter((p) => p.severity !== "error").length,
   };
   // Every action of the editor. Menus, toolbar, palette and shortcuts all
   // read this list; see commands.ts.
@@ -2144,6 +2177,15 @@ export function Editor({
           onClose={() => togglePane("panel")}
         >
           {layout.panel.tab === "problems" && errors.length > 0 && <ProblemList problems={errors} nodeName={nodeName} onFocusNode={focusNode} />}
+          {layout.panel.tab === "problems" && placement.length > 0 && (
+            <section className="build placement">
+              <h2>Placement</h2>
+              <p className="hint">
+                {placement.length} node{placement.length === 1 ? " is" : "s are"} under a parent their binding does not expect
+              </p>
+              <ProblemList problems={placement} nodeName={nodeName} onFocusNode={focusNode} />
+            </section>
+          )}
           {layout.panel.tab === "problems" &&
             (kernel ? (
               <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />

@@ -106,7 +106,15 @@ export default function Workspace() {
   const setStatus = useCallback((id: number, status: EditorStatus) => {
     setStatuses((m) => {
       const old = m.get(id);
-      if (old && old.title === status.title && old.dirty === status.dirty && old.fresh === status.fresh) return m;
+      if (
+        old &&
+        old.title === status.title &&
+        old.dirty === status.dirty &&
+        old.fresh === status.fresh &&
+        old.fit?.cls === status.fit?.cls &&
+        old.fit?.name === status.fit?.name
+      )
+        return m;
       return new Map(m).set(id, status);
     });
   }, []);
@@ -270,6 +278,7 @@ export default function Workspace() {
         <div className="pane-body" hidden={!layout.library.open}>
           <div className="side-view" hidden={layout.library.view !== "library"}>
             <Palette
+              fit={statuses.get(active)?.fit ?? null}
               onAdd={(b) => apis.current.get(active)?.addNode(b)}
               requestedKernel={requestedKernel}
               onKernelLoaded={(k) => setKernel({ path: k.path, version: k.version })}

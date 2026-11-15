@@ -37,6 +37,9 @@ fn indexes_fixture_tree() {
     assert!(!clocks.required);
     assert_eq!(clocks.description.as_deref(), Some("Reference clock."));
 
+    // Where the examples put it (US-18.4): at the top, and under an SPI bus.
+    assert_eq!(uart.buses, ["mmio", "spi"]);
+
     let clock = catalog.find_compatible("fixed-clock").unwrap();
     assert_eq!(clock.category, "clock");
     assert!(clock.properties.iter().all(|p| p.required));
