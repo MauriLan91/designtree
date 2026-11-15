@@ -1312,8 +1312,10 @@ export function Editor({
   const buildStale = !!build && !build.running && build.key !== schemaKey;
 
   const focusNode = (id: string) => {
-    // A node in another scope is shown there; a scope's own node is its tab.
-    const away = id !== scope && !inScope(id, scope, main, parents);
+    // A node is shown in its parent's scope, also when its own scope is the
+    // one open (#185), so a click on that row goes back up. The root is drawn
+    // nowhere: it is shown by the main scope.
+    const away = id === main ? scope !== main : !inScope(id, scope, main, parents);
     if (away) showScope(scopeOf(id, main, parents), false);
     // A node inside a collapsed group is not drawn: open the group first.
     const closed = new Set(collapsedAncestors(nodes, id));
@@ -1324,7 +1326,7 @@ export function Editor({
         return opened.selected === (n.id === id) ? opened : ({ ...opened, selected: n.id === id } as FlowNode);
       }),
     );
-    if (id === scope) return;
+    if (id === main) return;
     if (closed.size || away) setTimeout(() => fitView({ nodes: [{ id }], maxZoom: 1 }), 60);
     else fitView({ nodes: [{ id }], maxZoom: 1, duration: 300 });
   };

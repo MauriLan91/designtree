@@ -18,7 +18,9 @@
   - **Library** (Ctrl+Shift+E): the elements of the loaded kernel checkout, with search,
     categories, favorites and recent elements.
   - **Outline** (Ctrl+Shift+O): the whole devicetree as a tree. Click a node
-    to select it on the canvas and in the source, wherever it is; double-click
+    to select it on the canvas, among its siblings, and in the source,
+    wherever it is (a click on the node whose scope is open goes back up to
+    its parent's scope); double-click
     it, or press Enter, to open its scope. The arrow keys move through the
     tree and open or close branches, and the tree opens down to whatever you
     select elsewhere.
