@@ -301,7 +301,9 @@ pub fn address_map(graph: &Graph) -> AddressMap {
                         let end = start.saturating_add(size.max(1) - 1);
                         region.cpu_start = Some(hex(start));
                         region.cpu_end = Some(hex(end));
-                        if size_cells > 0 && !tree.is_disabled(&child.id) {
+                        // A region of size 0 (often all zeros for the
+                        // bootloader to fill in) holds no address to clash.
+                        if size_cells > 0 && size > 0 && !tree.is_disabled(&child.id) {
                             placed.push((map.buses.len(), regions.len(), start, end));
                         }
                     }
@@ -332,8 +334,11 @@ pub fn address_map(graph: &Graph) -> AddressMap {
             for i in 0..regions.len() {
                 for j in i + 1..regions.len() {
                     let (a, b) = (&regions[i], &regions[j]);
+                    let empty = |r: &Region| r.size == "0x0";
                     let clash = if size_cells == 0 {
                         a.address == b.address
+                    } else if empty(a) || empty(b) {
+                        false
                     } else {
                         let range = |r: &Region| {
                             let start = u64::from_str_radix(&r.address[2..], 16).unwrap_or(0);
@@ -700,6 +705,46 @@ mod tests {
         let buf = region(&map, "buf@1000");
         assert_eq!(buf.overlaps.len(), 1, "{:?}", buf.overlaps);
         assert!(buf.overlaps[0].0.ends_with("uart@1000"));
+    }
+
+    #[test]
+    fn regions_of_size_zero_overlap_nothing() {
+        let map = map_of(
+            r#"/dts-v1/;
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	memory { device_type = "memory"; reg = <0x0 0x0>; };
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		demura_region_0 { reg = <0x0 0x0>; };
+		demura_region_1 { reg = <0x0 0x0>; };
+	};
+	pll@0 { reg = <0x0 0x100>; };
+	i2c {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		a@0 { reg = <0x0 0x0>; };
+		b@0 { reg = <0x0 0x10>; };
+	};
+};
+"#,
+        );
+        for name in [
+            "memory",
+            "demura_region_0",
+            "demura_region_1",
+            "pll@0",
+            "a@0",
+            "b@0",
+        ] {
+            assert!(region(&map, name).overlaps.is_empty(), "{name}");
+        }
+        assert!(!map.problems.iter().any(|p| p.message.contains("overlaps")));
+        // Still listed, as placeholders.
+        assert_eq!(region(&map, "demura_region_0").size, "0x0");
     }
 
     #[test]
