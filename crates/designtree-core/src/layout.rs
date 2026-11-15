@@ -1,98 +1,218 @@
 //! Automatic placement of nodes on the editor canvas.
 //!
-//! The devicetree hierarchy is drawn top down, matching the editor's handles
-//! (parent at the bottom of a card, children at the top): depth selects the
-//! row, leaves are placed left to right in child order and every parent is
-//! centered above its children. Each bus (a non-root node with addressable
-//! children) is wrapped in a group frame named `bus:<node id>`. Groups created
-//! by the user are left alone. Positions are the only thing that changes, so
-//! the generated DTS is unaffected.
+//! The canvas shows one scope at a time: a node's children, and on the main
+//! scope the top-level nodes beside the root (D7). Each scope is therefore
+//! laid out on its own, from the origin, so that its nodes sit together and
+//! fit in view however large the rest of the tree is. Within a scope nodes
+//! keep their child order, in rows about as wide as a screen is wide in
+//! proportion. A user group is placed as one block holding its members.
+//!
+//! Older versions framed every bus in a group named `bus:<node id>`; inside
+//! the bus's own scope such a frame held everything, so it is dropped here.
+//! Positions are the only thing that changes, so the generated DTS is
+//! unaffected.
 
 use std::collections::{HashMap, HashSet};
 
-use crate::model::{EdgeKind, Graph, Group, Node, NodeId, Position, Size};
+use crate::model::{EdgeKind, Graph, Group, NodeId, Position, Size};
 
 /// Space reserved for one node; actual cards are a bit smaller, unless they
 /// list many wired ports.
 const NODE_WIDTH: f32 = 220.0;
 const NODE_HEIGHT: f32 = 130.0;
-/// Horizontal gap between neighbouring leaves.
+/// Room between neighbouring nodes in a row.
 const SIBLING_GAP: f32 = 40.0;
-/// Vertical gap between a parent and its children.
-const LEVEL_GAP: f32 = 80.0;
-/// Padding between a bus frame and the nodes inside it.
+/// Room between rows.
+const ROW_GAP: f32 = 60.0;
+/// Padding between a group frame and the nodes inside it.
 const GROUP_PADDING: f32 = 40.0;
+/// The width to height ratio a scope's rows aim for, about that of a screen.
+const ASPECT: f32 = 1.6;
+/// Small scopes still get a row of up to four nodes rather than a column.
+const MIN_ROW: f32 = 4.0 * (NODE_WIDTH + SIBLING_GAP) - SIBLING_GAP;
 const BUS_GROUP_PREFIX: &str = "bus:";
 
-/// Places every node and regenerates the bus groups of `graph`.
+/// Places every node, scope by scope, and refits the user groups.
 pub fn auto_layout(graph: &mut Graph) {
     graph.groups.retain(|g| !g.id.starts_with(BUS_GROUP_PREFIX));
-
-    let children = child_map(graph);
-    let buses: HashSet<NodeId> = graph
-        .nodes
-        .iter()
-        .filter(|n| !n.is_root() && is_bus(graph, n, &children))
-        .map(|n| n.id.clone())
-        .collect();
+    for group in &mut graph.groups {
+        drop_bus_subgroups(group);
+    }
 
     let mut positions: HashMap<NodeId, Position> = HashMap::new();
-    let mut cursor = 0.0;
-    // The hierarchy actually drawn: a spanning forest of the child edges.
-    let mut tree: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-    if let Some(root) = graph.root() {
-        place(
-            &root.id,
-            0,
-            &children,
-            &buses,
-            &mut cursor,
-            &mut positions,
-            &mut tree,
-        );
-    }
-    // Nodes unreachable from the root (invalid designs) go below the tree.
-    for node in &graph.nodes {
-        if !positions.contains_key(&node.id) {
-            place(
-                &node.id,
-                0,
-                &children,
-                &buses,
-                &mut cursor,
-                &mut positions,
-                &mut tree,
-            );
-        }
+    for scope in scopes(graph) {
+        let blocks = blocks(&scope, &graph.groups);
+        pack(&blocks, Position::default(), &mut positions);
     }
     for node in &mut graph.nodes {
-        node.position = positions[&node.id];
+        node.position = positions.get(&node.id).copied().unwrap_or_default();
     }
     // Routes were drawn for the old positions.
     for edge in &mut graph.edges {
         edge.route = None;
     }
-
     for group in &mut graph.groups {
         refit_group(group, &positions);
     }
+}
 
-    let grouped: HashSet<NodeId> = graph.groups.iter().flat_map(members_recursive).collect();
-    let mut bus_groups = Vec::new();
-    if let Some(root) = graph.root() {
-        for child in tree.get(&root.id).into_iter().flatten() {
-            collect_bus_groups(
-                graph,
-                child,
-                &tree,
-                &buses,
-                &positions,
-                &grouped,
-                &mut bus_groups,
-            );
+fn drop_bus_subgroups(group: &mut Group) {
+    group
+        .subgroups
+        .retain(|g| !g.id.starts_with(BUS_GROUP_PREFIX));
+    for sub in &mut group.subgroups {
+        drop_bus_subgroups(sub);
+    }
+}
+
+/// The nodes of each scope, in child order: the top-level nodes beside the
+/// root, then the children of every node that has some. The root itself is
+/// drawn in no scope; it stays at the origin.
+fn scopes(graph: &Graph) -> Vec<Vec<NodeId>> {
+    let mut children: HashMap<&NodeId, Vec<NodeId>> = HashMap::new();
+    let mut parented: HashSet<&NodeId> = HashSet::new();
+    for edge in &graph.edges {
+        // A node with several parents (an invalid design) is drawn under the first.
+        if edge.kind == EdgeKind::Child && parented.insert(&edge.to) {
+            children
+                .entry(&edge.from)
+                .or_default()
+                .push(edge.to.clone());
         }
     }
-    graph.groups.extend(bus_groups);
+    let root = graph.root().map(|n| &n.id);
+    let mut main: Vec<NodeId> = Vec::new();
+    if let Some(root) = root {
+        main.extend(children.remove(root).unwrap_or_default());
+    }
+    main.extend(
+        graph
+            .nodes
+            .iter()
+            .filter(|n| Some(&n.id) != root && !parented.contains(&n.id))
+            .map(|n| n.id.clone()),
+    );
+    let mut out = vec![main];
+    // In the order of the design, so the result does not depend on hashing.
+    for node in &graph.nodes {
+        if let Some(kids) = children.remove(&node.id) {
+            out.push(kids);
+        }
+    }
+    out
+}
+
+/// Something placed as a whole: a node, or a group with its contents.
+enum Block {
+    Node(NodeId),
+    Group(Vec<Block>),
+}
+
+/// The blocks of a scope: its nodes, with those in a user group gathered
+/// into that group's block at the place of its first member.
+fn blocks(scope: &[NodeId], groups: &[Group]) -> Vec<Block> {
+    let in_scope: HashSet<&NodeId> = scope.iter().collect();
+    let mut owner: HashMap<&NodeId, usize> = HashMap::new();
+    for (i, group) in groups.iter().enumerate() {
+        for id in members_recursive(group) {
+            if let Some(id) = in_scope.get(&id) {
+                owner.insert(id, i);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let mut done: HashSet<usize> = HashSet::new();
+    for id in scope {
+        match owner.get(id) {
+            None => out.push(Block::Node(id.clone())),
+            Some(&i) => {
+                if done.insert(i) {
+                    out.push(group_block(&groups[i], &in_scope));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn group_block(group: &Group, in_scope: &HashSet<&NodeId>) -> Block {
+    let mut inner: Vec<Block> = group
+        .members
+        .iter()
+        .filter(|id| in_scope.contains(id))
+        .map(|id| Block::Node(id.clone()))
+        .collect();
+    inner.extend(
+        group
+            .subgroups
+            .iter()
+            .map(|sub| group_block(sub, in_scope))
+            .filter(|b| !matches!(b, Block::Group(inner) if inner.is_empty())),
+    );
+    Block::Group(inner)
+}
+
+/// The size a block takes once packed.
+fn size_of(block: &Block) -> (f32, f32) {
+    match block {
+        Block::Node(_) => (NODE_WIDTH, NODE_HEIGHT),
+        Block::Group(inner) => {
+            let (w, h) = pack(inner, Position::default(), &mut HashMap::new());
+            (w + 2.0 * GROUP_PADDING, h + 2.0 * GROUP_PADDING)
+        }
+    }
+}
+
+/// Places `blocks` in rows from `origin`, left to right and wrapping where
+/// the rows would get wider than `ASPECT` times their height, and returns
+/// the size taken.
+fn pack(
+    blocks: &[Block],
+    origin: Position,
+    positions: &mut HashMap<NodeId, Position>,
+) -> (f32, f32) {
+    if blocks.is_empty() {
+        return (0.0, 0.0);
+    }
+    let sizes: Vec<(f32, f32)> = blocks.iter().map(size_of).collect();
+    let area: f32 = sizes
+        .iter()
+        .map(|(w, h)| (w + SIBLING_GAP) * (h + ROW_GAP))
+        .sum();
+    let widest = sizes.iter().map(|s| s.0).fold(0.0, f32::max);
+    let wrap = (area * ASPECT).sqrt().max(widest).max(MIN_ROW);
+
+    let (mut x, mut y, mut row_height, mut width) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+    for (block, (w, h)) in blocks.iter().zip(sizes) {
+        if x > 0.0 && x + w > wrap {
+            x = 0.0;
+            y += row_height + ROW_GAP;
+            row_height = 0.0;
+        }
+        let at = Position {
+            x: origin.x + x,
+            y: origin.y + y,
+        };
+        match block {
+            Block::Node(id) => {
+                positions.insert(id.clone(), at);
+            }
+            Block::Group(inner) => {
+                pack(
+                    inner,
+                    Position {
+                        x: at.x + GROUP_PADDING,
+                        y: at.y + GROUP_PADDING,
+                    },
+                    positions,
+                );
+            }
+        }
+        width = width.max(x + w);
+        row_height = row_height.max(h);
+        x += w + SIBLING_GAP;
+    }
+    (width, y + row_height)
 }
 
 /// Resizes a user group to enclose its (moved) members and subgroups.
@@ -140,155 +260,10 @@ fn members_recursive(group: &Group) -> Vec<NodeId> {
     ids
 }
 
-fn child_map(graph: &Graph) -> HashMap<NodeId, Vec<NodeId>> {
-    let mut map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-    for edge in &graph.edges {
-        if edge.kind == EdgeKind::Child {
-            map.entry(edge.from.clone())
-                .or_default()
-                .push(edge.to.clone());
-        }
-    }
-    map
-}
-
-fn is_bus(graph: &Graph, node: &Node, children: &HashMap<NodeId, Vec<NodeId>>) -> bool {
-    children.get(&node.id).is_some_and(|ids| {
-        ids.iter()
-            .any(|id| graph.node(id).is_some_and(|c| c.unit_address.is_some()))
-    })
-}
-
-/// Lays out the subtree of `id` and returns the horizontal center of its node.
-fn place(
-    id: &NodeId,
-    depth: usize,
-    children: &HashMap<NodeId, Vec<NodeId>>,
-    buses: &HashSet<NodeId>,
-    cursor: &mut f32,
-    positions: &mut HashMap<NodeId, Position>,
-    tree: &mut HashMap<NodeId, Vec<NodeId>>,
-) -> f32 {
-    // Reserve the slot first so malformed hierarchies (cycles, several
-    // parents) cannot recurse forever.
-    positions.insert(id.clone(), Position::default());
-    let bus = buses.contains(id);
-    let start = *cursor;
-    if bus {
-        *cursor += GROUP_PADDING;
-    }
-    let mut first = None;
-    let mut last = 0.0;
-    for kid in children.get(id).into_iter().flatten() {
-        // Already placed through another parent or an earlier sibling.
-        if positions.contains_key(kid) {
-            continue;
-        }
-        tree.entry(id.clone()).or_default().push(kid.clone());
-        last = place(kid, depth + 1, children, buses, cursor, positions, tree);
-        first.get_or_insert(last);
-    }
-
-    let center = match first {
-        Some(first) => {
-            if bus {
-                *cursor += GROUP_PADDING;
-            }
-            (first + last) / 2.0
-        }
-        None => {
-            *cursor = start;
-            let center = *cursor + NODE_WIDTH / 2.0;
-            *cursor += NODE_WIDTH + SIBLING_GAP;
-            center
-        }
-    };
-
-    positions.insert(
-        id.clone(),
-        Position {
-            x: center - NODE_WIDTH / 2.0,
-            y: depth as f32 * (NODE_HEIGHT + LEVEL_GAP),
-        },
-    );
-    center
-}
-
-/// Builds the frame of every outermost bus below `id`, with nested buses as
-/// subgroups. Walks through non-bus nodes to find buses deeper in the tree.
-fn collect_bus_groups(
-    graph: &Graph,
-    id: &NodeId,
-    children: &HashMap<NodeId, Vec<NodeId>>,
-    buses: &HashSet<NodeId>,
-    positions: &HashMap<NodeId, Position>,
-    grouped: &HashSet<NodeId>,
-    out: &mut Vec<Group>,
-) {
-    if buses.contains(id) {
-        out.push(bus_group(graph, id, children, buses, positions, grouped).0);
-        return;
-    }
-    for child in children.get(id).into_iter().flatten() {
-        collect_bus_groups(graph, child, children, buses, positions, grouped, out);
-    }
-}
-
-/// Returns the group of the bus `id` and its bounding box `(x0, y0, x1, y1)`.
-fn bus_group(
-    graph: &Graph,
-    id: &NodeId,
-    children: &HashMap<NodeId, Vec<NodeId>>,
-    buses: &HashSet<NodeId>,
-    positions: &HashMap<NodeId, Position>,
-    grouped: &HashSet<NodeId>,
-) -> (Group, (f32, f32, f32, f32)) {
-    let mut members = Vec::new();
-    let mut subgroups = Vec::new();
-    let mut bounds = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
-    let mut extend = |b: (f32, f32, f32, f32)| {
-        bounds = (
-            bounds.0.min(b.0),
-            bounds.1.min(b.1),
-            bounds.2.max(b.2),
-            bounds.3.max(b.3),
-        );
-    };
-
-    for child in children.get(id).into_iter().flatten() {
-        let p = positions[child];
-        if !grouped.contains(child) {
-            members.push(child.clone());
-            extend((p.x, p.y, p.x + NODE_WIDTH, p.y + NODE_HEIGHT));
-        }
-        if buses.contains(child) {
-            let (sub, b) = bus_group(graph, child, children, buses, positions, grouped);
-            subgroups.push(sub);
-            extend(b);
-        }
-    }
-    let (x0, y0) = (bounds.0 - GROUP_PADDING, bounds.1 - GROUP_PADDING);
-    let (x1, y1) = (bounds.2 + GROUP_PADDING, bounds.3 + GROUP_PADDING);
-    let node = graph.node(id).expect("bus is a graph node");
-    let group = Group {
-        id: format!("{BUS_GROUP_PREFIX}{}", id.0),
-        title: node.label.clone().unwrap_or_else(|| node.full_name()),
-        members,
-        subgroups,
-        position: Position { x: x0, y: y0 },
-        size: Some(Size {
-            width: x1 - x0,
-            height: y1 - y0,
-        }),
-        collapsed: false,
-    };
-    (group, (x0, y0, x1, y1))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Edge;
+    use crate::model::{Edge, Node};
 
     fn node(id: &str, unit: Option<&str>) -> Node {
         Node {
@@ -331,8 +306,24 @@ mod tests {
         (a.x - b.x).abs() < NODE_WIDTH && (a.y - b.y).abs() < NODE_HEIGHT
     }
 
+    /// The nodes drawn together in each scope overlap none of the others.
+    fn assert_no_overlap(g: &Graph) {
+        for scope in scopes(g) {
+            for (i, a) in scope.iter().enumerate() {
+                for b in &scope[i + 1..] {
+                    assert!(
+                        !overlap(pos(g, &a.0), pos(g, &b.0)),
+                        "{} overlaps {}",
+                        a.0,
+                        b.0
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
-    fn rows_by_depth_and_parents_centered() {
+    fn each_scope_starts_at_the_origin_in_child_order() {
         let mut g = graph(
             vec![
                 node("root", None),
@@ -343,15 +334,42 @@ mod tests {
             &[("root", "a"), ("root", "b"), ("a", "c")],
         );
         auto_layout(&mut g);
-        let level = NODE_HEIGHT + LEVEL_GAP;
-        assert_eq!(pos(&g, "root").y, 0.0);
-        assert_eq!(pos(&g, "a").y, level);
-        assert_eq!(pos(&g, "c").y, 2.0 * level);
-        // `a` has a single child, so it sits right above it.
-        assert_eq!(pos(&g, "a").x, pos(&g, "c").x);
-        let mid = (pos(&g, "a").x + pos(&g, "b").x) / 2.0;
-        assert_eq!(pos(&g, "root").x, mid);
-        assert!(pos(&g, "a").x < pos(&g, "b").x);
+        // `a` and `b` share the main scope, `c` is alone in the scope of `a`.
+        assert_eq!(pos(&g, "a"), Position { x: 0.0, y: 0.0 });
+        assert_eq!(pos(&g, "b").y, 0.0);
+        assert_eq!(pos(&g, "b").x, NODE_WIDTH + SIBLING_GAP);
+        assert_eq!(pos(&g, "c"), Position { x: 0.0, y: 0.0 });
+    }
+
+    #[test]
+    fn a_large_scope_wraps_into_rows_about_as_wide_as_a_screen() {
+        let mut nodes = vec![node("root", None), node("soc", None)];
+        let mut links = vec![("root".to_string(), "soc".to_string())];
+        for i in 0..494 {
+            nodes.push(node(&format!("dev{i}"), Some(&format!("{i:x}"))));
+            links.push(("soc".into(), format!("dev{i}")));
+        }
+        let links: Vec<(&str, &str)> = links
+            .iter()
+            .map(|(a, b)| (a.as_str(), b.as_str()))
+            .collect();
+        let mut g = graph(nodes, &links);
+        auto_layout(&mut g);
+        assert_no_overlap(&g);
+        let right = g
+            .nodes
+            .iter()
+            .map(|n| n.position.x + NODE_WIDTH)
+            .fold(0.0, f32::max);
+        let bottom = g
+            .nodes
+            .iter()
+            .map(|n| n.position.y + NODE_HEIGHT)
+            .fold(0.0, f32::max);
+        let ratio = right / bottom;
+        assert!((1.0..2.5).contains(&ratio), "{right} x {bottom}");
+        // No frame around the bus: the scope already is the bus.
+        assert!(g.groups.is_empty());
     }
 
     #[test]
@@ -374,60 +392,14 @@ mod tests {
             ],
         );
         auto_layout(&mut g);
-        for (i, a) in g.nodes.iter().enumerate() {
-            for b in &g.nodes[i + 1..] {
-                assert!(
-                    !overlap(a.position, b.position),
-                    "{} overlaps {}",
-                    a.id.0,
-                    b.id.0
-                );
-            }
-        }
+        assert_no_overlap(&g);
         let once = g.clone();
         auto_layout(&mut g);
         assert_eq!(g, once);
     }
 
     #[test]
-    fn groups_follow_buses_and_nest() {
-        let mut g = graph(
-            vec![
-                node("root", None),
-                node("soc", None),
-                node("uart", Some("1000")),
-                node("i2c", Some("2000")),
-                node("sensor", Some("48")),
-            ],
-            &[
-                ("root", "soc"),
-                ("soc", "uart"),
-                ("soc", "i2c"),
-                ("i2c", "sensor"),
-            ],
-        );
-        auto_layout(&mut g);
-        // `soc` and `i2c` are buses; `soc` is not at the root so it is framed.
-        assert_eq!(g.groups.len(), 1);
-        let soc = &g.groups[0];
-        assert_eq!(soc.id, "bus:soc");
-        assert_eq!(soc.members, vec![NodeId::from("uart"), "i2c".into()]);
-        assert_eq!(soc.subgroups.len(), 1);
-        let i2c = &soc.subgroups[0];
-        assert_eq!(i2c.members, vec![NodeId::from("sensor")]);
-
-        // The outer frame contains the inner one and every member.
-        let (o, i) = (soc.position, i2c.position);
-        let (os, is) = (soc.size.unwrap(), i2c.size.unwrap());
-        assert!(o.x < i.x && o.y < i.y);
-        assert!(o.x + os.width > i.x + is.width && o.y + os.height > i.y + is.height);
-        let u = pos(&g, "uart");
-        assert!(u.x > o.x && u.y > o.y && u.y + NODE_HEIGHT < o.y + os.height);
-        assert!(u.x + NODE_WIDTH < o.x + os.width);
-    }
-
-    #[test]
-    fn keeps_user_groups_and_replaces_old_bus_groups() {
+    fn drops_the_bus_frames_of_older_versions() {
         let mut g = graph(
             vec![
                 node("root", None),
@@ -436,10 +408,41 @@ mod tests {
             ],
             &[("root", "soc"), ("soc", "uart")],
         );
+        let frame = |id: &str, subgroups| Group {
+            id: id.into(),
+            title: id.into(),
+            members: vec!["uart".into()],
+            subgroups,
+            position: Position::default(),
+            size: None,
+            collapsed: false,
+        };
+        g.groups = vec![
+            frame("bus:soc", vec![]),
+            frame("g1", vec![frame("bus:i2c", vec![])]),
+        ];
+        auto_layout(&mut g);
+        assert_eq!(g.groups.len(), 1);
+        assert_eq!(g.groups[0].id, "g1");
+        assert!(g.groups[0].subgroups.is_empty());
+    }
+
+    #[test]
+    fn keeps_user_groups_as_blocks() {
+        let mut g = graph(
+            vec![
+                node("root", None),
+                node("a", None),
+                node("b", None),
+                node("c", None),
+                node("d", None),
+            ],
+            &[("root", "a"), ("root", "b"), ("root", "c"), ("root", "d")],
+        );
         let user = Group {
             id: "g1".into(),
             title: "mine".into(),
-            members: vec!["uart".into()],
+            members: vec!["b".into(), "d".into()],
             subgroups: vec![],
             position: Position::default(),
             size: None,
@@ -448,14 +451,24 @@ mod tests {
         g.groups = vec![user.clone()];
         auto_layout(&mut g);
         auto_layout(&mut g);
-        // The user group keeps its identity and members but wraps them again.
+        // The user group keeps its identity and members and wraps them again.
+        assert_eq!(g.groups.len(), 1);
         assert_eq!(g.groups[0].members, user.members);
-        let (gp, up) = (g.groups[0].position, pos(&g, "uart"));
-        assert!(gp.x < up.x && gp.y < up.y);
-        assert!(g.groups[0].size.is_some());
-        assert_eq!(g.groups.len(), 2);
-        // `uart` already belongs to a user group, so the bus frame skips it.
-        assert!(g.groups[1].members.is_empty());
+        let (gp, gs) = (g.groups[0].position, g.groups[0].size.unwrap());
+        for id in ["b", "d"] {
+            let p = pos(&g, id);
+            assert!(p.x > gp.x && p.y > gp.y);
+            assert!(p.x + NODE_WIDTH < gp.x + gs.width && p.y + NODE_HEIGHT < gp.y + gs.height);
+        }
+        // Nodes outside the group stay outside its frame.
+        for id in ["a", "c"] {
+            let p = pos(&g, id);
+            let inside = p.x + NODE_WIDTH > gp.x
+                && p.x < gp.x + gs.width
+                && p.y + NODE_HEIGHT > gp.y
+                && p.y < gp.y + gs.height;
+            assert!(!inside, "{id} is inside the group");
+        }
     }
 
     #[test]
@@ -470,10 +483,6 @@ mod tests {
             &[("root", "a"), ("a", "b"), ("b", "a")],
         );
         auto_layout(&mut g);
-        for (i, a) in g.nodes.iter().enumerate() {
-            for b in &g.nodes[i + 1..] {
-                assert!(!overlap(a.position, b.position));
-            }
-        }
+        assert_no_overlap(&g);
     }
 }

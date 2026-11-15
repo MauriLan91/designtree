@@ -62,12 +62,16 @@ fn import_arranges_nodes_without_overlap() {
         &ImportOptions::default(),
     )
     .unwrap();
-    let positions: Vec<_> = graph.nodes.iter().map(|n| n.position).collect();
-    for (i, a) in positions.iter().enumerate() {
-        for b in &positions[i + 1..] {
-            assert!((a.x, a.y) != (b.x, b.y), "two nodes share a position");
+    // The canvas shows one node's children at a time, so siblings must not
+    // share a place.
+    for parent in &graph.nodes {
+        let positions: Vec<_> = graph.children(&parent.id).map(|n| n.position).collect();
+        for (i, a) in positions.iter().enumerate() {
+            for b in &positions[i + 1..] {
+                assert!((a.x, a.y) != (b.x, b.y), "two siblings share a position");
+            }
         }
     }
-    // The `soc` bus is framed.
-    assert!(graph.groups.iter().any(|g| g.id == "bus:/soc"));
+    // The `soc` bus is its own scope, not a frame.
+    assert!(graph.groups.is_empty());
 }

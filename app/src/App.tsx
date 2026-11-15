@@ -132,6 +132,7 @@ import {
   type Design,
   type DtFlowNode,
   type FlowNode,
+  type GroupData,
   type GroupFlowNode,
   type DesignExtras,
   type AddressMap,
@@ -1105,11 +1106,49 @@ export function Editor({
     const boxes = tops.map(boxOf);
     const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes));
     placeMoved(positions, routes);
-    if (!onlySelected) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+    if (!onlySelected) {
+      refitFrames(tops[0].parentId);
+      setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+    }
   };
 
-  /** The top-level nodes of the scope on show: groups and ungrouped nodes. */
-  const scopeTops = () => nodes.filter((n) => shown.has(n.id) && !n.parentId);
+  /** The top-level nodes of the scope on show: groups and ungrouped nodes.
+   * A lone frame around all of them (the bus frame that layouts before
+   * #182 drew inside the bus's own scope) stands for what it holds, or
+   * there would be only one box to order. */
+  const scopeTops = () => {
+    let tops = nodes.filter((n) => shown.has(n.id) && !n.parentId);
+    while (tops.length === 1 && tops[0].type === "group" && !(tops[0].data as GroupData).collapsed) {
+      const frame = tops[0].id;
+      tops = nodes.filter((n) => shown.has(n.id) && n.parentId === frame);
+    }
+    return tops;
+  };
+
+  /** Fits the frames around `id` (and theirs, outwards) to what they hold
+   * after it was tidied, keeping the contents where they are on the canvas. */
+  const refitFrames = (id: string | undefined) => {
+    if (!id) return;
+    setNodes((ns) => {
+      let out = ns;
+      for (let frame: string | undefined = id; frame; frame = out.find((n) => n.id === frame)?.parentId) {
+        const g = out.find((n) => n.id === frame);
+        const inner = out.filter((n) => n.parentId === frame);
+        if (!g || !inner.length) break;
+        const x0 = Math.min(...inner.map((n) => n.position.x)) - GROUP_PADDING;
+        const y0 = Math.min(...inner.map((n) => n.position.y)) - GROUP_PADDING;
+        const x1 = Math.max(...inner.map((n) => n.position.x + (n.measured?.width ?? Number(n.style?.width ?? 200)))) + GROUP_PADDING;
+        const y1 = Math.max(...inner.map((n) => n.position.y + (n.measured?.height ?? Number(n.style?.height ?? 80)))) + GROUP_PADDING;
+        const fit = { width: x1 - x0, height: y1 - y0 };
+        out = out.map((n) => {
+          if (n.id === frame) return { ...n, position: { x: n.position.x + x0, y: n.position.y + y0 }, style: { ...n.style, ...fit } };
+          if (n.parentId === frame) return { ...n, position: { x: n.position.x - x0, y: n.position.y - y0 } };
+          return n;
+        });
+      }
+      return out;
+    });
+  };
 
   /** The references between `tops`, each from and to the drawn top-level
    * node it leaves or enters. */
@@ -1177,7 +1216,10 @@ export function Editor({
       placeMoved(tree(boxes, (id) => parents.get(id), cornerOf(boxes), direction));
     }
     // A whole scope rearranged may have moved out of view.
-    if (tidyable().length < 2) setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+    if (tidyable().length < 2) {
+      refitFrames(tops[0].parentId);
+      setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
+    }
   };
 
   /** The selected top-level nodes on show, which tidying the selection moves. */
