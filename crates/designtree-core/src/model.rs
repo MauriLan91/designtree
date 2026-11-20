@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Deserializer, Serialize};
 use ts_rs::TS;
 
@@ -197,6 +199,20 @@ pub struct Node {
     pub compatible_at: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<Property>,
+    /// Names of the node's properties, `compatible` and phandle lists
+    /// included, in the order the imported source had them, when that is
+    /// not the order export uses by default (phandle lists last), so that
+    /// an import compiles to the same blob. Properties it does not list
+    /// follow the one before them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub order: Vec<String>,
+    /// The phandle of a node imported from a decompiled tree (US-1.6), kept
+    /// where dtc would number the node otherwise, so that the rebuilt blob
+    /// keeps the numbers other values may hold. Written as a `phandle`
+    /// property; `None` lets dtc number the node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub phandle: Option<u32>,
     /// Set when the node comes from an included file (an SoC `.dtsi`).
     /// Export then writes only what differs from that definition, as an
     /// override (`&label { ... };`).
@@ -234,6 +250,37 @@ impl Node {
     pub fn compatible_index(&self) -> usize {
         self.compatible_at
             .map_or(0, |at| (at as usize).min(self.properties.len()))
+    }
+
+    /// `items`, named properties in the default output order, sorted into
+    /// [`Node::order`].
+    pub fn in_order<T>(&self, items: Vec<(String, T)>) -> Vec<(String, T)> {
+        if self.order.is_empty() {
+            return items;
+        }
+        let rank: HashMap<&str, usize> = self
+            .order
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.as_str(), i + 1))
+            .collect();
+        let mut last = 0;
+        let mut keyed: Vec<((usize, usize), (String, T))> = items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let key = match rank.get(item.0.as_str()) {
+                    Some(&r) => {
+                        last = r;
+                        (r, 0)
+                    }
+                    None => (last, i + 1),
+                };
+                (key, item)
+            })
+            .collect();
+        keyed.sort_by_key(|(key, _)| *key);
+        keyed.into_iter().map(|(_, item)| item).collect()
     }
 
     /// Full node name as it appears in DTS (`name@unit-address`).

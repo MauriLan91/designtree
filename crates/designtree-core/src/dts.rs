@@ -436,7 +436,8 @@ fn with_primary_labels(
 
 /// Properties of `node` in output order: the properties with `compatible`
 /// where the source had it (first for a new node), then phandle lists from
-/// reference edges. `None` is a boolean property.
+/// reference edges, unless [`Node::order`] says otherwise. `None` is a
+/// boolean property.
 fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>)> {
     let mut props = Vec::new();
     for prop in &node.properties {
@@ -473,7 +474,14 @@ fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>
     for (property, items) in phandle_lists {
         props.push((property.to_owned(), Some(items)));
     }
-    props
+    if let Some(phandle) = node.phandle {
+        let cells = vec![format_cell(u64::from(phandle))];
+        props.push((
+            "phandle".to_owned(),
+            Some(vec![Item::cells("<".into(), cells)]),
+        ));
+    }
+    node.in_order(props)
 }
 
 /// A plain cell list split into one `<…>` per entry of `width` cells
@@ -737,6 +745,8 @@ mod tests {
             compatible: vec![],
             compatible_at: None,
             properties: vec![],
+            order: Vec::new(),
+            phandle: None,
             inherited: None,
             position: Position::default(),
             board_position: None,

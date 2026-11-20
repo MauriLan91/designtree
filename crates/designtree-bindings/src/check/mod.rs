@@ -212,6 +212,16 @@ impl<'i> Keyword<'i> for TypeSize {
     }
 }
 
+/// A property type that holds phandles, see [`Checker::phandle_kind`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhandleKind {
+    /// One phandle.
+    Phandle,
+    /// Phandles with specifier cells; `entry` is the fixed number of cells
+    /// of an entry, phandle included, when the schemas give one.
+    PhandleArray { entry: Option<usize> },
+}
+
 /// Validates devicetree blobs against a [`SchemaSet`]. Validators are
 /// compiled on first use and kept, so the first check of a design is the
 /// slowest.
@@ -322,6 +332,24 @@ impl Checker {
             .unwrap()
             .insert(key.to_owned(), built.clone());
         built
+    }
+
+    /// What the schemas say a property holds, when it holds phandles and
+    /// nothing else, for reading decompiled trees.
+    pub fn phandle_kind(&self, property: &str) -> Option<PhandleKind> {
+        let types = self.types.types(property);
+        let only = |ty: &str| types.len() == 1 && types.contains(ty);
+        if only("phandle") {
+            Some(PhandleKind::Phandle)
+        } else if only("phandle-array") {
+            let entry = match self.types.dim(property) {
+                Some((_, (min, max))) if min > 0 && min == max => Some(min as usize),
+                _ => None,
+            };
+            Some(PhandleKind::PhandleArray { entry })
+        } else {
+            None
+        }
     }
 
     /// Validates a devicetree blob. Errors are attached to the node they

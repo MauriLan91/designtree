@@ -276,6 +276,8 @@ mod tests {
             compatible: vec![],
             compatible_at: None,
             properties: vec![],
+            order: Vec::new(),
+            phandle: None,
             inherited: None,
             position: Position::default(),
             board_position: None,

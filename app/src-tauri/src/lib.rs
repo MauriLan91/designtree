@@ -5,11 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use designtree_bindings::{Binding, Catalog, Checker, DtMacro, LibraryEntry};
+use designtree_bindings::{Binding, Catalog, Checker, DtMacro, LibraryEntry, PhandleKind};
 use designtree_core::dtc::DtcError;
 use designtree_core::{
-    AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PinCheck, Problem, Property,
-    Severity,
+    AddressMap, BoardLink, Graph, ImportOptions, InterruptTree, PhandleType, PhandleTypes,
+    PinCheck, Problem, Property, Severity,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -622,7 +622,16 @@ fn open_design(path: PathBuf) -> Result<Graph, String> {
 #[tauri::command(async)]
 fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
     let fallback = state.linux_src.read().unwrap().clone();
-    let options = ImportOptions::detect_or(&path, fallback.as_deref());
+    let mut options = ImportOptions::detect_or(&path, fallback.as_deref());
+    // A decompiled tree's numeric phandles are read with the schema types.
+    if let Some(checker) = state.checker.read().unwrap().clone() {
+        options.phandle_types = PhandleTypes::new(move |name| {
+            checker.phandle_kind(name).map(|kind| match kind {
+                PhandleKind::Phandle => PhandleType::Phandle,
+                PhandleKind::PhandleArray { entry } => PhandleType::PhandleArray { entry },
+            })
+        });
+    }
     designtree_core::import_dts_file(&path, &options).map_err(|e| e.to_string())
 }
 

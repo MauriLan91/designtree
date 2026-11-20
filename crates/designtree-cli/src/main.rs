@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use designtree_bindings::Checker;
-use designtree_core::{Graph, ImportOptions};
+use designtree_bindings::{Checker, PhandleKind};
+use designtree_core::{Graph, ImportOptions, PhandleType, PhandleTypes};
 
 /// DesignTree: build Linux devicetrees as node graphs.
 #[derive(Parser)]
@@ -33,7 +33,9 @@ enum Command {
     /// Import devicetree source (.dts) into a design file.
     ///
     /// `#include` and macros are resolved. Inside a kernel tree the kernel's
-    /// include directories are used automatically.
+    /// include directories are used automatically. The numeric phandles of
+    /// a decompiled tree become references, also by the binding schemas of
+    /// the `--linux` tree when given.
     Import {
         dts: PathBuf,
         /// Output file (JSON). Prints to stdout when omitted.
@@ -176,11 +178,25 @@ fn run() -> Result<()> {
             linux,
             include_dirs,
         } => {
-            let mut options = match linux {
-                Some(linux) => ImportOptions::kernel(&linux),
+            let mut options = match &linux {
+                Some(linux) => ImportOptions::kernel(linux),
                 None => ImportOptions::detect(&dts),
             };
             options.include_dirs.extend(include_dirs);
+            if let Some(linux) = linux {
+                // Indexed on first use: only decompiled trees need it.
+                let checker = std::sync::OnceLock::new();
+                options.phandle_types = PhandleTypes::new(move |name| {
+                    checker
+                        .get_or_init(|| {
+                            designtree_bindings::index_kernel_tree(&linux)
+                                .map(|catalog| Checker::new(catalog.schemas))
+                                .ok()
+                        })
+                        .as_ref()
+                        .and_then(|c: &Checker| phandle_type(c, name))
+                });
+            }
             let graph = designtree_core::import_dts_file(&dts, &options)?;
             write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
@@ -365,7 +381,7 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
         Some(cache) => designtree_bindings::index_kernel_tree_cached(linux, cache)?.0,
         None => designtree_bindings::index_kernel_tree(linux)?,
     };
-    let checker = Checker::new(catalog.schemas);
+    let checker = std::sync::Arc::new(Checker::new(catalog.schemas));
     eprintln!("schemas loaded in {:.0?}", started.elapsed());
 
     let blob = match input.extension().and_then(|e| e.to_str()) {
@@ -373,7 +389,12 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
         other => {
             let graph = match other {
                 Some("dts") => {
-                    designtree_core::import_dts_file(input, &ImportOptions::kernel(linux))?
+                    let checker = checker.clone();
+                    let options = ImportOptions {
+                        phandle_types: PhandleTypes::new(move |name| phandle_type(&checker, name)),
+                        ..ImportOptions::kernel(linux)
+                    };
+                    designtree_core::import_dts_file(input, &options)?
                 }
                 _ => load(input)?,
             };
@@ -402,6 +423,14 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
         bail!("{} problem(s) found", problems.len());
     }
     Ok(())
+}
+
+/// What the schemas of `checker` say about a phandle property.
+fn phandle_type(checker: &Checker, property: &str) -> Option<PhandleType> {
+    checker.phandle_kind(property).map(|kind| match kind {
+        PhandleKind::Phandle => PhandleType::Phandle,
+        PhandleKind::PhandleArray { entry } => PhandleType::PhandleArray { entry },
+    })
 }
 
 /// Median time of `runs` calls of `f`, in milliseconds.

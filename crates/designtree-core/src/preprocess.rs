@@ -17,17 +17,22 @@ use std::path::{Path, PathBuf};
 
 use crate::dts::quote;
 use crate::parse::{evaluate, ImportError};
+use crate::phandles::PhandleTypes;
 
 /// Include directory of the kernel build for devicetrees, relative to the
 /// top of a kernel tree.
 const KERNEL_INCLUDE_DIR: &str = "scripts/dtc/include-prefixes";
 
-/// Where `#include` looks for files.
+/// Where `#include` looks for files, and what the binding schemas say
+/// about phandles.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ImportOptions {
     /// Directories searched in order for `#include <...>`, and for
     /// `#include "..."` after the directory of the including file.
     pub include_dirs: Vec<PathBuf>,
+    /// Phandle properties of the schemas, for restoring the references
+    /// of a decompiled tree (US-1.6).
+    pub phandle_types: PhandleTypes,
 }
 
 impl ImportOptions {
@@ -36,6 +41,7 @@ impl ImportOptions {
     pub fn kernel(linux: &Path) -> Self {
         ImportOptions {
             include_dirs: vec![linux.join(KERNEL_INCLUDE_DIR)],
+            ..ImportOptions::default()
         }
     }
 
@@ -1008,6 +1014,7 @@ mod tests {
     fn includes_with_line_markers() {
         let options = ImportOptions {
             include_dirs: vec![PathBuf::from("inc")],
+            ..ImportOptions::default()
         };
         let out = run(
             &[
