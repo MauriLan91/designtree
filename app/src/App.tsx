@@ -81,7 +81,9 @@ import {
   scopeOf,
   scopePath,
   treeRows,
+  withAncestors,
 } from "./scopes";
+import { nodePaths, searchNodes } from "./nodeSearch";
 import type { EditorMode, Layout, PaneName, PanelTab, SideView } from "./layout";
 import type { Settings } from "./settings";
 import { SettingsPanel, type Section } from "./components/SettingsPanel";
@@ -331,6 +333,7 @@ export function Editor({
   scopeRef.current = scope;
   // The navigator's open branches (US-16.4).
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [outlineFilter, setOutlineFilter] = useState("");
   const toggleExpanded = (id: string) =>
     setExpanded((s) => {
       const next = new Set(s);
@@ -1479,7 +1482,23 @@ export function Editor({
   }, [selectedKey, main, parents]);
   // Rows change with the tree and the names, not with positions.
   const treeKey = nodes.map((n) => (isDtNode(n) ? `${n.id}=${n.data.name}` : "")).join(" ");
-  const navRows = useMemo(() => treeRows(nodes, edges, expanded), [edges, expanded, treeKey]);
+  // Paths and the search read names, labels, compatibles and phandles, not
+  // positions; they are worked out only while someone searches.
+  const searchKey = nodes
+    .map((n) => (isDtNode(n) ? `${n.id}=${n.data.name}@${n.data.unitAddress}:${n.data.label}:${n.data.extraLabels}:${n.data.compatible}:${n.data.phandle}` : ""))
+    .join(" ");
+  const nodesForSearch = useRef(nodes);
+  nodesForSearch.current = nodes;
+  const paths = useMemo(() => nodePaths(nodesForSearch.current, parents), [searchKey, parents]);
+  const outlineQuery = outlineFilter.trim();
+  const outlineMatches = useMemo(
+    () => (outlineQuery ? new Set(searchNodes(nodesForSearch.current, paths, outlineQuery).map((m) => m.id)) : undefined),
+    [outlineQuery, paths, searchKey],
+  );
+  const navRows = useMemo(
+    () => treeRows(nodes, edges, expanded, outlineMatches && withAncestors(outlineMatches, parents)),
+    [edges, expanded, treeKey, outlineMatches],
+  );
   const navNodes = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
   /** Double-click (D7): open a node that holds others, edit the rest. */
@@ -1804,6 +1823,19 @@ export function Editor({
 
     { id: "palette", title: "Command palette…", shortcut: "Ctrl+K", menu: "View", run: () => setShowPalette(true) },
     {
+      id: "go-to-node",
+      title: "Go to node…",
+      shortcut: "Ctrl+P",
+      menu: "View",
+      hint: "Find a node by name, label, compatible, path or phandle, and show it in its scope",
+      run: (): NodePick => ({
+        title: "Node name, label, compatible, path or phandle",
+        nodes: [],
+        search: (query) => searchNodes(nodesForSearch.current, paths, query).map((m) => ({ id: m.id, title: m.title, hint: m.path })),
+        onPick: focusNode,
+      }),
+    },
+    {
       id: "open-scope",
       title: "Open selected node",
       menu: "View",
@@ -1992,12 +2024,19 @@ export function Editor({
       if (!combo || combo === "Ctrl+Z" || combo === "Ctrl+Shift+Z") return;
       const command = commandsRef.current.find((c) => c.shortcut === combo);
       if (!command) return;
-      // Save works from a text field too; the rest belong to the canvas.
+      // Save and Go to node work from a text field too; the rest belong to
+      // the canvas.
       const target = e.target as HTMLElement | null;
       const inText = !!target?.closest(`${TEXT_INPUTS}, textarea, select, [contenteditable], .cm-editor`);
-      if (inText && command.id !== "save") return;
+      if (inText && command.id !== "save" && command.id !== "go-to-node") return;
       e.preventDefault();
-      if (!command.disabled) command.run();
+      if (command.disabled) return;
+      // A command that still needs a node continues in the palette.
+      const next = pickOf(command.run());
+      if (next) {
+        setPalettePick(next);
+        setShowPalette(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -2112,6 +2151,9 @@ export function Editor({
               onToggle={toggleExpanded}
               onSelect={focusNode}
               onOpen={openNode}
+              filter={outlineFilter}
+              onFilter={setOutlineFilter}
+              matched={outlineMatches}
             />,
             outlineSlot,
           )}

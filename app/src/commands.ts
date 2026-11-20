@@ -6,7 +6,9 @@ import type { LucideIcon } from "lucide-react";
 /** A second step that picks a node, as for "Connect to…". */
 export interface NodePick {
   title: string;
-  nodes: { id: string; title: string }[];
+  nodes: { id: string; title: string; hint?: string }[];
+  /** Finds the nodes for a query itself, best first, instead of `nodes`. */
+  search?: (query: string) => { id: string; title: string; hint?: string }[];
   onPick: (id: string) => void;
 }
 
