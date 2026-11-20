@@ -170,4 +170,17 @@ describe("treeRows", () => {
       ["osc", 1, false],
     ]);
   });
+
+  it("shows the matches of a filter with their ancestors, all open", async () => {
+    const { treeRows, withAncestors } = await import("./scopes");
+    const keep = withAncestors(["sensor", "cpu0"], parentsOf(edges));
+    expect(treeRows(nodes, edges, new Set(), keep).map((r) => [r.id, r.depth, r.expanded])).toEqual([
+      ["root", 0, true],
+      ["cpus", 1, true],
+      ["cpu0", 2, false],
+      ["soc", 1, true],
+      ["i2c", 2, true],
+      ["sensor", 3, false],
+    ]);
+  });
 });

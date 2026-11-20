@@ -24,6 +24,15 @@
     it, or press Enter, to open its scope. The arrow keys move through the
     tree and open or close branches, and the tree opens down to whatever you
     select elsewhere.
+    The filter field at the top keeps the nodes whose name, label,
+    compatible or phandle holds what you type (or their path, for text with
+    a slash, such as `/soc/i2c`), with the nodes above
+    them (in grey) so you see where they are; Enter shows the first match in
+    its scope, the Down arrow moves into the tree, and Escape clears it.
+  - **Go to node** (Ctrl+P, View menu) finds a node anywhere in the design the
+    same way, from the keyboard: names and labels that are what you typed
+    come first, then the ones that start with it. Enter shows the node in its
+    scope and selects it.
 - **Canvas** (middle): the devicetree as a graph. A tinted icon on each node
   and library row shows its kind: CPU, interrupt controller, clock, bus or
   serial device, GPIO, memory. Zoom with the mouse wheel

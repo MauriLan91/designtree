@@ -54,6 +54,7 @@ F1 lists them in the app.
 | Keys | Action |
 | --- | --- |
 | Ctrl+K | Command palette |
+| Ctrl+P | Go to node |
 | Ctrl+N | New design |
 | Ctrl+O | Open design |
 | Ctrl+S | Save |
