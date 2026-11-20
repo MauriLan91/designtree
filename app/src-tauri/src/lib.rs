@@ -632,7 +632,7 @@ fn import_dts(path: PathBuf, state: State<AppState>) -> Result<Graph, String> {
             })
         });
     }
-    designtree_core::import_dts_file(&path, &options).map_err(|e| e.to_string())
+    designtree_core::import_file(&path, &options).map_err(|e| e.to_string())
 }
 
 /// SoC `.dtsi` files of the loaded kernel tree, for starting a board.

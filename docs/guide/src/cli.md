@@ -6,7 +6,7 @@ app, for scripts and CI. `designtree <command> --help` describes the options.
 
 | Command | Does |
 | --- | --- |
-| `import board.dts -o board.json` | Import devicetree source into a design (`--linux <tree>`, `-I <dir>` for includes); a decompiled tree gets its references back, also from the schemas of the `--linux` tree |
+| `import board.dts -o board.json` | Import devicetree source, or a `.dtb`, into a design (`--linux <tree>`, `-I <dir>` for includes); a blob or a decompiled tree gets its references back, also from the schemas of the `--linux` tree |
 | `export board.json` | Write devicetree source; a layered import becomes a board file again, `--flatten` writes the whole tree |
 | `validate board.json` | Structural checks |
 | `check board.json --linux <tree>` | Schema check like `make dtbs_check`; also takes `.dts` and `.dtb` |

@@ -1585,7 +1585,7 @@ export function Editor({
       run: newOverlay,
     },
     { id: "open", title: "Open design…", shortcut: "Ctrl+O", menu: "File", group: 1, icon: FolderOpen, disabled: !inTauri, run: openDesign },
-    { id: "import", title: "Import .dts…", menu: "File", group: 1, disabled: !inTauri, run: importDts },
+    { id: "import", title: "Import .dts or .dtb…", menu: "File", group: 1, disabled: !inTauri, run: importDts },
     {
       id: "save",
       title: designPath ? "Save" : "Save…",
