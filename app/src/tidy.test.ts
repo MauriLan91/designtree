@@ -27,6 +27,34 @@ describe("layered layout", () => {
     expect(positions.get("led")!.x).toBe(100);
   });
 
+  it("fills a grid shaped like the viewport with boxes without references", () => {
+    const many = Array.from({ length: 120 }, (_, i) => box(`n${i}`));
+    for (const aspect of [16 / 9, 1, 3]) {
+      const { positions } = layered(many, [], { x: 0, y: 0 }, aspect);
+      const xs = many.map((b) => positions.get(b.id)!.x);
+      const ys = many.map((b) => positions.get(b.id)!.y);
+      const width = Math.max(...xs) + 200;
+      const height = Math.max(...ys) + 80;
+      // Within a row of the viewport's shape, not four columns.
+      expect(width / height).toBeGreaterThan(aspect * 0.75);
+      expect(width / height).toBeLessThan(aspect * 1.5);
+    }
+  });
+
+  it("wraps a column too tall for the viewport's shape", () => {
+    const many = Array.from({ length: 200 }, (_, i) => box(`d${i}`));
+    const links = many.map((d) => ({ id: d.id, source: d.id, target: "clk" }));
+    const { positions, routes } = layered([...many, box("clk")], links, { x: 0, y: 0 }, 16 / 9);
+    const xs = new Set(many.map((d) => positions.get(d.id)!.x));
+    expect(xs.size).toBeGreaterThan(1);
+    const bottom = Math.max(...many.map((d) => positions.get(d.id)!.y)) + 80;
+    const clk = positions.get("clk")!.x;
+    expect((clk + 200) / bottom).toBeGreaterThan(1);
+    // The provider stays right of every consumer, the turns between them.
+    for (const d of many) expect(positions.get(d.id)!.x + 200).toBeLessThan(routes.get(d.id)!);
+    expect(Math.max(...routes.values())).toBeLessThan(clk);
+  });
+
   it("turns each reference in the gap right of its consumer, apart", () => {
     const gap = [100 + 200, 100 + 200 + COLUMN_GAP];
     const xs = ["a", "b", "c"].map((id) => routes.get(id)!);

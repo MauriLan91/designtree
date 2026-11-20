@@ -64,14 +64,21 @@ their icons.
   reads: a device left of the clocks and interrupt controller it uses. A
   reference to the next column then turns at right angles in the gap
   between them, each at its own place, the gap widening so they stay
-  apart; one that skips a column or points back stays a curve. Nodes with no reference on this
-  level go in rows below. The view then fits the result.
+  apart; one that skips a column or points back stays a curve. A column
+  taller than the view's shape allows wraps into several side by side.
+  Nodes with no reference on this level go in a grid below, shaped like
+  the view. The view then fits the result.
 - **Tidy the selection** (Ctrl+Shift+L) does the same for the selected
   nodes only, from where the selection starts, and leaves the rest alone.
 - **Lay out the whole tree** arranges every level of the design on its own,
   in rows in the order of the source, so each level fits in view however
   large the tree is; a group you made stays one block. References go back to
-  curves. Imported designs are laid out this way on import.
+  curves. Imported designs are laid out this way on import, and each level
+  is then tidied the first time you open it, so it never shows as one long
+  row. A level you already arranged keeps its places.
+
+Fit view (the View menu, or the button under the canvas) always shows the
+whole level, however large: the zoom goes down as far as it needs.
 - **Grid** puts the nodes in rows of equal cells, as square as it gets, in
   reading order.
 - **Tree, top down** and **Tree, left to right** hang each node under (or

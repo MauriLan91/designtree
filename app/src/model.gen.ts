@@ -217,6 +217,13 @@ overlay?: Overlay,
  */
 kernel?: string | null, 
 /**
+ * Scopes (by node id) the editor has shown and arranged, so that it
+ * tidies each other scope the first time it shows it (US-9.9). Set by
+ * import; `None`, as in designs made before, leaves every scope as it
+ * is. Not part of the exported devicetree.
+ */
+arranged?: Array<NodeId>, 
+/**
  * The board view: devices placed over a picture of the board.
  */
 board?: Board, };

@@ -385,6 +385,13 @@ pub struct Graph {
     /// another one. Not part of the exported devicetree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+    /// Scopes (by node id) the editor has shown and arranged, so that it
+    /// tidies each other scope the first time it shows it (US-9.9). Set by
+    /// import; `None`, as in designs made before, leaves every scope as it
+    /// is. Not part of the exported devicetree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub arranged: Option<Vec<NodeId>>,
     /// The board view: devices placed over a picture of the board.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
