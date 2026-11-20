@@ -534,17 +534,37 @@ fn labels_from_symbols(graph: &mut Graph) {
         .iter()
         .flat_map(|n| n.labels().cloned())
         .collect();
-    for (label, path) in symbols {
-        if taken.contains(&label) {
-            continue;
-        }
-        if let Some(node) = graph.nodes.iter_mut().find(|n| n.id.0 == path) {
+    let at: HashMap<String, usize> = graph
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.0.clone(), i))
+        .collect();
+    for (label, path) in &symbols {
+        let Some(&i) = at.get(path) else { continue };
+        if taken.insert(label.clone()) {
+            let node = &mut graph.nodes[i];
             match node.label {
                 None => node.label = Some(label.clone()),
                 Some(_) => node.extra_labels.push(label.clone()),
             }
-            taken.insert(label);
         }
+    }
+    // dtc -@ lists a node's labels in the order the node has them; newer
+    // dtc versions decompile them in another.
+    let rank: HashMap<&str, usize> = symbols
+        .iter()
+        .enumerate()
+        .map(|(i, (label, _))| (label.as_str(), i))
+        .collect();
+    for node in &mut graph.nodes {
+        if node.extra_labels.is_empty() {
+            continue;
+        }
+        let mut labels: Vec<String> = node.labels().cloned().collect();
+        labels.sort_by_key(|l| rank.get(l.as_str()).copied().unwrap_or(usize::MAX));
+        node.label = Some(labels.remove(0));
+        node.extra_labels = labels;
     }
 }
 
@@ -686,7 +706,7 @@ mod tests {
 		phandle = <0x01>;
 	};
 
-	clock-controller@200 {
+	clk: ccu: clock-controller@200 {
 		#clock-cells = <0x01>;
 		phandle = <0x02>;
 	};
