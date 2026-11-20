@@ -17,6 +17,7 @@ mod macros;
 mod resolve;
 mod search;
 
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -175,6 +176,12 @@ pub struct Binding {
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub compatibles: Vec<String>,
+    /// The compatibles of `compatibles` this schema lists only after a more
+    /// specific one (`"airoha,en7581-scu", "syscon"`). A node with such a
+    /// compatible is not described here, and the library does not list it
+    /// here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallbacks: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<PropertySpec>,
     /// The node name a new node gets, for the basic nodes the name defines
@@ -199,19 +206,28 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    /// Finds the binding that documents a compatible string.
+    /// Finds the binding that documents a compatible string: the first that
+    /// lists it other than as a fallback. A schema that lists it only after
+    /// a more specific compatible describes another device (#183).
     pub fn find_compatible(&self, compatible: &str) -> Option<&Binding> {
-        self.bindings
-            .iter()
-            .find(|b| b.compatibles.iter().any(|c| c == compatible))
+        self.bindings.iter().find(|b| {
+            b.compatibles.iter().any(|c| c == compatible)
+                && !b.fallbacks.iter().any(|c| c == compatible)
+        })
     }
 
     /// The G2 metrics of the backlog: how many schemas were indexed and how
     /// many of their properties have a resolved type.
     pub fn stats(&self) -> Stats {
-        let properties = self.bindings.iter().flat_map(|b| &b.properties);
+        // The kernel's schemas, not the dt-schema ones added to them.
+        let kernel = || {
+            self.bindings
+                .iter()
+                .filter(|b| !b.path.starts_with(DTSCHEMA_PREFIX))
+        };
+        let properties = kernel().flat_map(|b| &b.properties);
         Stats {
-            bindings: self.bindings.len(),
+            bindings: kernel().count(),
             skipped: self.skipped.len(),
             properties: properties.clone().count(),
             typed: properties.filter(|p| p.ty.is_some()).count(),
@@ -312,6 +328,10 @@ pub fn index_dir(root: &Path) -> Result<Catalog, IndexError> {
         .iter()
         .filter_map(|(rel, doc)| binding(&schemas, doc, rel))
         .collect();
+    catalog
+        .bindings
+        .extend(generic_core_bindings(&schemas, &core, &docs));
+    settle_fallbacks(&mut catalog.bindings);
     // Kernel schemas first: they win over core schemas with the same `$id`.
     catalog.schemas = SchemaSet::new(
         docs.iter()
@@ -336,14 +356,37 @@ fn read_schema(path: &Path) -> Result<Value, IndexError> {
 /// documents that are not dt-schema bindings (e.g. helper files without
 /// `$id`).
 fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding> {
+    schema_binding(schemas, doc, rel, false)
+}
+
+/// [`binding`], where `contains_leads` says whether a compatible the
+/// property only `contains` is the schema's own: so in dt-schema's core
+/// schemas, which describe every node that carries it (`simple-bus`).
+fn schema_binding(
+    schemas: &resolve::Schemas,
+    doc: &Value,
+    rel: &str,
+    contains_leads: bool,
+) -> Option<Binding> {
     doc.get("$id")?;
 
     let mut compatibles = Vec::new();
+    let mut leading = Vec::new();
     if let Some(spec) = doc.get("properties").and_then(|p| p.get("compatible")) {
-        collect_strings(spec, &mut compatibles);
+        let mut walk = Walk {
+            contains_leads,
+            out: &mut compatibles,
+            leading: &mut leading,
+        };
+        walk.strings(spec, true);
     }
     compatibles.sort();
     compatibles.dedup();
+    let fallbacks = compatibles
+        .iter()
+        .filter(|c| !leading.contains(c))
+        .cloned()
+        .collect();
     let examples: Vec<&str> = doc
         .get("examples")
         .and_then(Value::as_sequence)
@@ -364,11 +407,105 @@ fn binding(schemas: &resolve::Schemas, doc: &Value, rel: &str) -> Option<Binding
             .and_then(Value::as_str)
             .map(|s| s.trim().to_owned()),
         compatibles,
+        fallbacks,
         properties: schemas.properties(&format!("/schemas/{rel}"), doc),
         node_name: None,
         buses,
     })
 }
+
+/// The dt-schema core schemas that define compatibles, with the library
+/// category they go in. The kernel's bindings list some of these strings
+/// only as fallbacks (`"fsl,spba-bus", "simple-bus"`), and do not list
+/// others at all (`shared-dma-pool`).
+const GENERIC_CORE: &[(&str, &str)] = &[
+    ("simple-bus.yaml", "bus"),
+    ("bus/qemu,platform.yaml", "bus"),
+    ("isa/isa-bridge.yaml", "isa"),
+    ("pci/pci-pci-bridge.yaml", "pci"),
+    ("cache.yaml", "cache"),
+    ("numa-distance-map-v1.yaml", "numa"),
+    ("options/u-boot.yaml", "options"),
+    ("reserved-memory/shared-dma-pool.yaml", "reserved-memory"),
+    ("reserved-memory/framebuffer.yaml", "reserved-memory"),
+];
+
+/// The bindings of [`GENERIC_CORE`] that the kernel's own schemas do not
+/// replace (same path, so same `$id`).
+fn generic_core_bindings(
+    schemas: &resolve::Schemas,
+    core: &[(String, Value)],
+    kernel: &[(String, Value)],
+) -> Vec<Binding> {
+    GENERIC_CORE
+        .iter()
+        .filter(|(rel, _)| !kernel.iter().any(|(r, _)| r == rel))
+        .filter_map(|&(rel, category)| {
+            let doc = &core.iter().find(|(r, _)| r == rel)?.1;
+            let mut binding = schema_binding(schemas, doc, rel, true)?;
+            binding.path = format!("{DTSCHEMA_PREFIX}{rel}");
+            binding.category = category.to_owned();
+            Some(binding)
+        })
+        .collect()
+}
+
+/// A compatible that every schema lists only as a fallback is still
+/// documented by one of them: the only one (a SoC after its boards, as in
+/// `"fsl,imx6dl-board", "fsl,imx6dl"`), the one named after it
+/// (`mfd/syscon.yaml` for `syscon`), or the one whose name is the longest
+/// vendor-qualified start of it (`net/snps,dwmac.yaml` for
+/// `snps,dwmac-4.20a`). That schema no longer counts it as a fallback.
+/// Strings that many schemas share with no such owner (`simple-mfd`,
+/// `arm,primecell`) stay fallbacks everywhere.
+fn settle_fallbacks(bindings: &mut [Binding]) {
+    let leading: HashSet<&str> = bindings
+        .iter()
+        .flat_map(|b| b.compatibles.iter().filter(|c| !b.fallbacks.contains(c)))
+        .map(String::as_str)
+        .collect();
+    let mut listing: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (i, b) in bindings.iter().enumerate() {
+        for c in &b.fallbacks {
+            if !leading.contains(c.as_str()) {
+                listing.entry(c).or_default().push(i);
+            }
+        }
+    }
+    let stem = |b: &Binding| {
+        let name = b.path.rsplit('/').next().unwrap_or(&b.path);
+        name.strip_suffix(".yaml").unwrap_or(name).to_owned()
+    };
+    let mut owners: Vec<(String, usize)> = Vec::new();
+    for (c, schemas) in listing {
+        let owner = match schemas[..] {
+            [only] => Some(only),
+            _ => schemas
+                .iter()
+                .copied()
+                .find(|&i| stem(&bindings[i]) == c)
+                .or_else(|| {
+                    schemas
+                        .iter()
+                        .copied()
+                        .filter(|&i| {
+                            let s = stem(&bindings[i]);
+                            s.contains(',') && c.starts_with(&s)
+                        })
+                        .max_by_key(|&i| stem(&bindings[i]).len())
+                }),
+        };
+        if let Some(owner) = owner {
+            owners.push((c.to_owned(), owner));
+        }
+    }
+    for (c, owner) in owners {
+        bindings[owner].fallbacks.retain(|f| *f != c);
+    }
+}
+
+/// The path prefix of the bindings that come from dt-schema's core schemas.
+const DTSCHEMA_PREFIX: &str = "dtschema/";
 
 /// The category of the basic nodes in the library.
 pub const BASIC_CATEGORY: &str = "basic";
@@ -447,10 +584,11 @@ pub fn basic_bindings() -> Vec<Binding> {
                 p.required |= also_required.contains(&p.name.as_str());
             }
             Some(Binding {
-                path: format!("dtschema/{rel}"),
+                path: format!("{DTSCHEMA_PREFIX}{rel}"),
                 category: BASIC_CATEGORY.to_owned(),
                 title: Some(title.to_owned()),
                 compatibles: Vec::new(),
+                fallbacks: Vec::new(),
                 properties,
                 node_name: Some(name.to_owned()),
                 buses: Vec::new(),
@@ -459,28 +597,111 @@ pub fn basic_bindings() -> Vec<Binding> {
         .collect()
 }
 
-/// Collects every literal string reachable through `const`, `enum`, `items`,
-/// `oneOf`, `anyOf` and `allOf` inside a `compatible` schema.
-fn collect_strings(spec: &Value, out: &mut Vec<String>) {
-    match spec {
-        Value::Mapping(map) => {
-            for (key, value) in map {
-                match key.as_str() {
-                    Some("const") => out.extend(value.as_str().map(str::to_owned)),
-                    Some("enum") => {
-                        if let Some(seq) = value.as_sequence() {
-                            out.extend(seq.iter().filter_map(Value::as_str).map(str::to_owned));
-                        }
-                    }
-                    Some("items" | "oneOf" | "anyOf" | "allOf" | "contains") => {
-                        collect_strings(value, out)
-                    }
-                    _ => {}
-                }
+/// Collects the compatible strings of a `compatible` schema.
+struct Walk<'a> {
+    contains_leads: bool,
+    /// Every literal string reachable through `const`, `enum`, `items`,
+    /// `oneOf`, `anyOf`, `allOf` and `contains`.
+    out: &'a mut Vec<String>,
+    /// Those that can stand first in the property: not a later item of an
+    /// `items` list, nor (unless `contains_leads`) one the list only
+    /// `contains`.
+    leading: &'a mut Vec<String>,
+}
+
+impl Walk<'_> {
+    fn add(&mut self, value: Option<&str>, first: bool) {
+        if let Some(v) = value {
+            self.out.push(v.to_owned());
+            if first {
+                self.leading.push(v.to_owned());
             }
         }
-        Value::Sequence(seq) => seq.iter().for_each(|v| collect_strings(v, out)),
-        _ => {}
+    }
+
+    fn strings(&mut self, spec: &Value, first: bool) {
+        match spec {
+            Value::Mapping(map) => {
+                for (key, value) in map {
+                    match key.as_str() {
+                        Some("const") => self.add(value.as_str(), first),
+                        Some("enum") => {
+                            for v in value.as_sequence().into_iter().flatten() {
+                                self.add(v.as_str(), first);
+                            }
+                        }
+                        Some("items") => match value.as_sequence() {
+                            Some(items) => {
+                                for (i, item) in items.iter().enumerate() {
+                                    self.strings(item, first && i == 0);
+                                }
+                            }
+                            None => self.strings(value, first),
+                        },
+                        Some("oneOf" | "anyOf" | "allOf") => self.strings(value, first),
+                        Some("contains") => self.strings(value, first && self.contains_leads),
+                        _ => {}
+                    }
+                }
+            }
+            Value::Sequence(seq) => seq.iter().for_each(|v| self.strings(v, first)),
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+
+    fn schema(path: &str, compatibles: &[&str], fallbacks: &[&str]) -> Binding {
+        Binding {
+            path: path.into(),
+            category: "misc".into(),
+            title: None,
+            compatibles: compatibles.iter().map(|c| c.to_string()).collect(),
+            fallbacks: fallbacks.iter().map(|c| c.to_string()).collect(),
+            properties: vec![],
+            node_name: None,
+            buses: vec![],
+        }
+    }
+
+    #[test]
+    fn a_fallback_no_schema_leads_with_is_owned_where_it_belongs() {
+        let mut bindings = vec![
+            schema("arm/fsl.yaml", &["fsl,board", "fsl,soc"], &["fsl,soc"]),
+            schema(
+                "mfd/a,scu.yaml",
+                &["a,scu", "syscon", "simple-mfd"],
+                &["syscon", "simple-mfd"],
+            ),
+            schema("mfd/syscon.yaml", &["b,sys", "syscon"], &["syscon"]),
+            schema(
+                "net/c,mac.yaml",
+                &["c,mac", "snps,dwmac-4.20a"],
+                &["snps,dwmac-4.20a"],
+            ),
+            schema(
+                "net/snps,dwmac.yaml",
+                &["snps,dwmac", "snps,dwmac-4.20a"],
+                &["snps,dwmac-4.20a"],
+            ),
+            schema("mfd/d,pmu.yaml", &["d,pmu", "simple-mfd"], &["simple-mfd"]),
+            schema("bus/e,bus.yaml", &["e,bus", "simple-bus"], &["simple-bus"]),
+            schema("dtschema/simple-bus.yaml", &["simple-bus"], &[]),
+        ];
+        settle_fallbacks(&mut bindings);
+        let catalog = Catalog {
+            bindings,
+            ..Default::default()
+        };
+        let path = |c| catalog.find_compatible(c).map(|b| b.path.as_str());
+        assert_eq!(path("fsl,soc"), Some("arm/fsl.yaml"));
+        assert_eq!(path("syscon"), Some("mfd/syscon.yaml"));
+        assert_eq!(path("snps,dwmac-4.20a"), Some("net/snps,dwmac.yaml"));
+        assert_eq!(path("simple-bus"), Some("dtschema/simple-bus.yaml"));
+        assert_eq!(path("simple-mfd"), None);
     }
 }
 

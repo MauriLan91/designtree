@@ -17,7 +17,9 @@ fn property<'a>(catalog: &'a Catalog, compatible: &str, name: &str) -> &'a Prope
 #[test]
 fn indexes_fixture_tree() {
     let catalog = catalog();
-    assert_eq!(catalog.bindings.len(), 3);
+    // The fixtures, and the dt-schema core schemas that define compatibles.
+    assert_eq!(catalog.stats().bindings, 6);
+    assert!(catalog.find_compatible("shared-dma-pool").is_some());
 
     let uart = catalog.find_compatible("vendor,uart-b1").unwrap();
     assert_eq!(uart.category, "serial");
@@ -118,7 +120,40 @@ fn serializes_types_with_dt_schema_names() {
 #[test]
 fn reports_g2_stats() {
     let stats = catalog().stats();
-    assert_eq!((stats.bindings, stats.skipped), (3, 0));
+    assert_eq!((stats.bindings, stats.skipped), (6, 0));
     assert_eq!(stats.typed, stats.properties);
     assert!(stats.to_string().contains("properties typed:"));
+}
+
+#[test]
+fn a_generic_compatible_finds_the_schema_that_defines_it() {
+    let catalog = catalog();
+    let path = |c| catalog.find_compatible(c).map(|b| b.path.as_str());
+    // Listed only as fallbacks in the kernel's schemas: dt-schema's own.
+    assert_eq!(path("simple-bus"), Some("dtschema/simple-bus.yaml"));
+    assert_eq!(
+        catalog.find_compatible("simple-bus").unwrap().category,
+        "bus"
+    );
+    // A fallback everywhere: the schema named after it, not the first.
+    assert_eq!(path("syscon"), Some("mfd/syscon.yaml"));
+    // Specific compatibles keep their own schemas.
+    assert_eq!(path("airoha,scu"), Some("mfd/airoha,scu.yaml"));
+    assert_eq!(path("vendor,sysctrl-b"), Some("mfd/syscon.yaml"));
+    assert_eq!(path("vendor,spba-bus"), Some("bus/vendor,spba-bus.yaml"));
+
+    // The library lists a generic compatible once, under its own schema.
+    let entries: Vec<_> = catalog
+        .search("", None, usize::MAX)
+        .into_iter()
+        .filter_map(|h| Some((h.compatible?, h.binding.path.as_str())))
+        .filter(|(c, _)| ["syscon", "simple-bus"].contains(c))
+        .collect();
+    assert_eq!(
+        entries,
+        [
+            ("syscon", "mfd/syscon.yaml"),
+            ("simple-bus", "dtschema/simple-bus.yaml")
+        ]
+    );
 }

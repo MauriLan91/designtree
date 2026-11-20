@@ -68,8 +68,10 @@ their icons.
   level go in rows below. The view then fits the result.
 - **Tidy the selection** (Ctrl+Shift+L) does the same for the selected
   nodes only, from where the selection starts, and leaves the rest alone.
-- **Lay out the whole tree** arranges every node of the design from the
-  root down, with a group for each bus; references go back to curves. Imported designs are laid out this way on import.
+- **Lay out the whole tree** arranges every level of the design on its own,
+  in rows in the order of the source, so each level fits in view however
+  large the tree is; a group you made stays one block. References go back to
+  curves. Imported designs are laid out this way on import.
 - **Grid** puts the nodes in rows of equal cells, as square as it gets, in
   reading order.
 - **Tree, top down** and **Tree, left to right** hang each node under (or

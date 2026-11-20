@@ -41,7 +41,7 @@ pub fn kernel_version(linux: &Path) -> Option<String> {
 }
 
 /// Bumped when the cached catalog's shape changes.
-const CACHE_FORMAT: u32 = 3;
+const CACHE_FORMAT: u32 = 4;
 
 /// Bigger cache files are not read: a catalog of the whole kernel, with
 /// the processed schemas, is about 20 megabytes.
@@ -226,7 +226,7 @@ mod tests {
         let cache = Dir::new("cache");
         let (first, status) = index_kernel_tree_cached(&linux.0, &cache.0).unwrap();
         assert_eq!(status, CacheStatus::Rebuilt);
-        assert_eq!(first.bindings.len(), 1);
+        assert_eq!(first.stats().bindings, 1);
 
         let (second, status) = index_kernel_tree_cached(&linux.0, &cache.0).unwrap();
         assert_eq!(status, CacheStatus::Hit);
@@ -240,7 +240,7 @@ mod tests {
         .unwrap();
         let (third, status) = index_kernel_tree_cached(&linux.0, &cache.0).unwrap();
         assert_eq!(status, CacheStatus::Rebuilt);
-        assert_eq!(third.bindings.len(), 2);
+        assert_eq!(third.stats().bindings, 2);
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         fs::write(&file, "{ not json").unwrap();
         let (catalog, status) = index_kernel_tree_cached(&linux.0, &cache.0).unwrap();
         assert_eq!(status, CacheStatus::Rebuilt);
-        assert_eq!(catalog.bindings.len(), 1);
+        assert_eq!(catalog.stats().bindings, 1);
     }
 
     #[test]

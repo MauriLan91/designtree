@@ -1,0 +1,19 @@
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/bus/vendor,spba-bus.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Shared Peripherals Bus Interface
+
+properties:
+  compatible:
+    items:
+      - const: vendor,spba-bus
+      - const: simple-bus
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg

@@ -84,6 +84,8 @@ export interface DtNodeData extends Record<string, unknown> {
   extraLabels?: string[];
   omitIfNoRef?: boolean;
   compatible: string[];
+  /** Where `compatible` stood among the properties in the imported source. */
+  compatibleAt?: number;
   properties: Property[];
   inherited?: Inherited;
   /** Where the device sits in the board view; unset when it is not placed there. */
@@ -173,6 +175,7 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
     extra_labels: n.data.extraLabels,
     omit_if_no_ref: n.data.omitIfNoRef,
     compatible: n.data.compatible,
+    compatible_at: n.data.compatibleAt,
     properties: n.data.properties,
     inherited: n.data.inherited,
     position: absolutePosition(n, byId),
@@ -250,6 +253,7 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
         extraLabels: n.extra_labels,
         omitIfNoRef: n.omit_if_no_ref,
         compatible: n.compatible ?? [],
+        compatibleAt: n.compatible_at ?? undefined,
         properties: n.properties ?? [],
         inherited: n.inherited ?? undefined,
         boardPosition: n.board_position,
