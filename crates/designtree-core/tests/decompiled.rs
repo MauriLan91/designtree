@@ -1,15 +1,15 @@
-//! A decompiled blob imports with its references restored and builds back
-//! into the same blob (US-1.6).
+//! A decompiled blob, or the blob itself, imports with its references
+//! restored and builds back into the same blob (US-1.6, US-1.7).
 
 mod common;
 
 use std::path::Path;
 
-use designtree_core::{import_dts, to_dts_flat, EdgeKind, ImportOptions};
+use designtree_core::{import_dtb, import_dts, to_dts_flat, EdgeKind, Graph, ImportOptions};
 
 /// Compiles `dts` as DesignTree builds (`dtc -@`), decompiles the blob,
 /// imports that, and checks that its export compiles to the same bytes.
-fn round_trip(fixture: &str) -> Option<designtree_core::Graph> {
+fn round_trip(fixture: &str) -> Option<Graph> {
     if !common::dtc_available() {
         assert!(
             std::env::var_os("DESIGNTREE_REQUIRE_DTC").is_none(),
@@ -35,18 +35,25 @@ fn round_trip(fixture: &str) -> Option<designtree_core::Graph> {
         common::run_bytes("dtc", &["-q", "-I", "dtb", "-O", "dts", "-"], &original).unwrap(),
     )
     .unwrap();
-    let graph = import_dts(
-        &decompiled,
-        Path::new("board.dts"),
-        &ImportOptions::default(),
-    )
-    .unwrap_or_else(|e| panic!("{e}"));
-    let exported = to_dts_flat(&graph).unwrap_or_else(|e| panic!("{e:?}"));
-    assert!(
-        build(&exported) == original,
-        "the rebuilt blob differs from the original; export:\n{exported}"
-    );
+    let options = ImportOptions::default();
+    let graph =
+        import_dts(&decompiled, Path::new("board.dts"), &options).unwrap_or_else(|e| panic!("{e}"));
+    // Opening the blob itself (US-1.7) gives the same tree.
+    let opened =
+        import_dtb(&original, Path::new("board.dtb"), &options).unwrap_or_else(|e| panic!("{e}"));
+    for graph in [&graph, &opened] {
+        let exported = to_dts_flat(graph).unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(
+            build(&exported) == original,
+            "the rebuilt blob differs from the original; export:\n{exported}"
+        );
+    }
+    assert_eq!(edges(&graph), edges(&opened));
     Some(graph)
+}
+
+fn edges(graph: &Graph) -> Vec<String> {
+    graph.edges.iter().map(|e| format!("{e:?}")).collect()
 }
 
 #[test]

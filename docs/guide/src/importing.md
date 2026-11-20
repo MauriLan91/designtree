@@ -1,7 +1,9 @@
 # Importing board files
 
-**File › Import .dts…** opens existing devicetree source: a kernel board file, a
-vendor BSP file or anything `dtc` accepts.
+**File › Import .dts or .dtb…** opens existing devicetree source: a kernel
+board file, a vendor BSP file or anything `dtc` accepts. It also opens a
+compiled blob (`.dtb`), such as the one a device boots with: the result is the
+same as importing its decompiled source (see [Decompiled trees](#decompiled-trees)).
 
 - `#include` of `.dtsi` files and `dt-bindings` headers is resolved, and C
   macros such as `GPIO_ACTIVE_LOW` and `IRQ_TYPE_LEVEL_HIGH` are expanded.
@@ -28,8 +30,8 @@ nodes), the design is imported flat instead.
 
 ## Decompiled trees
 
-A tree decompiled from a `.dtb` (`dtc -I dtb -O dts`) has numbers where the
-source had references: `clocks = <0x2f 0x01>;`. DesignTree turns them back
+A tree decompiled from a `.dtb` (`dtc -I dtb -O dts`), or a `.dtb` opened
+directly, has numbers where the source had references: `clocks = <0x2f 0x01>;`. DesignTree turns them back
 into references wherever the property is known to hold phandles:
 `interrupt-parent`, `clocks`, `resets`, `dmas`, `*-gpios`, `*-supply`,
 `pinctrl-N`, `interrupt-map` and the other standard ones, plus every

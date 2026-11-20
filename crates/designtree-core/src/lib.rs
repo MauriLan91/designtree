@@ -7,6 +7,7 @@
 
 pub mod address_map;
 pub mod board;
+pub mod dtb;
 pub mod dtc;
 pub mod dts;
 pub mod entries;
@@ -30,7 +31,10 @@ pub use address_map::{address_map, AddressMap, AddressProblem, Bus, Region};
 pub use board::{pin_check, PinCheck, PinProblem, PinState};
 pub use dts::{to_dts, to_dts_flat, to_dts_flat_mapped, to_dts_mapped, NodeSpan, SourceMap};
 pub use fdt::{to_dtb, Dtb};
-pub use import::{import_dts, import_dts_file, import_dts_mapped, parse_properties, ImportError};
+pub use import::{
+    import_dtb, import_dts, import_dts_file, import_dts_mapped, import_file, parse_properties,
+    ImportError,
+};
 pub use interrupts::{interrupt_tree, InterruptController, InterruptProblem, InterruptTree};
 pub use layout::auto_layout;
 pub use links::{board_links, BoardLink, LinkKind};

@@ -30,7 +30,7 @@ enum Command {
         #[arg(long)]
         stats: bool,
     },
-    /// Import devicetree source (.dts) into a design file.
+    /// Import devicetree source (.dts) or a blob (.dtb) into a design file.
     ///
     /// `#include` and macros are resolved. Inside a kernel tree the kernel's
     /// include directories are used automatically. The numeric phandles of
@@ -197,7 +197,7 @@ fn run() -> Result<()> {
                         .and_then(|c: &Checker| phandle_type(c, name))
                 });
             }
-            let graph = designtree_core::import_dts_file(&dts, &options)?;
+            let graph = designtree_core::import_file(&dts, &options)?;
             write_output(output, &serde_json::to_string_pretty(&graph)?)
         }
         Command::Overlay {

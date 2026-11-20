@@ -99,6 +99,7 @@ export const backend = {
 const DESIGN_FILTER = [{ name: "DesignTree design", extensions: ["json"] }];
 const DTB_FILTER = [{ name: "Device tree blob", extensions: ["dtb"] }];
 const DTS_FILTER = [{ name: "Devicetree source", extensions: ["dts", "dtsi"] }];
+const IMPORT_FILTER = [{ name: "Devicetree source or blob", extensions: ["dts", "dtsi", "dtb"] }];
 const DTSO_FILTER = [{ name: "Devicetree overlay source", extensions: ["dtso"] }];
 const DTBO_FILTER = [{ name: "Devicetree overlay blob", extensions: ["dtbo"] }];
 const BASE_FILTER = [{ name: "Design or devicetree source", extensions: ["json", "dts"] }];
@@ -135,7 +136,7 @@ export const dialogs = {
   pickDesignToOpen: () => openFile({ filters: DESIGN_FILTER }),
   /** `current`: the design's file, which the dialog starts at. */
   pickDesignToSave: (current?: string | null) => saveAs(DESIGN_FILTER, "design.json", current),
-  pickDtsToOpen: () => openFile({ filters: DTS_FILTER }),
+  pickDtsToOpen: () => openFile({ filters: IMPORT_FILTER }),
   pickDtbToSave: () => saveAs(DTB_FILTER, "board.dtb"),
   pickDtc: () => open({ title: "Select the dtc program" }) as Promise<string | null>,
   pickDtsToSave: () => saveAs(DTS_FILTER, "board.dts"),

@@ -11,6 +11,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use crate::dtb::{decompile, is_dtb};
 use crate::dts::NodeSpan;
 use crate::layout::auto_layout;
 use crate::model::{
@@ -29,6 +30,34 @@ pub fn import_dts_file(path: &Path, options: &ImportOptions) -> Result<Graph, Im
     let source = std::fs::read_to_string(path)
         .map_err(|e| ImportError::new(path.display().to_string(), 1, e.to_string()))?;
     import_dts(&source, path, options)
+}
+
+/// Imports a devicetree source file or, when the file is one, a blob
+/// (`.dtb`, see [`import_dtb`]), whatever its name.
+pub fn import_file(path: &Path, options: &ImportOptions) -> Result<Graph, ImportError> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| ImportError::new(path.display().to_string(), 1, e.to_string()))?;
+    if is_dtb(&bytes) {
+        return import_dtb(&bytes, path, options);
+    }
+    let source = String::from_utf8(bytes).map_err(|_| {
+        ImportError::new(
+            path.display().to_string(),
+            1,
+            "neither devicetree source (UTF-8 text) nor a devicetree blob",
+        )
+    })?;
+    import_dts(&source, path, options)
+}
+
+/// Imports a devicetree blob read from `file` (US-1.7): the same design as
+/// importing its decompiled source, references restored as for any
+/// decompiled tree (US-1.6).
+pub fn import_dtb(blob: &[u8], file: &Path, options: &ImportOptions) -> Result<Graph, ImportError> {
+    let name = file.display().to_string();
+    let source = decompile(blob).map_err(|e| ImportError::new(&*name, 1, e.to_string()))?;
+    // Written by us from checked names: nothing to preprocess, no includes.
+    finish(import_preprocessed(&source, &name, Vec::new())?, options).map(|(graph, _)| graph)
 }
 
 /// Imports devicetree source text read from `file`. Includes are looked up
@@ -59,11 +88,19 @@ pub fn import_dts_mapped(
     options: &ImportOptions,
 ) -> Result<(Graph, Vec<NodeSpan>), ImportError> {
     let preprocessed = preprocess(source, file, options, &confined_reader(file, options))?;
-    let (mut graph, mut spans) = import_preprocessed(
+    let imported = import_preprocessed(
         &preprocessed.text,
         &file.display().to_string(),
         preprocessed.directives,
     )?;
+    finish(imported, options)
+}
+
+/// Restores the references of a decompiled tree and lays the design out.
+fn finish(
+    (mut graph, mut spans): (Graph, Vec<NodeSpan>),
+    options: &ImportOptions,
+) -> Result<(Graph, Vec<NodeSpan>), ImportError> {
     if restore_references(&mut graph, &options.phandle_types) {
         let ids: HashSet<&NodeId> = graph.nodes.iter().map(|n| &n.id).collect();
         spans.retain(|s| ids.contains(&s.node));
