@@ -74,6 +74,14 @@ try {
   for (const id of path) {
     const node = page.locator(`.react-flow__node[data-id="${id}"]`);
     await node.waitFor({ timeout: 60_000 });
+    // A scope is tidied and fitted when first shown (US-9.9): click once
+    // the node stops moving.
+    for (let last = null; ; ) {
+      const box = JSON.stringify(await node.boundingBox());
+      if (box === last) break;
+      last = box;
+      await page.waitForTimeout(250);
+    }
     await node.dblclick();
   }
   await drawn(scopeSize);

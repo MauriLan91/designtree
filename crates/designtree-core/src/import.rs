@@ -106,6 +106,8 @@ fn finish(
         spans.retain(|s| ids.contains(&s.node));
     }
     auto_layout(&mut graph);
+    // The editor tidies each scope when it first shows it.
+    graph.arranged = Some(Vec::new());
     Ok((graph, spans))
 }
 

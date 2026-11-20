@@ -38,11 +38,13 @@ const MAX_GAP = 600;
  * Lays the boxes out in columns, left to right along the references, the
  * way a devicetree reads: a consumer left of the providers it uses (a UART
  * left of its clock and interrupt controller). Within a column, boxes
- * follow the order of what points at them, so references cross less. Boxes
- * with no reference among them go in rows below. The result starts at
- * `origin`, the top left corner of the area tidied.
+ * follow the order of what points at them, so references cross less; one
+ * too tall for the viewport's shape wraps into several. Boxes
+ * with no reference among them go in rows below, as many to a row as
+ * shapes the whole like the viewport (`aspect`, its width over its height).
+ * The result starts at `origin`, the top left corner of the area tidied.
  */
-export function layered(boxes: Box[], links: Link[], origin: { x: number; y: number }): Tidied {
+export function layered(boxes: Box[], links: Link[], origin: { x: number; y: number }, aspect = 16 / 9): Tidied {
   const ids = new Set(boxes.map((b) => b.id));
   const byId = new Map(boxes.map((b) => [b.id, b]));
   const inside = links.filter((l) => ids.has(l.source) && ids.has(l.target) && l.source !== l.target);
@@ -109,20 +111,32 @@ export function layered(boxes: Box[], links: Link[], origin: { x: number; y: num
 
   const positions = new Map<string, { x: number; y: number }>();
   const heightOf = (col: string[]) => col.reduce((h, id) => h + byId.get(id)!.height, 0) + ROW_GAP * (col.length - 1);
-  const tallest = Math.max(0, ...columns.map(heightOf));
+  // A column taller than the viewport's shape allows for all the boxes
+  // (hundreds of devices using one clock controller) wraps into several,
+  // side by side.
+  const area = boxes.reduce((a, b) => a + (b.width + COLUMN_GAP / 2) * (b.height + ROW_GAP), 0);
+  const limit = Math.sqrt(area / aspect);
+  const wrapped = columns.map((col) => {
+    const parts = Math.max(1, Math.ceil(heightOf(col) / limit));
+    const per = Math.ceil(col.length / parts);
+    return Array.from({ length: parts }, (_, i) => col.slice(i * per, (i + 1) * per)).filter((p) => p.length);
+  });
+  const tallest = Math.max(0, ...wrapped.flat().map(heightOf));
   const right: number[] = [];
   let x = origin.x;
-  columns.forEach((col, c) => {
-    const width = Math.max(...col.map((id) => byId.get(id)!.width));
-    // Columns are centred on the tallest one.
-    let y = origin.y + (tallest - heightOf(col)) / 2;
-    for (const id of col) {
-      const b = byId.get(id)!;
-      positions.set(id, { x: x + (width - b.width) / 2, y });
-      y += b.height + ROW_GAP;
-    }
-    right[c] = x + width;
-    x += width + gapAfter(c);
+  wrapped.forEach((parts, c) => {
+    parts.forEach((col, i) => {
+      const width = Math.max(...col.map((id) => byId.get(id)!.width));
+      // Columns are centred on the tallest one.
+      let y = origin.y + (tallest - heightOf(col)) / 2;
+      for (const id of col) {
+        const b = byId.get(id)!;
+        positions.set(id, { x: x + (width - b.width) / 2, y });
+        y += b.height + ROW_GAP;
+      }
+      right[c] = x + width;
+      x += width + (i < parts.length - 1 ? ROW_GAP : gapAfter(c));
+    });
   });
 
   // Each reference turns in the gap right of its consumer's column; those
@@ -136,9 +150,11 @@ export function layered(boxes: Box[], links: Link[], origin: { x: number; y: num
     sorted.forEach((l, i) => routes.set(l.id, right[c] + gap / 2 + (i - (sorted.length - 1) / 2) * step));
   }
 
-  // Loose boxes in rows below, as wide as the layered part (or four boxes).
+  // Loose boxes in rows below, at least as wide as the layered part, and
+  // wide enough for the whole to take the viewport's shape.
   const top = linked.length ? origin.y + tallest + ROW_GAP * 2 : origin.y;
-  const maxWidth = Math.max(right.length ? right[right.length - 1] - origin.x : 0, ...loose.slice(0, 4).map((b) => b.width * 4 + ROW_GAP * 3));
+  const layeredWidth = right.length ? right[right.length - 1] - origin.x : 0;
+  const maxWidth = Math.max(layeredWidth, gridWidth(loose, aspect, linked.length ? tallest + ROW_GAP * 2 : 0, layeredWidth));
   let lx = origin.x;
   let ly = top;
   let rowHeight = 0;
@@ -153,6 +169,24 @@ export function layered(boxes: Box[], links: Link[], origin: { x: number; y: num
     rowHeight = Math.max(rowHeight, b.height);
   }
   return { positions, routes };
+}
+
+/**
+ * The row width that gives `loose` boxes, under a part `above` tall and
+ * `aboveWidth` wide, the shape `aspect` as a whole.
+ */
+function gridWidth(loose: Box[], aspect: number, above: number, aboveWidth: number): number {
+  if (!loose.length) return 0;
+  const cellW = loose.reduce((w, b) => w + b.width, 0) / loose.length + ROW_GAP;
+  const cellH = loose.reduce((h, b) => h + b.height, 0) / loose.length + ROW_GAP;
+  // The narrowest row count whose block, with what is above, is no taller
+  // than the aspect allows.
+  for (let columns = 1; columns < loose.length; columns++) {
+    const width = Math.max(aboveWidth, columns * cellW - ROW_GAP);
+    const height = above + Math.ceil(loose.length / columns) * cellH - ROW_GAP;
+    if (width / height >= aspect) return columns * cellW - ROW_GAP;
+  }
+  return loose.length * cellW - ROW_GAP;
 }
 
 function topological(ids: string[], out: Map<string, string[]>, back: Set<string>): string[] {

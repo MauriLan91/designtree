@@ -9,6 +9,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type IsValidConnection,
@@ -150,6 +151,8 @@ const failure = (message: string): Problem => ({ severity: "error", message });
 const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode, busbar: BusBarNode };
 const edgeTypes = { ref: RefEdge };
 const GROUP_PADDING = 40;
+/** The zoom floor of a scope that fits the view at a larger zoom. */
+const MIN_ZOOM = 0.1;
 
 /** The design without what does not reach the devicetree (positions, groups, the board view), and its key. */
 function treeOf(nodes: FlowNode[], edges: Edge[], extras: DesignExtras) {
@@ -455,6 +458,10 @@ export function Editor({
   const [pinCheck, setPinCheck] = useState<PinCheck | null>(null);
   const [boardLinks, setBoardLinks] = useState<BoardLink[] | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
+  const viewWidth = useStore((s) => s.width);
+  const viewHeight = useStore((s) => s.height);
+  /** The viewport's shape, which a tidied scope takes. */
+  const aspect = viewWidth > 0 && viewHeight > 0 ? viewWidth / viewHeight : 16 / 9;
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1061,6 +1068,7 @@ export function Editor({
       setBuild(null);
       setOpenScopes([]);
       setScopeTab(null);
+      autoTidied.current.clear();
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
     } catch (e) {
       setErrors([failure(String(e))]);
@@ -1104,13 +1112,35 @@ export function Editor({
     const tops = onlySelected ? tidyable() : scopeTops();
     if (tops.length < (onlySelected ? 2 : 1)) return;
     const boxes = tops.map(boxOf);
-    const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes));
+    const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes), aspect);
     placeMoved(positions, routes);
     if (!onlySelected) {
       refitFrames(tops[0].parentId);
       setTimeout(() => fitView({ maxZoom: 1, duration: 300 }), 50);
     }
   };
+
+  // A scope shown for the first time is tidied (US-9.9), once its nodes
+  // have their size: an imported tree never opens on a heap of nodes. The
+  // design keeps which scopes are arranged; designs without that list
+  // (made before) are left as they are. A scope is tidied once a session,
+  // so undoing the tidy keeps the old places.
+  const autoTidied = useRef(new Set<string | null>());
+  useEffect(() => {
+    const arranged = extras.arranged;
+    if (!arranged || scope === null || arranged.includes(scope) || autoTidied.current.has(scope)) return;
+    const tops = scopeTops();
+    if (!tops.length || tops.some((n) => !n.measured?.width)) return;
+    autoTidied.current.add(scope);
+    const boxes = tops.map(boxOf);
+    const { positions, routes } = layered(boxes, refLinks(tops), cornerOf(boxes), aspect);
+    placeMoved(positions, routes);
+    refitFrames(tops[0].parentId);
+    setExtras((x) => ({ ...x, arranged: [...(x.arranged ?? []), scope] }));
+    // The zoom floor still holds the bounds from before the tidy here, so
+    // the fit names its own.
+    setTimeout(() => fitView({ maxZoom: 1, minZoom: 0.001 }), 50);
+  }, [scope, nodes, extras.arranged]);
 
   /** The top-level nodes of the scope on show: groups and ungrouped nodes.
    * A lone frame around all of them (the bus frame that layouts before
@@ -1340,6 +1370,21 @@ export function Editor({
   // Dragging changes positions, not what is shown: keep the edges array the
   // same object then, so React Flow does not redo every edge each frame.
   const shown = scopeIds(nodes, scope, main, parents);
+  // Fit view always shows the whole scope (US-9.9): the zoom floor goes
+  // down as far as the scope's size needs.
+  const minZoom = (() => {
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const n of nodes) {
+      if (n.parentId || !shown.has(n.id)) continue;
+      const b = boxOf(n);
+      left = Math.min(left, b.x);
+      top = Math.min(top, b.y);
+      right = Math.max(right, b.x + b.width);
+      bottom = Math.max(bottom, b.y + b.height);
+    }
+    if (!(right > left) || !(viewWidth > 0) || !(viewHeight > 0)) return MIN_ZOOM;
+    return Math.min(MIN_ZOOM, 0.9 * Math.min(viewWidth / (right - left), viewHeight / (bottom - top)));
+  })();
   const shownKey = [...shown].join(" ");
   // References that leave the scope end at boundary ports (US-16.2); their
   // edges do not depend on positions, the ports' places do.
@@ -2111,7 +2156,7 @@ export function Editor({
               colorMode={settings.theme}
               fitView
               fitViewOptions={{ maxZoom: 1 }}
-              minZoom={0.1}
+              minZoom={minZoom}
               deleteKeyCode={active ? ["Backspace", "Delete"] : null}
               snapToGrid={settings.snapToGrid}
               snapGrid={[settings.gridSize, settings.gridSize]}

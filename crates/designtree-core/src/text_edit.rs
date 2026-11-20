@@ -80,6 +80,7 @@ pub fn apply_source(
     graph.groups = kept_groups(&previous.groups, &graph);
     graph.kernel.clone_from(&previous.kernel);
     graph.board.clone_from(&previous.board);
+    graph.arranged.clone_from(&previous.arranged);
     Ok((graph, spans))
 }
 
