@@ -73,6 +73,21 @@ omit_if_no_ref?: boolean, compatible?: Array<string>,
  */
 compatible_at?: number | null, properties?: Array<Property>, 
 /**
+ * Names of the node's properties, `compatible` and phandle lists
+ * included, in the order the imported source had them, when that is
+ * not the order export uses by default (phandle lists last), so that
+ * an import compiles to the same blob. Properties it does not list
+ * follow the one before them.
+ */
+order?: Array<string>, 
+/**
+ * The phandle of a node imported from a decompiled tree (US-1.6), kept
+ * where dtc would number the node otherwise, so that the rebuilt blob
+ * keeps the numbers other values may hold. Written as a `phandle`
+ * property; `None` lets dtc number the node.
+ */
+phandle?: number, 
+/**
  * Set when the node comes from an included file (an SoC `.dtsi`).
  * Export then writes only what differs from that definition, as an
  * override (`&label { ... };`).

@@ -8,7 +8,7 @@
 //! any other value that contains references is kept as a
 //! [`PropertyValue::Mixed`] value.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::dts::NodeSpan;
@@ -21,6 +21,7 @@ pub use crate::parse::ImportError;
 use crate::parse::{
     parse, BodyItem, NodeBody, NodeDef, ParseError, Pos, PropertyDef, Reference, TopItem,
 };
+use crate::phandles::restore_references;
 use crate::preprocess::{confined_reader, preprocess, ImportOptions};
 
 /// Imports a devicetree source file, resolving `#include` and macros.
@@ -58,11 +59,17 @@ pub fn import_dts_mapped(
     options: &ImportOptions,
 ) -> Result<(Graph, Vec<NodeSpan>), ImportError> {
     let preprocessed = preprocess(source, file, options, &confined_reader(file, options))?;
-    import_preprocessed(
+    let (mut graph, mut spans) = import_preprocessed(
         &preprocessed.text,
         &file.display().to_string(),
         preprocessed.directives,
-    )
+    )?;
+    if restore_references(&mut graph, &options.phandle_types) {
+        let ids: HashSet<&NodeId> = graph.nodes.iter().map(|n| &n.id).collect();
+        spans.retain(|s| ids.contains(&s.node));
+    }
+    auto_layout(&mut graph);
+    Ok((graph, spans))
 }
 
 /// Imports source that has already been preprocessed; `directives` are the
@@ -459,6 +466,7 @@ impl Tree {
             let Some(graph_index) = *graph_index else {
                 continue;
             };
+            let mut lists = Vec::new();
             for def in &self.nodes[node].properties {
                 // Resolve every reference up front to report unknown ones
                 // at their position.
@@ -484,6 +492,7 @@ impl Tree {
                         })
                     }
                     Classified::Phandles(entries) => {
+                        lists.push(def.name.clone());
                         for (label, args) in entries {
                             let target = index
                                 [self.labeled(label).expect("references are resolved")]
@@ -500,6 +509,16 @@ impl Tree {
                         }
                     }
                 }
+            }
+            // Export writes phandle lists last; anywhere else needs the order.
+            let names: Vec<String> = self.nodes[node]
+                .properties
+                .iter()
+                .map(|def| def.name.clone())
+                .collect();
+            let last = names.len() - lists.len();
+            if names[last..] != lists[..] {
+                graph.nodes[graph_index].order = names;
             }
         }
         for (node, graph_index) in index.iter().enumerate() {
@@ -542,7 +561,6 @@ impl Tree {
                 omit_if_no_ref: self.nodes[node].base_omit_if_no_ref,
             });
         }
-        auto_layout(&mut graph);
         let mut spans: Vec<NodeSpan> = index
             .iter()
             .enumerate()
@@ -601,6 +619,8 @@ impl Tree {
             compatible: Vec::new(),
             compatible_at: None,
             properties: Vec::new(),
+            order: Vec::new(),
+            phandle: None,
             inherited: None,
             position: Position::default(),
             board_position: None,
@@ -841,6 +861,20 @@ mod tests {
     fn child_names(graph: &Graph, id: &str) -> Vec<String> {
         let id = NodeId::from(id);
         graph.children(&id).map(Node::full_name).collect()
+    }
+
+    #[test]
+    fn phandle_lists_keep_their_place_among_the_properties() {
+        let source = "/dts-v1/;\n/ {\n\tosc: osc { #clock-cells = <0>; };\n\tuart {\n\t\tclocks = <&osc>;\n\t\tstatus = \"okay\";\n\t};\n\tspi { status = \"okay\"; clocks = <&osc>; };\n};\n";
+        let graph = import(source);
+        assert_eq!(node(&graph, "/uart").order, ["clocks", "status"]);
+        // Last is where export puts them anyway.
+        assert!(node(&graph, "/spi").order.is_empty());
+        let dts = crate::to_dts(&graph).unwrap();
+        assert!(
+            dts.contains("clocks = <&osc>;\n\t\tstatus = \"okay\";"),
+            "{dts}"
+        );
     }
 
     #[test]

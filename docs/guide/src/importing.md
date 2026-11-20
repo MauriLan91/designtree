@@ -25,3 +25,27 @@ stays close to it, so your diffs stay small.
 
 When a file cannot be layered (an include inside a node, or after the board
 nodes), the design is imported flat instead.
+
+## Decompiled trees
+
+A tree decompiled from a `.dtb` (`dtc -I dtb -O dts`) has numbers where the
+source had references: `clocks = <0x2f 0x01>;`. DesignTree turns them back
+into references wherever the property is known to hold phandles:
+`interrupt-parent`, `clocks`, `resets`, `dmas`, `*-gpios`, `*-supply`,
+`pinctrl-N`, `interrupt-map` and the other standard ones, plus every
+property the binding schemas type as a phandle when a kernel tree is
+loaded. Each phandle list is split by the provider's `#*-cells`, so
+`<0x2f 0x01 0x30>` becomes `<&gcc 1>, <&osc>` when `gcc` has one clock
+cell and `osc` none. A value that does not fit stays as numbers.
+
+- Labels come from the tree's `__symbols__` node; a referenced node without
+  one gets a label made from its name (`gpio_1000`).
+- `__symbols__`, `__fixups__` and `__local_fixups__` are hidden: building
+  writes them again.
+- `phandle` properties are hidden too. dtc numbers the nodes again when it
+  builds; where it would number a node differently from the original blob
+  (some value the editor does not know may hold that number), the node
+  keeps its number, written as `phandle = <…>;` on export.
+- Properties keep their order, so the rebuilt `.dtb` holds the same bytes
+  as the original. Vendor blobs merged from overlays may list their
+  `__symbols__` in another order; their content is the same.

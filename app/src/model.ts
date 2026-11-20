@@ -87,6 +87,10 @@ export interface DtNodeData extends Record<string, unknown> {
   /** Where `compatible` stood among the properties in the imported source. */
   compatibleAt?: number;
   properties: Property[];
+  /** Source order of the properties, when export would not keep it. */
+  order?: string[];
+  /** Phandle kept from a decompiled tree. */
+  phandle?: number;
   inherited?: Inherited;
   /** Where the device sits in the board view; unset when it is not placed there. */
   boardPosition?: Position;
@@ -177,6 +181,8 @@ export function toDesign(nodes: FlowNode[], edges: Edge[], extras: DesignExtras 
     compatible: n.data.compatible,
     compatible_at: n.data.compatibleAt,
     properties: n.data.properties,
+    order: n.data.order,
+    phandle: n.data.phandle,
     inherited: n.data.inherited,
     position: absolutePosition(n, byId),
     board_position: n.data.boardPosition,
@@ -255,6 +261,8 @@ export function fromDesign(design: Design): { nodes: FlowNode[]; edges: Edge[]; 
         compatible: n.compatible ?? [],
         compatibleAt: n.compatible_at ?? undefined,
         properties: n.properties ?? [],
+        order: n.order,
+        phandle: n.phandle,
         inherited: n.inherited ?? undefined,
         boardPosition: n.board_position,
       },

@@ -23,7 +23,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub use buses::bus_class;
-pub use check::{parse_fdt, Checker, FdtError, FdtNode, SchemaProblem, SchemaSet};
+pub use check::{parse_fdt, Checker, FdtError, FdtNode, PhandleKind, SchemaProblem, SchemaSet};
 pub use kernel::{index_kernel_tree_cached, kernel_version, CacheStatus};
 pub use macros::{index_dt_macros, DtMacro};
 pub use search::{Hit, LibraryEntry};

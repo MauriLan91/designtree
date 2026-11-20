@@ -149,7 +149,11 @@ impl<'a> Writer<'a> {
             }
         }
         props.extend(lists);
-        props
+        if let Some(phandle) = node.phandle {
+            let value = self.encode(&PropertyValue::Cells(vec![phandle]));
+            props.push(("phandle".to_owned(), value));
+        }
+        node.in_order(props)
     }
 }
 
@@ -207,7 +211,51 @@ pub fn to_dtb(graph: &Graph) -> Result<Dtb, Vec<ValidationError>> {
     if !errors.is_empty() {
         return Err(errors);
     }
-    let root = graph.root().expect("validated graph has a root");
+    let (mut tree, _) = flatten(graph, false).expect("validated graph has a root");
+    fn prune(flat: &mut Flat) {
+        flat.children.retain(|c| !c.omitted);
+        flat.children.iter_mut().for_each(prune);
+    }
+    prune(&mut tree);
+
+    let mut nodes = Vec::new();
+    fn list(flat: &Flat, path: &str, nodes: &mut Vec<(String, NodeId)>) {
+        nodes.push((path.to_owned(), flat.id.clone()));
+        for child in &flat.children {
+            let child_path = if path == "/" {
+                format!("/{}", child.name)
+            } else {
+                format!("{path}/{}", child.name)
+            };
+            list(child, &child_path, nodes);
+        }
+    }
+    list(&tree, "/", &mut nodes);
+
+    let reserves: Vec<(u64, u64)> = graph
+        .memreserves
+        .iter()
+        .map(|r| (r.address, r.size))
+        .collect();
+    Ok(Dtb {
+        blob: serialize(&tree, &reserves),
+        nodes,
+    })
+}
+
+/// The phandle each node gets when `dtc -@` compiles `graph`, without
+/// checking the design first.
+pub(crate) fn phandles(graph: &Graph) -> HashMap<NodeId, u32> {
+    flatten(graph, true)
+        .map(|(_, assigned)| assigned)
+        .unwrap_or_default()
+}
+
+/// The tree of `graph` with phandles filled in, and the phandle of each
+/// node that has one. `symbols` numbers labeled nodes too, as `dtc -@`
+/// does when it writes `__symbols__`. `None` without a root.
+fn flatten(graph: &Graph, symbols: bool) -> Option<(Flat, HashMap<NodeId, u32>)> {
+    let root = graph.root()?;
 
     let mut paths = HashMap::new();
     let mut stack = vec![(root, "/".to_owned())];
@@ -297,6 +345,27 @@ pub fn to_dtb(graph: &Graph) -> Result<Dtb, Vec<ValidationError>> {
         assigned.insert(id.clone(), next);
         fresh.push(id);
     }
+    if symbols {
+        let mut labeled = Vec::new();
+        fn walk(graph: &Graph, flat: &Flat, out: &mut Vec<NodeId>) {
+            if graph.node(&flat.id).is_some_and(|n| n.label.is_some()) {
+                out.push(flat.id.clone());
+            }
+            flat.children.iter().for_each(|c| walk(graph, c, out));
+        }
+        walk(graph, &tree, &mut labeled);
+        for id in labeled {
+            if assigned.contains_key(&id) {
+                continue;
+            }
+            while taken.contains(&next) {
+                next += 1;
+            }
+            taken.insert(next);
+            assigned.insert(id.clone(), next);
+            fresh.push(id);
+        }
+    }
     fn patch(flat: &mut Flat, assigned: &HashMap<NodeId, u32>, fresh: &HashSet<NodeId>) {
         for (_, value) in flat.props.iter_mut() {
             for (offset, id) in &value.phandles {
@@ -320,35 +389,7 @@ pub fn to_dtb(graph: &Graph) -> Result<Dtb, Vec<ValidationError>> {
             .for_each(|c| patch(c, assigned, fresh));
     }
     patch(&mut tree, &assigned, &fresh.into_iter().collect());
-    fn prune(flat: &mut Flat) {
-        flat.children.retain(|c| !c.omitted);
-        flat.children.iter_mut().for_each(prune);
-    }
-    prune(&mut tree);
-
-    let mut nodes = Vec::new();
-    fn list(flat: &Flat, path: &str, nodes: &mut Vec<(String, NodeId)>) {
-        nodes.push((path.to_owned(), flat.id.clone()));
-        for child in &flat.children {
-            let child_path = if path == "/" {
-                format!("/{}", child.name)
-            } else {
-                format!("{path}/{}", child.name)
-            };
-            list(child, &child_path, nodes);
-        }
-    }
-    list(&tree, "/", &mut nodes);
-
-    let reserves: Vec<(u64, u64)> = graph
-        .memreserves
-        .iter()
-        .map(|r| (r.address, r.size))
-        .collect();
-    Ok(Dtb {
-        blob: serialize(&tree, &reserves),
-        nodes,
-    })
+    Some((tree, assigned))
 }
 
 const BEGIN_NODE: u32 = 1;

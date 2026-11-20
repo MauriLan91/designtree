@@ -113,6 +113,8 @@ export function pasteClipboard(
     // A pasted node is the board's own, wherever the original came from.
     inherited: undefined,
     board_position: undefined,
+    // Two nodes cannot share a phandle; dtc numbers the copy.
+    phandle: undefined,
     position: { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
   }));
   const childrenOf = (parent: string) =>

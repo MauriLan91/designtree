@@ -35,6 +35,8 @@ fn new_node(id: &str, name: &str, unit: Option<&str>, label: Option<&str>) -> No
         compatible: vec![],
         compatible_at: None,
         properties: vec![],
+        order: vec![],
+        phandle: None,
         inherited: None,
         position: Position::default(),
         board_position: None,
