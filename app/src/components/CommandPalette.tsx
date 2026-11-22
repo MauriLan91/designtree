@@ -57,10 +57,9 @@ export function CommandPalette({ commands, library, onAdd, onClose, initialPick 
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = (text: string) => words.every((w) => text.toLowerCase().includes(w));
     if (pick) {
-      return pick.nodes
-        .filter((n) => matches(n.title))
+      return (pick.search ? pick.search(query) : pick.nodes.filter((n) => matches(n.title)))
         .slice(0, MAX)
-        .map((n) => ({ key: n.id, title: n.title, run: () => pick.onPick(n.id) }));
+        .map((n) => ({ key: n.id, title: n.title, hint: n.hint, run: () => pick.onPick(n.id) }));
     }
     const found = commands
       .filter((c) => !c.disabled && matches(c.title))

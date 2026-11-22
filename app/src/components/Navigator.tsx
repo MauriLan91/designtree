@@ -1,11 +1,13 @@
 // The navigator (US-16.4): the whole devicetree as a tree in the side bar,
 // like Qt Design Studio's Navigator. Clicking a node selects it, on the
 // canvas (in its scope) and in the text; double-click or Enter opens it.
+// The filter (US-16.6) keeps the matching rows with their ancestors.
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { KINDS, kindOf } from "../categories";
 import { isDtNode, type FlowNode } from "../model";
 import type { TreeRow } from "../scopes";
+import { SearchField } from "./Palette";
 
 interface Props {
   rows: TreeRow[];
@@ -14,9 +16,13 @@ interface Props {
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
+  filter: string;
+  onFilter: (text: string) => void;
+  /** With a filter: the rows that match it, not only lead to one, best first. */
+  matched?: ReadonlySet<string>;
 }
 
-export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen }: Props) {
+export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, filter, onFilter, matched }: Props) {
   const list = useRef<HTMLUListElement>(null);
   const current = rows.findIndex((r) => selected.has(r.id));
 
@@ -37,9 +43,31 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen }:
     e.preventDefault();
   };
 
+  // Enter in the filter shows the best match; Down goes on to the tree.
+  const firstMatch = () => {
+    const best = matched?.values().next().value;
+    return best !== undefined ? rows.find((r) => r.id === best) : rows[0];
+  };
+  const onFilterKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    const first = firstMatch();
+    if (e.key === "Enter" && first) onSelect(first.id);
+    else if (e.key === "ArrowDown" && rows.length) {
+      if (current < 0 && first) onSelect(first.id);
+      list.current?.focus();
+    } else return;
+    e.preventDefault();
+  };
+
   return (
     <section className="navigator">
       <h2>Outline</h2>
+      <SearchField
+        value={filter}
+        onChange={onFilter}
+        label="Filter the outline"
+        placeholder="Name, label, compatible, path, phandle"
+        onKeyDown={onFilterKey}
+      />
       <ul ref={list} role="tree" aria-label="Devicetree" tabIndex={0} onKeyDown={onKeyDown}>
         {rows.map((r, i) => {
           const n = nodes.get(r.id);
@@ -55,7 +83,7 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen }:
               aria-level={r.depth + 1}
               aria-expanded={r.branch ? r.expanded : undefined}
               aria-selected={selected.has(r.id)}
-              className={selected.has(r.id) ? "selected" : undefined}
+              className={[selected.has(r.id) && "selected", matched && !matched.has(r.id) && "ancestor"].filter(Boolean).join(" ") || undefined}
               style={{ paddingLeft: 4 + r.depth * 14 }}
               onClick={() => onSelect(r.id)}
               onDoubleClick={() => onOpen(r.id)}
@@ -82,6 +110,7 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen }:
             </li>
           );
         })}
+        {filter && rows.length === 0 && <li className="hint">No node matches</li>}
       </ul>
     </section>
   );

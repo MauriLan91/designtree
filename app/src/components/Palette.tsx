@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, LayoutGrid, List, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { backend, dialogs, inTauri, type CatalogSummary } from "../backend";
 import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from "../libraryHistory";
 import { BASIC_CATEGORY, EMPTY_ENTRY, basicEntry, bindingOf, entryKey, entryOfKey, highlight } from "../library";
@@ -409,15 +409,29 @@ function SectionList({
   );
 }
 
-/** The library search, with a button and Escape to clear it (US-18.5). */
-function SearchField({ value, onChange }: { value: string; onChange: (text: string) => void }) {
+/** A search with a button and Escape to clear it (US-18.5): the library's,
+ * and the Outline's filter. */
+export function SearchField({
+  value,
+  onChange,
+  label = "Search the library",
+  placeholder = "Search compatible or title",
+  onKeyDown,
+}: {
+  value: string;
+  onChange: (text: string) => void;
+  label?: string;
+  placeholder?: string;
+  /** Other keys, such as Enter; Escape is the field's. */
+  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <div className="search-field">
       <input
         ref={input}
-        aria-label="Search the library"
-        placeholder="Search compatible or title"
+        aria-label={label}
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -425,7 +439,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (text: stri
           if (e.key === "Escape" && value) {
             e.stopPropagation();
             onChange("");
-          }
+          } else onKeyDown?.(e);
         }}
       />
       {value && (
