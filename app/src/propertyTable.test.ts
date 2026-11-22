@@ -192,3 +192,47 @@ describe("itemRows", () => {
     expect(itemRows({ type: "cells", value: [1, 2] }, "cells", "dec", "uint32")).toEqual(["1", "2"]);
   });
 });
+
+describe("long values (US-17.8)", () => {
+  it("sizes a value as the blob holds it", async () => {
+    const { sizeOf, sizeText } = await import("./propertyTable");
+    expect(sizeOf({ type: "empty" })).toBe(0);
+    expect(sizeOf({ type: "cells", value: [1, 2, 3] })).toBe(12);
+    expect(sizeOf({ type: "strings", value: ["okay", "a"] })).toBe(7);
+    expect(sizeOf({ type: "bytes", value: [1, 2, 3] })).toBe(3);
+    expect(
+      sizeOf({
+        type: "mixed",
+        value: [
+          { type: "cells", bits: 16, cells: [1, { phandle: "clk" }] },
+          { type: "string", value: "x" },
+          { type: "path", target: "/soc" },
+        ],
+      }),
+    ).toBe(4 + 2 + 5);
+    expect(sizeText(12)).toBe("12 B");
+    expect(sizeText(4096)).toBe("4.0 KiB");
+  });
+
+  it("dumps bytes 16 per line with offsets and text", async () => {
+    const { hexLines } = await import("./propertyTable");
+    const bytes = [...Array(18).keys()].map((i) => 0x41 + i);
+    bytes[1] = 0;
+    const lines = hexLines(bytes);
+    expect(lines).toHaveLength(2);
+    expect(lines[0].offset).toBe("0000");
+    expect(lines[0].hex.split(" ")).toHaveLength(16);
+    expect(lines[0].ascii.slice(0, 3)).toBe("A.C");
+    expect(lines[1]).toEqual({ offset: "0010", hex: "51 52", ascii: "QR" });
+  });
+
+  it("edits a line of the grid, growing, shrinking or appending", async () => {
+    const { withHexLine } = await import("./propertyTable");
+    const bytes = [...Array(20).keys()];
+    expect(withHexLine(bytes, 1, "ff")).toEqual([...bytes.slice(0, 16), 0xff]);
+    expect(withHexLine(bytes, 0, "0a0B 0c")).toEqual([10, 11, 12, 16, 17, 18, 19]);
+    expect(withHexLine([1], 1, "02")).toEqual([1, 2]);
+    expect(() => withHexLine(bytes, 0, "0g")).toThrow();
+    expect(() => withHexLine(bytes, 0, "123")).toThrow();
+  });
+});

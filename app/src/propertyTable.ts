@@ -405,3 +405,61 @@ export function blank(kind: ValueKind): PropertyValue {
       return { type: "mixed", value: [] };
   }
 }
+
+/** The size of a value in the blob, in bytes (US-17.8): a reference or a
+ * constant in a cell list takes its cell. */
+export function sizeOf(value: PropertyValue): number {
+  switch (value.type) {
+    case "empty":
+      return 0;
+    case "strings":
+      return value.value.reduce((n, s) => n + new TextEncoder().encode(s).length + 1, 0);
+    case "cells":
+      return value.value.length * 4;
+    case "bytes":
+      return value.value.length;
+    case "mixed":
+      return value.value.reduce((n, c) => {
+        if (c.type === "cells") return n + c.cells.length * (c.bits / 8);
+        if (c.type === "bytes") return n + c.value.length;
+        // A string, or a path written outside `<>`, ends in its NUL.
+        return n + new TextEncoder().encode(c.type === "string" ? c.value : c.target).length + 1;
+      }, 0);
+  }
+}
+
+/** A size as a row shows it. */
+export function sizeText(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KiB`;
+}
+
+/** Bytes per line of the hex grid. */
+export const HEX_LINE = 16;
+
+/** The lines of a byte array as a hex dump: offset, bytes, printable text. */
+export function hexLines(bytes: number[]): { offset: string; hex: string; ascii: string }[] {
+  const lines = [];
+  for (let at = 0; at < bytes.length; at += HEX_LINE) {
+    const line = bytes.slice(at, at + HEX_LINE);
+    lines.push({
+      offset: at.toString(16).padStart(4, "0"),
+      hex: line.map(formatByte).join(" "),
+      ascii: line.map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : ".")).join(""),
+    });
+  }
+  return lines;
+}
+
+/** The bytes with line `line` of the grid replaced by `text`: bytes as hex
+ * pairs, spaced or not. A line may grow or shrink, or be emptied to remove
+ * it. Throws on anything that is not hex. */
+export function withHexLine(bytes: number[], line: number, text: string): number[] {
+  const digits = text.replace(/\s+/g, "");
+  if (!/^([0-9a-fA-F]{2})*$/.test(digits)) throw new Error("Bytes are pairs of hex digits, such as 0a 1f");
+  const parsed = digits.match(/../g)?.map((h) => parseInt(h, 16)) ?? [];
+  const at = line * HEX_LINE;
+  return [...bytes.slice(0, at), ...parsed, ...bytes.slice(at + HEX_LINE)];
+}
+
+/** Items per page of a long list (US-17.8). */
+export const PAGE = 64;

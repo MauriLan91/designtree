@@ -23,6 +23,14 @@ Select a node to edit it in the inspector.
     as in the source, `<0x1c81000 0x1000>, <0x1c82000 0x2000>`, and the DTS
     source writes `reg`, `ranges` and `interrupts` the same way. Warnings
     about the number of items count entries.
+  - Long values stay readable. A byte array opens as a hex grid, 16 bytes
+    per line with the offset on the left and the bytes as text on the
+    right; type a line's bytes as hex pairs (it may get more or fewer), or
+    use the empty last line to add bytes. A list of more than 64 items or
+    entries shows them 64 at a time, with arrows to the other pages. A
+    long string gets a box of several lines; Enter applies it and
+    Shift+Enter breaks the line. Under each row's type is the size of its
+    value in the blob.
   - With a kernel checkout loaded, the binding fixes the type of the
     properties it describes. An enum is a dropdown, a single number one
     field, and a boolean a checkbox: untick it to remove the property. Hover a key for the schema's description; values outside the
