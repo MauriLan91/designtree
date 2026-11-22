@@ -4,7 +4,7 @@
 // The rows are drawn from the model in propertyTable.ts. The binding's
 // required properties are pinned on top and never go away (US-17.2): one
 // without a value is an empty to-do row until it gets one.
-import { ChevronDown, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
 import { baseOf, type DtMacro, type NumberBase, type Property, type PropertySpec, type PropertyValue } from "../model";
@@ -15,14 +15,20 @@ import {
   convert,
   entriesOf,
   formatNumber,
+  HEX_LINE,
+  hexLines,
   kindOf,
+  PAGE,
   parseCellText,
   parseSummary,
   referenceOf,
   referenceTo,
+  sizeOf,
+  sizeText,
   summaryOf,
   itemRows,
   withEntry,
+  withHexLine,
   withItem,
   withoutEntry,
   withoutItem,
@@ -80,6 +86,8 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
   const [errors, setErrors] = useState<Record<string, string>>({});
   // One-string values the user made a list; the binding says so for its own.
   const [lists, setLists] = useState<ReadonlySet<string>>(new Set());
+  // The page shown of each long list (US-17.8).
+  const [pages, setPages] = useState<Record<string, number>>({});
   // Errors are keyed by row; any change of the properties can shift the rows.
   useEffect(() => setErrors({}), [properties]);
   const specOf = (name: string) => specs.find((s) => s.name === name);
@@ -215,6 +223,13 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           const width = entryCells?.[p.name] ?? spec?.entry_cells;
           const entries = width && width > 1 && items && isCellList(p.value) ? entriesOf(items, width) : null;
           const expanded = open.has(p.name) && items !== null;
+          // A byte array is edited as a hex grid; long lists go by pages.
+          const grid = p.value.type === "bytes" ? p.value.value : null;
+          const total = entries?.length ?? items?.length ?? 0;
+          const pageCount = Math.max(1, Math.ceil(total / PAGE));
+          const page = Math.min(pages[p.name] ?? 0, pageCount - 1);
+          const first = page * PAGE;
+          const shown = <T,>(list: T[]) => (total > PAGE ? list.slice(first, first + PAGE) : list);
           const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, width);
           const isTodo = todo?.includes(p.name);
           return (
@@ -288,6 +303,11 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       ))}
                     </select>
                   )}
+                  {kind !== "flag" && kind !== "reference" && (
+                    <span className="value-size" title="Size of the value in the blob">
+                      {sizeText(sizeOf(p.value))}
+                    </span>
+                  )}
                 </td>
                 <td>
                   <ValueCell
@@ -321,8 +341,39 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     ))}
                 </td>
               </tr>
+              {expanded && grid && (
+                <tr className="item-row hex-row">
+                  <td colSpan={4}>
+                    <HexGrid
+                      name={p.name}
+                      bytes={grid}
+                      disabled={locked}
+                      onLine={(line, text) => attempt(`${p.name}#${line}`, () => ({ type: "bytes", value: withHexLine(grid, line, text) }), p.name)}
+                      errors={errors}
+                    />
+                  </td>
+                </tr>
+              )}
+              {expanded && !grid && total > PAGE && (
+                <tr className="item-row pager-row">
+                  <td colSpan={4}>
+                    <Pager
+                      name={p.name}
+                      first={first}
+                      count={Math.min(PAGE, total - first)}
+                      total={total}
+                      what={entries ? "entries" : "items"}
+                      page={page}
+                      pages={pageCount}
+                      onPage={(n) => setPages((s) => ({ ...s, [p.name]: n }))}
+                    />
+                  </td>
+                </tr>
+              )}
               {expanded &&
-                entries?.map((cells, i) => {
+                entries &&
+                shown(entries).map((cells, k) => {
+                  const i = first + k;
                   const key = `${p.name}[${i}]`;
                   return (
                     <tr key={key} className="item-row entry-row">
@@ -357,7 +408,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                 })}
               {expanded &&
                 !entries &&
-                items!.map((text, i) => {
+                !grid &&
+                shown(items!).map((text, k) => {
+                  const i = first + k;
                   const key = `${p.name}[${i}]`;
                   return (
                     <tr key={key} className="item-row">
@@ -377,6 +430,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                           <CommitInput
                             value={text}
                             label={`${p.name} item ${i}`}
+                            multiline={p.value.type === "strings"}
                             disabled={locked}
                             onCommit={(t) => attempt(key, () => withItem(p.value, i, t), p.name)}
                           />
@@ -393,7 +447,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     </tr>
                   );
                 })}
-              {expanded && !locked && (
+              {expanded && !locked && !grid && (
                 <tr className="item-row add-item">
                   <th scope="row" />
                   <td colSpan={3}>
@@ -611,8 +665,11 @@ function ValueCell({
       </select>
     );
   }
-  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} disabled={disabled} onCommit={onCommit} />;
+  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} multiline={kind === "string"} disabled={disabled} onCommit={onCommit} />;
 }
+
+/** Characters past which a string gets a box of several lines. */
+const LONG_TEXT = 40;
 
 /** A text input that applies its value on Enter or when it loses focus. */
 function CommitInput({
@@ -623,10 +680,14 @@ function CommitInput({
   list,
   onInput,
   placeholder,
+  multiline,
 }: {
   value: string;
   label: string;
   placeholder?: string;
+  /** A long text (a string over a line) is edited in a box of several
+   * lines (US-17.8). Enter still applies it; Shift+Enter breaks the line. */
+  multiline?: boolean;
   disabled?: boolean;
   onCommit: (text: string) => void;
   list?: string;
@@ -640,6 +701,31 @@ function CommitInput({
     if (text !== value) setText(value);
   }
   const commit = () => text !== value && onCommit(text);
+  if (multiline && (value.length > LONG_TEXT || value.includes("\n"))) {
+    return (
+      <textarea
+        className="long-text"
+        aria-label={label}
+        value={text}
+        disabled={disabled}
+        placeholder={placeholder}
+        spellCheck={false}
+        rows={Math.min(8, Math.max(2, Math.ceil(text.length / 40) + text.split("\n").length - 1))}
+        onChange={(e) => {
+          setText(e.target.value);
+          onInput?.(e.target.value);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === "Escape") setText(value);
+        }}
+      />
+    );
+  }
   return (
     <input
       aria-label={label}
@@ -731,6 +817,87 @@ function AddProperty({ specs, onAdd }: { specs: PropertySpec[]; onAdd: (name: st
           <option key={s.name} value={s.name} label={[s.type, s.description?.split("\n")[0]].filter(Boolean).join(" · ")} />
         ))}
       </datalist>
+    </div>
+  );
+}
+
+/** A byte array as a hex dump (US-17.8): an offset, 16 bytes to edit and
+ * their printable text per line. A line may be given more or fewer bytes;
+ * the empty line at the end adds bytes. */
+function HexGrid({
+  name,
+  bytes,
+  disabled,
+  onLine,
+  errors,
+}: {
+  name: string;
+  bytes: number[];
+  disabled: boolean;
+  onLine: (line: number, text: string) => void;
+  errors: Record<string, string>;
+}) {
+  const [page, setPage] = useState(0);
+  const lines = hexLines(bytes);
+  // A full last line leaves room for one more, to append to.
+  if (!disabled && bytes.length % HEX_LINE === 0) lines.push({ offset: bytes.length.toString(16).padStart(4, "0"), hex: "", ascii: "" });
+  const pages = Math.max(1, Math.ceil(lines.length / PAGE));
+  const at = Math.min(page, pages - 1) * PAGE;
+  return (
+    <div className="hex-grid" role="group" aria-label={`${name} bytes`}>
+      {pages > 1 && (
+        <Pager name={name} first={at * HEX_LINE} count={Math.min(PAGE * HEX_LINE, bytes.length - at * HEX_LINE)} total={bytes.length} what="bytes" page={Math.min(page, pages - 1)} pages={pages} onPage={setPage} />
+      )}
+      {lines.slice(at, at + PAGE).map((l, k) => {
+        const line = at + k;
+        return (
+          <Fragment key={line}>
+            <div className="hex-line">
+              <span className="hex-offset">{l.offset}</span>
+              <CommitInput value={l.hex} label={`${name} bytes ${l.offset}`} placeholder="add bytes" disabled={disabled} onCommit={(t) => onLine(line, t)} />
+              <span className="hex-ascii" aria-hidden>
+                {l.ascii}
+              </span>
+            </div>
+            {errors[`${name}#${line}`] && <span className="row-error">{errors[`${name}#${line}`]}</span>}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Where a long list is, and buttons to the pages before and after. */
+function Pager({
+  name,
+  first,
+  count,
+  total,
+  what,
+  page,
+  pages,
+  onPage,
+}: {
+  name: string;
+  first: number;
+  count: number;
+  total: number;
+  what: string;
+  page: number;
+  pages: number;
+  onPage: (page: number) => void;
+}) {
+  return (
+    <div className="pager" role="group" aria-label={`Pages of ${name}`}>
+      <button className="link" aria-label="Previous page" disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <ChevronLeft size={12} aria-hidden />
+      </button>
+      <span>
+        {what} {first}–{first + count - 1} of {total}
+      </span>
+      <button className="link" aria-label="Next page" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+        <ChevronRight size={12} aria-hidden />
+      </button>
     </div>
   );
 }

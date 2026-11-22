@@ -989,3 +989,17 @@ button.lib-header:hover { background: var(--hover); }
 .lib-scroll mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
 /* A build result from before the last edit stays readable but recedes. */
 .build.stale .problems, .build.stale > pre { opacity: 0.55; }
+/* Long values (US-17.8). */
+.prop-table .value-size { display: block; padding: 0 4px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.prop-table textarea.long-text { width: 100%; min-width: 0; padding: 3px 4px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: 12px var(--mono); resize: vertical; overflow-wrap: anywhere; }
+.prop-table textarea.long-text:hover { border-color: var(--border); }
+.prop-table textarea.long-text:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+.prop-table .hex-row > td { padding-left: 22px; }
+.prop-table .hex-grid { overflow-x: auto; font: 11px var(--mono); }
+.prop-table .hex-line { display: flex; align-items: center; gap: 6px; width: max-content; }
+.prop-table .hex-offset { color: var(--muted); }
+.prop-table .hex-line input:not([type="checkbox"]) { width: 48ch; font-size: 11px; }
+.prop-table .hex-ascii { color: var(--muted); white-space: pre; }
+.prop-table .pager { display: flex; align-items: center; gap: 6px; padding: 2px 4px; color: var(--muted); font-size: 11px; }
+.prop-table .pager .link { display: flex; padding: 2px; }
+.prop-table .pager .link:disabled { opacity: 0.4; }
