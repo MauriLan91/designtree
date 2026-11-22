@@ -14,9 +14,18 @@ few seconds and is cached, so the next start is fast. The cache is rebuilt
 when the bindings change. **Load kernel bindings…** in the library does the
 same for a checkout not in the list yet.
 
-The design records the kernel version it was built against. Opening it while
-a different version is loaded shows a warning above the canvas, because
+The design records the kernel checkout it was saved with, its path and its
+version. Opening the design loads that checkout again when it is one of your
+registered checkouts and is still there. When it is not (the design comes
+from another machine, or the checkout moved), a note above the canvas names
+the path and offers your checkouts; a design file never makes DesignTree
+read a directory you have not added yourself. Opening a design while a
+different kernel version is loaded shows a warning above the canvas, because
 bindings may differ between kernels.
+
+To change the kernel, click it in the status bar (or **Tools › Use kernel
+checkout…**) and pick one of your checkouts; the last entry opens the
+checkout list to add one.
 
 ## Finding an element
 

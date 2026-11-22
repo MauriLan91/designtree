@@ -79,6 +79,7 @@ pub fn apply_source(
     keep_identity(previous, &mut graph, &mut spans);
     graph.groups = kept_groups(&previous.groups, &graph);
     graph.kernel.clone_from(&previous.kernel);
+    graph.kernel_path.clone_from(&previous.kernel_path);
     graph.board.clone_from(&previous.board);
     graph.arranged.clone_from(&previous.arranged);
     Ok((graph, spans))
@@ -250,9 +251,11 @@ mod tests {
             background: Some("board.png".into()),
             ..Default::default()
         });
+        previous.kernel = Some("7.3".into());
+        previous.kernel_path = Some("/src/linux".into());
         let (text, _) = to_dts_mapped(&previous).unwrap();
         assert!(
-            !text.contains("board"),
+            !text.contains("board") && !text.contains("/src/linux"),
             "the board view is not exported: {text}"
         );
         let edited = text.replace(
@@ -266,6 +269,7 @@ mod tests {
         assert_eq!(serial.position, Position { x: 7.0, y: 9.0 });
         assert_eq!(serial.board_position, Some(Position { x: 3.0, y: 4.0 }));
         assert_eq!(graph.board, previous.board);
+        assert_eq!(graph.kernel_path, previous.kernel_path);
         assert!(serial.properties.iter().any(|p| p.name == "status"));
         let device = graph.nodes.iter().find(|n| n.name == "device").unwrap();
         assert_eq!(device.id.0, "/soc/serial@1000/device@1");

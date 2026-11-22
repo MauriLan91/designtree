@@ -385,6 +385,13 @@ pub struct Graph {
     /// another one. Not part of the exported devicetree.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+    /// The kernel checkout the design was edited against, as a path. The
+    /// editor loads it again on open when it is one of the user's
+    /// registered checkouts (US-15.10); a design file never makes it index
+    /// another directory by itself. Not part of the exported devicetree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub kernel_path: Option<String>,
     /// Scopes (by node id) the editor has shown and arranged, so that it
     /// tidies each other scope the first time it shows it (US-9.9). Set by
     /// import; `None`, as in designs made before, leaves every scope as it
