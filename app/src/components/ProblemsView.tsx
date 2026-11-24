@@ -2,8 +2,9 @@
 // check, the binding schemas and the last build, grouped and filtered so a
 // vendor tree's thousands stay workable.
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
-import { SOURCES, filterProblems, groupProblems, readable, type GroupBy, type ProblemFilter, type ProblemSource, type Tagged } from "../problemView";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { SOURCES, filterProblems, groupProblems, readable, type GroupBy, type ProblemFilter, type ProblemGroup, type ProblemSource, type Tagged } from "../problemView";
+import { useVisibleRows } from "../visibleRows";
 import { SearchField } from "./Palette";
 
 interface Props {
@@ -15,8 +16,10 @@ interface Props {
   notes?: ReactNode;
 }
 
-/** Rows drawn per group before "Show more". */
-const ROWS = 200;
+/** Height of a row, in pixels; the stylesheet gives rows the same. */
+const ROW = 22;
+
+type Item = { head: ProblemGroup; expanded: boolean; row?: undefined } | { row: Tagged; head?: undefined };
 
 const SOURCE_TITLES: Record<ProblemSource, string> = { structure: "Structure", schema: "Schema", dtc: "dtc" };
 const GROUP_TITLES: [GroupBy, string][] = [
@@ -30,7 +33,6 @@ export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
   const [by, setBy] = useState<GroupBy>("rule");
   const [filter, setFilter] = useState<ProblemFilter>({ severity: "all", sources: new Set(SOURCES), text: "" });
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const [shown, setShown] = useState<Record<string, number>>({});
 
   const kept = useMemo(() => filterProblems(problems, filter, pathOf), [problems, filter, pathOf]);
   const groups = useMemo(() => groupProblems(kept, by, pathOf), [kept, by, pathOf]);
@@ -42,6 +44,17 @@ export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
   // One group of all, or a lone group, needs no click to open.
   const isOpen = (key: string, undocumented?: boolean) =>
     open.has(key) !== (!undocumented && (by === "none" || groups.length === 1));
+  // Group heads and the rows of the open groups, as one list of rows of one
+  // height, of which only those in view are drawn (US-11.3).
+  const items = useMemo(() => {
+    const out: Item[] = [];
+    for (const g of groups) {
+      const expanded = isOpen(g.key, g.undocumented);
+      if (by !== "none" || g.undocumented) out.push({ head: g, expanded });
+      if (expanded) for (const t of g.problems) out.push({ row: t });
+    }
+    return out;
+  }, [groups, open, by]);
   const toggle = (key: string) =>
     setOpen((s) => {
       const next = new Set(s);
@@ -95,54 +108,65 @@ export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
       ) : kept.length === 0 ? (
         <p className="hint">No problem matches the filters.</p>
       ) : (
-        <ul className="problem-groups">
-          {groups.map((g) => {
-            const expanded = isOpen(g.key, g.undocumented);
-            const limit = shown[g.key] ?? ROWS;
-            return (
-              <li key={g.key} className={g.undocumented ? "undocumented" : undefined}>
-                {by !== "none" || g.undocumented ? (
-                  <button className="group-head" aria-expanded={expanded} onClick={() => toggle(g.key)}>
-                    {expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                    <span className="problem-group-title">{g.title}</span>
-                    <span className="badge">{g.problems.length}</span>
-                    {g.undocumented && <span className="hint">properties no binding documents, usually vendor ones</span>}
-                  </button>
-                ) : null}
-                {expanded && (
-                  <ul className="problems">
-                    {g.problems.slice(0, limit).map(({ problem: p, source }, i) => {
-                      const path = p.node ? pathOf(p.node) : undefined;
-                      return (
-                        <li key={i} className={p.severity}>
-                          <button
-                            disabled={!p.node}
-                            onClick={() => p.node && onFocusNode(p.node)}
-                            title={p.node ? "Show the node on the canvas" : p.line ? `Line ${p.line} of the generated source` : undefined}
-                          >
-                            <b>{p.severity}</b>
-                            {path && by !== "node" && <code>{path}</code>}
-                            {p.property && by !== "property" && <code className="problem-property">{p.property}</code>}
-                            <span>{readable(p.message)}</span>
-                            {(p.rule || source !== "schema") && <span className="problem-rule">{p.rule ?? SOURCE_TITLES[source]}</span>}
-                          </button>
-                        </li>
-                      );
-                    })}
-                    {g.problems.length > limit && (
-                      <li className="more">
-                        <button className="link" onClick={() => setShown((s) => ({ ...s, [g.key]: limit + ROWS * 5 }))}>
-                          Show more ({g.problems.length - limit} left)
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <ProblemItems items={items} by={by} pathOf={pathOf} onFocusNode={onFocusNode} onToggle={toggle} />
       )}
     </section>
+  );
+}
+
+/** The rows in view of the group heads and problems. */
+function ProblemItems({
+  items,
+  by,
+  pathOf,
+  onFocusNode,
+  onToggle,
+}: {
+  items: Item[];
+  by: GroupBy;
+  pathOf: (id: string) => string | undefined;
+  onFocusNode: (id: string) => void;
+  onToggle: (key: string) => void;
+}) {
+  const list = useRef<HTMLUListElement>(null);
+  const { start, end } = useVisibleRows(list, ".panel-body", items.length, ROW);
+  return (
+    <ul ref={list} className="problem-items" style={{ paddingTop: start * ROW, paddingBottom: (items.length - end) * ROW }}>
+      {items.slice(start, end).map((item, k) => {
+        if (item.head) {
+          const g = item.head;
+          return (
+            <li key={`head:${g.key}`} className={g.undocumented ? "group undocumented" : "group"}>
+              <button className="group-head" aria-expanded={item.expanded} onClick={() => onToggle(g.key)}>
+                {item.expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                <span className="problem-group-title" title={g.title}>
+                  {g.title}
+                </span>
+                <span className="badge">{g.problems.length}</span>
+                {g.undocumented && <span className="hint">properties no binding documents, usually vendor ones</span>}
+              </button>
+            </li>
+          );
+        }
+        const { problem: p, source } = item.row;
+        const path = p.node ? pathOf(p.node) : undefined;
+        const message = readable(p.message);
+        return (
+          <li key={start + k} className={`problem ${p.severity}${by === "none" ? "" : " in-group"}`}>
+            <button
+              disabled={!p.node}
+              onClick={() => p.node && onFocusNode(p.node)}
+              title={[path, p.property, message].filter(Boolean).join(" · ")}
+            >
+              <b>{p.severity}</b>
+              {path && by !== "node" && <code>{path}</code>}
+              {p.property && by !== "property" && <code className="problem-property">{p.property}</code>}
+              <span className="problem-message">{message}</span>
+              {(p.rule || source !== "schema") && <span className="problem-rule">{p.rule ?? SOURCE_TITLES[source]}</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

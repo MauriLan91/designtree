@@ -198,7 +198,7 @@ fn run() -> Result<()> {
                 });
             }
             let graph = designtree_core::import_file(&dts, &options)?;
-            write_output(output, &serde_json::to_string_pretty(&graph)?)
+            write_output(output, &designtree_core::to_design_json(&graph)?)
         }
         Command::Overlay {
             base,
@@ -212,7 +212,7 @@ fn run() -> Result<()> {
             };
             options.include_dirs.extend(include_dirs);
             let overlay = designtree_core::new_overlay(&base, &options)?;
-            write_output(output, &serde_json::to_string_pretty(&overlay)?)
+            write_output(output, &designtree_core::to_design_json(&overlay)?)
         }
         Command::Check {
             input,
@@ -353,7 +353,7 @@ fn run() -> Result<()> {
         Command::Layout { design, output } => {
             let mut graph = load(&design)?;
             designtree_core::auto_layout(&mut graph);
-            write_output(output, &serde_json::to_string_pretty(&graph)?)
+            write_output(output, &designtree_core::to_design_json(&graph)?)
         }
         Command::Export {
             design,

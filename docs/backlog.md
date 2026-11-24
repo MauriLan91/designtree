@@ -49,7 +49,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | G2 | **Complete, typed element library.** Every kernel binding is usable from the palette with typed properties. | ≥ 95 % of binding schemas indexed without being skipped; ≥ 90 % of their properties have a resolved type. Reported by `designtree index --stats`. | 2026-12-18 (v0.1) |
 | G3 | **Schema validation while editing.** Catch the errors `make dtbs_check` would report, without leaving the editor. | On a seeded corpus of 100 known errors, DesignTree reports ≥ 90 % of what `dtbs_check` reports; full validation of a 500-node design takes < 200 ms. | 2027-02-26 (v0.2) |
 | G4 | **Fast first board.** A new user builds a minimal board (CPU, memory, clock, UART, GPIO LED) from an empty canvas to a compiling `.dtb`. | Median time < 15 min across 3 test users, no help from the authors. | 2027-03-31 (v0.3) |
-| G5 | **Scales to real SoCs.** Large designs stay fluid. | A 1,000-node design pans/zooms at ≥ 50 fps and opens in < 2 s on a mid-range laptop (benchmark in CI). | 2027-03-31 (v0.3) |
+| G5 | **Scales to real SoCs.** Large designs stay fluid. | A 1,000-node design pans/zooms at ≥ 50 fps and opens in < 2 s on a mid-range laptop; lists of a 5,000-node design with 8,000 problems scroll at ≥ 50 fps (benchmark in CI). | 2027-03-31 (v0.3) |
 | G6 | **Public 1.0 release.** Anyone can install and use it. | Signed installers for Linux (AppImage, .deb), Windows (.msi) and macOS (.dmg) built by CI; user guide and tutorial published; ≥ 70 % line coverage on `designtree-core`. | 2027-04-30 (v1.0) |
 
 ## Milestones

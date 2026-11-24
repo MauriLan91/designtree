@@ -170,6 +170,11 @@ jobs:
       - name: Time the canvas
         working-directory: app
         run: node bench/g5.mjs ../g5-design.json --out ../g5-canvas.json
+      - name: Time the long lists
+        working-directory: app
+        run: |
+          ../target/release/designtree bench --nodes 5000 --runs 1 --json --design ../g5-lists-design.json > /dev/null
+          node bench/lists.mjs ../g5-lists-design.json --problems 8000 --out ../g5-lists.json
       - name: Fetch the last report from main
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -179,7 +184,7 @@ jobs:
           path: previous
           if_no_artifact_found: warn
       - name: Report
-        run: node app/bench/g5-report.mjs g5-backend.json g5-canvas.json g5.json previous/g5.json >> "$GITHUB_STEP_SUMMARY"
+        run: node app/bench/g5-report.mjs g5-backend.json g5-canvas.json g5-lists.json g5.json previous/g5.json >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: g5

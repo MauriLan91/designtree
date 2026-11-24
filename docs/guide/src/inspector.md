@@ -31,6 +31,8 @@ Select a node to edit it in the inspector.
     long string gets a box of several lines; Enter applies it and
     Shift+Enter breaks the line. Under each row's type is the size of its
     value in the blob.
+  - A node with more than 100 properties shows the first 100, with
+    **Show N more properties** under them.
   - With a kernel checkout loaded, the binding fixes the type of the
     properties it describes. An enum is a dropdown, a single number one
     field, and a boolean a checkbox: untick it to remove the property. Hover a key for the schema's description; values outside the

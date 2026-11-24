@@ -35,6 +35,9 @@ through:
   check that reports it. A value written as bytes that reads as text is
   shown as text (`"okay"` rather than `[6f 6b 61 79 00]`).
 
+The list draws only the rows in view, as does the Outline, so thousands of
+problems or nodes scroll as smoothly as ten.
+
 The address map and interrupt views add their own checks: overlapping
 `reg` regions and devices with no usable interrupt parent (see
 [Views](views.md)).
