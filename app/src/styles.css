@@ -501,6 +501,16 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .dt-node-todo { color: var(--ref); font-size: 11px; }
 .dt-node.invalid { border-color: var(--danger); }
 .dt-node-errors { color: var(--danger); font-size: 11px; }
+/* A node the kernel does not probe (US-16.7): faded, with a mark that says so
+   in words, since a fade alone reads as "loading" or "inherited". */
+.dt-node.disabled { background: var(--panel); border-style: dashed; }
+.dt-node.disabled > :not(.react-flow__handle):not(.dt-node-title),
+.dt-node.disabled .dt-node-title > :not(.status-mark) { opacity: 0.55; }
+.status-mark { flex: none; margin-left: auto; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--muted); font-family: "Inter Variable", Inter, system-ui, sans-serif; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: 0.02em; }
+/* What is inside (US-16.7): the way into the node's scope. */
+.dt-node-children { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: calc(100% + 24px); margin: 8px -12px -8px; padding: 4px 8px 4px 12px; border: none; border-top: 1px solid var(--border); border-radius: 0 0 7px 7px; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.dt-node-children:hover { background: var(--hover); color: var(--text); }
+.dt-node-children:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .build { padding: 12px; border-bottom: 1px solid var(--border); }
 .build pre { margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; font-size: 12px; background: var(--code); border-radius: 6px; padding: 8px; }
 .build.failed pre { color: var(--danger); }
@@ -912,6 +922,8 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .navigator .kind-chip { width: 16px; height: 16px; }
 .navigator .search-field { position: sticky; top: 0; z-index: 1; padding: 4px 0 8px; background: var(--panel); }
 .navigator li.ancestor .nav-name { color: var(--muted); }
+.navigator li.disabled .nav-name, .navigator li.disabled .kind-chip { opacity: 0.55; }
+.navigator .status-mark { margin-right: 4px; font-size: 9px; line-height: 14px; }
 .navigator li.hint { padding-left: 8px; color: var(--muted); font-family: inherit; }
 .nav-name { overflow: hidden; text-overflow: ellipsis; }
 

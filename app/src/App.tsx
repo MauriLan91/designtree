@@ -34,6 +34,8 @@ import { readable, type Tagged } from "./problemView";
 import { NodeProblems } from "./nodeProblems";
 import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
+import { NodeChildren } from "./nodeChildren";
+import { isDisabled } from "./nodeStatus";
 import {
   accepts,
   consumerHandle,
@@ -153,6 +155,7 @@ const failure = (message: string): Problem => ({ severity: "error", message });
 
 const nodeTypes = { dt: DtNode, group: GroupNode, boundary: BoundaryNode, busbar: BusBarNode };
 const edgeTypes = { ref: RefEdge };
+const NONE: ReadonlySet<string> = new Set();
 const GROUP_PADDING = 40;
 /** The zoom floor of a scope that fits the view at a larger zoom. */
 const MIN_ZOOM = 0.1;
@@ -1424,9 +1427,19 @@ export function Editor({
     return node.data.unitAddress ? `${node.data.name}@${node.data.unitAddress}` : node.data.name;
   };
 
+  // Nodes that are not enabled (US-16.7), worked out from their status only.
+  const disabledKey = nodes.map((n) => (isDtNode(n) && isDisabled(n.data.properties) ? n.id : "")).filter(Boolean).join(" ");
+  const disabled = useMemo(() => new Set(disabledKey ? disabledKey.split(" ") : []), [disabledKey]);
+  const hiddenNodes: ReadonlySet<string> = layout.hideDisabled ? disabled : NONE;
+  // References to a hidden node are hidden with it, not drawn as ports.
+  const drawnEdges = useMemo(
+    () => (hiddenNodes.size ? portEdges.filter((e) => !hiddenNodes.has(e.source) && !hiddenNodes.has(e.target)) : portEdges),
+    [portEdges, hiddenNodes],
+  );
   // Dragging changes positions, not what is shown: keep the edges array the
   // same object then, so React Flow does not redo every edge each frame.
   const shown = scopeIds(nodes, scope, main, parents);
+  for (const id of hiddenNodes) shown.delete(id);
   // Fit view always shows the whole scope (US-9.9): the zoom floor goes
   // down as far as the scope's size needs.
   const minZoom = (() => {
@@ -1447,8 +1460,8 @@ export function Editor({
   // edges do not depend on positions, the ports' places do.
   const boundaryCache = useRef(new Map<string, FlowNode>());
   const shownEdges = useMemo(
-    () => [...scopeEdges(portEdges, shown), ...boundaryPorts(portEdges, shown, () => undefined, () => "").edges],
-    [portEdges, shownKey],
+    () => [...scopeEdges(drawnEdges, shown), ...boundaryPorts(drawnEdges, shown, () => undefined, () => "").edges],
+    [drawnEdges, shownKey],
   );
   const view = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -1471,7 +1484,7 @@ export function Editor({
     };
     // Unchanged ports keep their object, so React Flow leaves them alone.
     const cache = boundaryCache.current;
-    const ports = boundaryPorts(portEdges, shown, boxOf, portTitle).nodes.map((p) => {
+    const ports = boundaryPorts(drawnEdges, shown, boxOf, portTitle).nodes.map((p) => {
       const old = cache.get(p.id) as typeof p | undefined;
       const same =
         old && old.position.x === p.position.x && old.position.y === p.position.y && old.data.title === p.data.title;
@@ -1491,7 +1504,7 @@ export function Editor({
       return collapseView([...drawn, bar.node as unknown as FlowNode], [...shownEdges, ...bar.edges], (id) => nodeName(id) ?? id);
     }
     return collapseView(drawn, shownEdges, (id) => nodeName(id) ?? id);
-  }, [nodes, portEdges, shownEdges, shownKey, scope]);
+  }, [nodes, drawnEdges, shownEdges, shownKey, scope]);
   /** The nodes Select all picks: those drawn in the scope on show, not the
    * ports that stand for nodes elsewhere. */
   const scopeNodeIds = useMemo(
@@ -1562,11 +1575,15 @@ export function Editor({
     [outlineQuery, paths, searchKey],
   );
   const navRows = useMemo(
-    () => treeRows(nodes, edges, expanded, outlineMatches && withAncestors(outlineMatches, parents)),
-    [edges, expanded, treeKey, outlineMatches],
+    () => treeRows(nodes, edges, expanded, outlineMatches && withAncestors(outlineMatches, parents), hiddenNodes),
+    [edges, expanded, treeKey, outlineMatches, hiddenNodes],
   );
   const navNodes = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
+  // Cards open their scope from the child count (US-16.7); the context keeps
+  // one function, so opening does not redraw every card.
+  const openRef = useRef<(id: string) => void>(() => {});
+  const nodeChildren = useMemo(() => ({ count: childCount, open: (id: string) => openRef.current(id) }), [childCount]);
   /** Double-click (D7): open a node that holds others, edit the rest. */
   const openNode = (id: string) => {
     const node = nodes.find((n) => n.id === id);
@@ -1574,6 +1591,7 @@ export function Editor({
     if (canHaveChildren(node, childCount.has(id))) return showScope(id);
     editNode(id);
   };
+  openRef.current = showScope;
   /** Selects `id` and puts the cursor in its properties in the inspector. */
   const editNode = (id: string) => {
     // From the navigator the node may be elsewhere: go to it first.
@@ -1917,6 +1935,14 @@ export function Editor({
       run: () => showScope(scope === null ? main : scopeOf(scope, main, parents)),
     },
     {
+      id: "hide-disabled",
+      title: "Hide disabled nodes",
+      menu: "View",
+      hint: "Leave nodes whose status is not \"okay\" off the canvas and the Outline",
+      checked: layout.hideDisabled,
+      run: () => onLayout((l) => ({ ...l, hideDisabled: !l.hideDisabled })),
+    },
+    {
       id: "outline",
       title: "Outline",
       shortcut: "Ctrl+Shift+O",
@@ -2241,6 +2267,7 @@ export function Editor({
               filter={outlineFilter}
               onFilter={setOutlineFilter}
               matched={outlineMatches}
+              disabled={disabled}
             />,
             outlineSlot,
           )}
@@ -2272,6 +2299,7 @@ export function Editor({
           ) : (
             <NodeProblems.Provider value={nodeProblems}>
             <NodePorts.Provider value={stablePorts}>
+            <NodeChildren.Provider value={nodeChildren}>
             <ReactFlow
               nodes={view.nodes}
               edges={view.edges}
@@ -2332,6 +2360,7 @@ export function Editor({
               <Controls />
               <MiniMap pannable zoomable />
             </ReactFlow>
+            </NodeChildren.Provider>
             </NodePorts.Provider>
             </NodeProblems.Provider>
           )}

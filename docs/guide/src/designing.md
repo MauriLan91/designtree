@@ -14,7 +14,14 @@ canvas holds the root's children. Double-click a node that holds others
 children in a scope tab; the breadcrumb under the tabs shows where you are
 and takes you back up. Double-clicking any other node opens its properties
 in the inspector. **View › Open selected node** and **View › Up one scope**
-do the same from the keyboard or the command palette.
+do the same from the keyboard or the command palette. A card with children
+says how many at its foot (**3 nodes inside**); click it to open the scope.
+
+A node whose `status` is not `okay` (or `ok`) is one the kernel does not
+probe: its card is faded with a dashed border and a **disabled** mark, and
+its Outline row is faded with an **off** mark. **View › Hide disabled nodes**
+leaves them, and the references to them, off the canvas and the Outline; the
+choice is kept for the next session.
 
 In the scope of an I²C, SPI or other bus controller, the controller is a
 **bus bar** above its devices, with an edge to each labelled with its unit

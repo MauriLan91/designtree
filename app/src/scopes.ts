@@ -288,6 +288,7 @@ export function treeRows(
   edges: Edge[],
   expanded: ReadonlySet<string>,
   keep?: ReadonlySet<string>,
+  hide?: ReadonlySet<string>,
 ): TreeRow[] {
   const children = new Map<string, string[]>();
   const hasParent = new Set<string>();
@@ -296,7 +297,7 @@ export function treeRows(
     children.set(e.source, [...(children.get(e.source) ?? []), e.target]);
     hasParent.add(e.target);
   }
-  const dt = nodes.filter((n) => isDtNode(n) && (!keep || keep.has(n.id)));
+  const dt = nodes.filter((n) => isDtNode(n) && (!keep || keep.has(n.id)) && !hide?.has(n.id));
   const known = new Set(dt.map((n) => n.id));
   // The root first, then the other top-level nodes (overrides, fragments).
   const top = dt.filter((n) => !hasParent.has(n.id)).sort((a, b) => Number(b.data.name === "/") - Number(a.data.name === "/"));

@@ -50,3 +50,11 @@ describe("canvas tool", () => {
     expect(parseLayout({ tool: "lasso" }).tool).toBe("select");
   });
 });
+
+describe("hide disabled nodes", () => {
+  it("is off unless stored as true", () => {
+    expect(parseLayout({}).hideDisabled).toBe(false);
+    expect(parseLayout({ hideDisabled: "yes" }).hideDisabled).toBe(false);
+    expect(parseLayout({ hideDisabled: true }).hideDisabled).toBe(true);
+  });
+});

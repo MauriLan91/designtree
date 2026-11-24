@@ -26,9 +26,11 @@ interface Props {
   onFilter: (text: string) => void;
   /** With a filter: the rows that match it, not only lead to one, best first. */
   matched?: ReadonlySet<string>;
+  /** Nodes whose status is not "okay" (US-16.7), drawn dimmed. */
+  disabled?: ReadonlySet<string>;
 }
 
-export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, filter, onFilter, matched }: Props) {
+export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, filter, onFilter, matched, disabled }: Props) {
   const list = useRef<HTMLUListElement>(null);
   const current = rows.findIndex((r) => selected.has(r.id));
 
@@ -101,7 +103,7 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
               aria-level={r.depth + 1}
               aria-expanded={r.branch ? r.expanded : undefined}
               aria-selected={selected.has(r.id)}
-              className={[selected.has(r.id) && "selected", matched && !matched.has(r.id) && "ancestor"].filter(Boolean).join(" ") || undefined}
+              className={[selected.has(r.id) && "selected", matched && !matched.has(r.id) && "ancestor", disabled?.has(r.id) && "disabled"].filter(Boolean).join(" ") || undefined}
               style={{ paddingLeft: 4 + r.depth * 14 }}
               onClick={() => onSelect(r.id)}
               onDoubleClick={() => onOpen(r.id)}
@@ -125,6 +127,11 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
                 {n.data.label && <span className="dt-node-label">{n.data.label}:</span>}
                 {name}
               </span>
+              {disabled?.has(r.id) && (
+                <span className="status-mark" title="Disabled: its status is not &quot;okay&quot;">
+                  off
+                </span>
+              )}
             </li>
           );
         })}

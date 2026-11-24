@@ -183,4 +183,10 @@ describe("treeRows", () => {
       ["sensor", 3, false],
     ]);
   });
+
+  it("leaves hidden nodes and what is under them out", async () => {
+    const { treeRows } = await import("./scopes");
+    const rows = treeRows(nodes, edges, new Set(["root", "soc"]), undefined, new Set(["soc"]));
+    expect(rows.map((r) => r.id)).toEqual(["root", "cpus", "osc"]);
+  });
 });
