@@ -46,9 +46,8 @@ video*, *Audio*, *Sensor*, *Input*, *Security*, *SoC and platform* and
 more than 200 elements opens onto one section per vendor (the generic
 elements, with no vendor prefix, first), each with its own count. Click a
 header to open or close it; classes start closed so the whole library
-reads as one short list of headers. Picking a category in the list shows
-that one schema directory instead. The two buttons next to the category
-list switch between a **list**, with the schema title of each element, and
+reads as one short list of headers. The two buttons at the end of the
+filters switch between a **list**, with the schema title of each element, and
 a **grid** of compact tiles that fits more at once. The view and the open
 sections are remembered.
 
@@ -61,19 +60,33 @@ Type in the search box: the search is fuzzy over the compatible string, the
 vendor and the schema title, ranked by match quality, so `bme280`, `bosch
 pressure` and `i2c eeprom` all work. The words you typed are highlighted
 and the count above the list says how many elements match. Narrow it with
-the category list. The × in the box, or Escape, clears the search.
+the filters. The × in the box, or Escape, clears the search.
 The star next to an element adds it to **Favorites**; elements you add show
 up under **Recent**. Both are kept between sessions. While a search is
 typed, the sections give way to one list of matches, best first.
 
+## Filters
+
+Under the search box, the chips **Class**, **Vendor** and **Bus** narrow
+the library without a name to search for. Each opens a list of its values
+with the number of elements each keeps, given the other filters: the
+device classes, the vendors by name (from the kernel's
+`vendor-prefixes.yaml`; *Generic* for compatibles without a vendor), and
+the buses the elements go on (I²C, SPI, MMIO, CPUs, USB, ...). A set chip
+shows its value; its × clears it, and **Clear filters** clears them all.
+The filters combine with each other and with the search, and are kept
+between sessions. While a filter is set, the library shows only what it
+keeps, without the Basic, Favorites and Recent sections.
+
 ## What fits here
 
-The library follows the level open on the canvas. **Fits here**, on top
-of the library and of the search results, lists the elements that belong
-in it: I²C devices in an I²C controller, SPI devices in an SPI one, CPUs in
-`/cpus`, memory-mapped devices in `/` or a `soc` bus. The header names the
-node you are in. Everything else stays below, under its category or as
-**Other matches**.
+The library follows the level open on the canvas. **Fits here**, the
+last filter, keeps the elements that belong in it: I²C devices in an I²C
+controller, SPI devices in an SPI one, CPUs in `/cpus`, memory-mapped
+devices in `/` or a `soc` bus. It lists them in one ranked list, the
+elements made only for that bus first and those that also go elsewhere
+after, and the count names the node you are in. It is greyed out while no
+scope is open, as in an overlay without a root node.
 
 DesignTree learns where an element belongs from the examples of its
 binding schema, which show each device inside the node it hangs from. A

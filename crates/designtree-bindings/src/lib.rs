@@ -18,7 +18,7 @@ mod macros;
 mod resolve;
 mod search;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -209,6 +209,10 @@ pub struct Catalog {
     /// The schemas processed for validation; see [`Checker`].
     #[serde(default, skip_serializing_if = "SchemaSet::is_empty")]
     pub schemas: SchemaSet,
+    /// Vendor names by compatible prefix (`ti` → `Texas Instruments`), from
+    /// `vendor-prefixes.yaml`, for the library's vendor filter (US-18.7).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vendors: BTreeMap<String, String>,
 }
 
 impl Catalog {
@@ -328,6 +332,9 @@ pub fn index_dir(root: &Path) -> Result<Catalog, IndexError> {
             Err(err) => catalog.skipped.push((rel, err.to_string())),
         }
     }
+    if let Some((_, doc)) = docs.iter().find(|(rel, _)| rel == "vendor-prefixes.yaml") {
+        catalog.vendors = vendor_names(doc);
+    }
     let core = resolve::core_docs();
     let schemas = resolve::Schemas::new(docs.iter().cloned(), core.iter().cloned());
     catalog.bindings = docs
@@ -419,6 +426,26 @@ fn schema_binding(
         buses,
         root: describes_root(doc),
     })
+}
+
+/// The vendors of `vendor-prefixes.yaml`: each `"^acme,.*"` pattern with
+/// its description. Patterns that are not one plain prefix are left out.
+fn vendor_names(doc: &Value) -> BTreeMap<String, String> {
+    let Some(patterns) = doc.get("patternProperties").and_then(Value::as_mapping) else {
+        return BTreeMap::new();
+    };
+    patterns
+        .iter()
+        .filter_map(|(pattern, spec)| {
+            let prefix = pattern.as_str()?.strip_prefix('^')?.strip_suffix(",.*")?;
+            let plain = !prefix.is_empty()
+                && prefix
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+            let name = spec.get("description")?.as_str()?.trim();
+            (plain && !name.is_empty()).then(|| (prefix.to_owned(), name.to_owned()))
+        })
+        .collect()
 }
 
 /// Whether a schema is about the root node: its `$nodename` is `/`.
@@ -670,6 +697,17 @@ impl Walk<'_> {
 #[cfg(test)]
 mod root_tests {
     use super::*;
+
+    #[test]
+    fn vendor_names_come_from_the_prefix_patterns() {
+        let doc: Value = serde_norway::from_str(
+            "patternProperties:\n  \"^ti,.*\":\n    description: Texas Instruments\n  \"^(a|b),.*\":\n    description: Two\n  \"^acme,.*\": true\n",
+        )
+        .unwrap();
+        let vendors = vendor_names(&doc);
+        assert_eq!(vendors.len(), 1);
+        assert_eq!(vendors["ti"], "Texas Instruments");
+    }
 
     #[test]
     fn a_board_schema_describes_the_root() {

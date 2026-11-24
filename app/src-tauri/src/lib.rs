@@ -282,6 +282,12 @@ fn library_entries(
         .collect()
 }
 
+/// Vendor names by compatible prefix, for the library's vendor filter (US-18.7).
+#[tauri::command]
+fn library_vendors(state: State<AppState>) -> std::collections::BTreeMap<String, String> {
+    state.catalog.read().unwrap().vendors.clone()
+}
+
 /// The bindings with the given schema paths (favorites, recents, a dropped
 /// entry), in that order: the loaded kernel's or the basic nodes'; paths
 /// neither has are left out.
@@ -790,6 +796,7 @@ pub fn run() {
             remove_kernel,
             search_bindings,
             library_entries,
+            library_vendors,
             basic_bindings,
             dtc_version,
             read_settings,

@@ -1079,3 +1079,20 @@ button.lib-header:hover { background: var(--hover); }
 /* A class split by vendor (US-18.6): the vendor headers sit under it. */
 .lib-header.sub { height: 26px; padding-left: 24px; font-weight: 500; color: var(--muted); }
 .lib-header.sub:hover { color: var(--text); }
+/* Library filters (US-18.7): chips that read as their name until set, then
+   as their value, tinted, with a × to clear. */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.filter-chip { position: relative; display: inline-flex; align-items: center; max-width: 100%; height: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 12px; white-space: nowrap; }
+.filter-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.filter-chip:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filter-chip-text { position: relative; display: inline-flex; align-items: center; gap: 2px; min-width: 0; padding: 0 6px 0 10px; overflow: hidden; text-overflow: ellipsis; }
+.filter-chip-text select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.filter-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.filter-chip-clear { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 2px; padding: 0; border: none; border-radius: 10px; background: none; color: var(--muted); }
+.filter-chip-clear:hover { background: var(--hover); color: var(--text); }
+button.filter-chip.toggle { padding: 0 10px; cursor: pointer; }
+button.filter-chip.toggle:disabled { cursor: default; opacity: 0.5; }
+button.filter-chip.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lib-total .link { font-size: inherit; }
+.filter-chips .segmented { margin-left: auto; }
+.filter-chips .segmented button { display: flex; align-items: center; height: 22px; padding: 0 6px; }
