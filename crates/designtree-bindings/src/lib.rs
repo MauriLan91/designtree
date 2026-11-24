@@ -12,6 +12,7 @@
 
 mod buses;
 mod check;
+pub mod classes;
 mod kernel;
 mod macros;
 mod resolve;
@@ -192,6 +193,11 @@ pub struct Binding {
     /// `spi`, `cpus`, `mmio`; see [`bus_class`]); empty when they do not say.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub buses: Vec<String>,
+    /// The schema describes the root node (`$nodename: const: '/'`): a board
+    /// or SoC, whose compatibles go on `/`, not a device to add (US-18.6).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<bool>")]
+    pub root: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -411,7 +417,17 @@ fn schema_binding(
         properties: schemas.properties(&format!("/schemas/{rel}"), doc),
         node_name: None,
         buses,
+        root: describes_root(doc),
     })
+}
+
+/// Whether a schema is about the root node: its `$nodename` is `/`.
+fn describes_root(doc: &Value) -> bool {
+    doc.get("properties")
+        .and_then(|p| p.get("$nodename"))
+        .and_then(|n| n.get("const"))
+        .and_then(Value::as_str)
+        == Some("/")
 }
 
 /// The dt-schema core schemas that define compatibles, with the library
@@ -592,6 +608,7 @@ pub fn basic_bindings() -> Vec<Binding> {
                 properties,
                 node_name: Some(name.to_owned()),
                 buses: Vec::new(),
+                root: false,
             })
         })
         .collect()
@@ -651,6 +668,21 @@ impl Walk<'_> {
 }
 
 #[cfg(test)]
+mod root_tests {
+    use super::*;
+
+    #[test]
+    fn a_board_schema_describes_the_root() {
+        let board: Value =
+            serde_norway::from_str("properties:\n  $nodename:\n    const: '/'\n").unwrap();
+        let device: Value =
+            serde_norway::from_str("properties:\n  $nodename:\n    pattern: '^serial@'\n").unwrap();
+        assert!(describes_root(&board));
+        assert!(!describes_root(&device));
+    }
+}
+
+#[cfg(test)]
 mod fallback_tests {
     use super::*;
 
@@ -664,6 +696,7 @@ mod fallback_tests {
             properties: vec![],
             node_name: None,
             buses: vec![],
+            root: false,
         }
     }
 

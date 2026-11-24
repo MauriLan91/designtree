@@ -1076,3 +1076,6 @@ button.lib-header:hover { background: var(--hover); }
 .problem-items .problem-property { color: var(--text); }
 .problem-items .problem-message { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
 .problem-items .problem-rule { flex: none; padding-left: 8px; color: var(--muted); font-size: 11px; }
+/* A class split by vendor (US-18.6): the vendor headers sit under it. */
+.lib-header.sub { height: 26px; padding-left: 24px; font-weight: 500; color: var(--muted); }
+.lib-header.sub:hover { color: var(--text); }

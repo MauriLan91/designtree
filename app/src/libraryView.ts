@@ -15,6 +15,11 @@ export interface Section {
   entries: LibraryEntry[];
   /** Drawn without a header row: the one list of search matches. */
   headless?: boolean;
+  /** Sub-sections drawn under the header instead of `entries` (a big
+   * class by vendor, US-18.6); `entries` still holds them all. */
+  children?: Section[];
+  /** 1 for a sub-section, indented under its parent's header. */
+  depth?: number;
 }
 
 export type Row =
@@ -29,7 +34,7 @@ export const TILE_WIDTH = 100;
 
 /** Favorites and recents start open; a category opens when asked to, as a
  * library of a hundred categories is read by its headers first. */
-export const openByDefault = (id: string) => !id.startsWith("category:");
+export const openByDefault = (id: string) => !id.startsWith("category:") && !id.startsWith("class:");
 
 /** A category name as a header: `interrupt-controller` → `Interrupt controller`. */
 export function categoryTitle(category: string): string {
@@ -62,19 +67,110 @@ export function categorySections(entries: LibraryEntry[]): Section[] {
 }
 
 /** The rows to draw: a header per section and, for an open one, its
- * entries one per row or `columns` per row. */
+ * sub-sections or its entries one per row or `columns` per row. */
 export function layoutRows(sections: Section[], isOpen: (id: string) => boolean, display: Display, columns: number): Row[] {
   const per = display === "grid" ? Math.max(1, columns) : 1;
   const rows: Row[] = [];
-  for (const section of sections) {
+  const add = (section: Section) => {
     const open = section.headless || isOpen(section.id);
     if (!section.headless) rows.push({ type: "header", section, open });
-    if (!open) continue;
+    if (!open) return;
+    if (section.children) return section.children.forEach(add);
     for (let i = 0; i < section.entries.length; i += per) {
       rows.push({ type: "entries", section, entries: section.entries.slice(i, i + per) });
     }
-  }
+  };
+  sections.forEach(add);
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Device classes (US-18.6)
+
+/** The classes of `designtree_bindings::classes::CLASSES`, in its order. */
+export const CLASSES: [string, string][] = [
+  ["cpu", "CPU"],
+  ["memory", "Memory"],
+  ["clock-reset", "Clock and reset"],
+  ["power", "Power"],
+  ["interrupt-dma", "Interrupts and DMA"],
+  ["bus", "Bus"],
+  ["serial", "Serial and messaging"],
+  ["gpio", "GPIO, pins and LEDs"],
+  ["storage", "Storage"],
+  ["network", "Network"],
+  ["display", "Display and video"],
+  ["audio", "Audio"],
+  ["sensor", "Sensor"],
+  ["input", "Input"],
+  ["security", "Security"],
+  ["platform", "SoC and platform"],
+  ["other", "Other"],
+];
+
+/** A binding category whose icon stands for each class in its header. */
+const CLASS_ICONS: Record<string, string> = {
+  cpu: "cpu",
+  memory: "memory-controllers",
+  "clock-reset": "clock",
+  power: "power",
+  "interrupt-dma": "interrupt-controller",
+  bus: "bus",
+  serial: "serial",
+  gpio: "gpio",
+  storage: "mtd",
+};
+
+/** Above this many entries a class is split by vendor. */
+export const VENDOR_SPLIT = 200;
+
+/** The vendor prefix of an entry's compatible (`st` of `st,stm32-uart`);
+ * "" for a generic one (`ns16550a`, `simple-bus`). */
+export const vendorOf = (e: LibraryEntry) => {
+  const c = e.compatible ?? "";
+  const comma = c.indexOf(",");
+  return comma > 0 ? c.slice(0, comma) : "";
+};
+
+/**
+ * The device list grouped by class, in the classes' order. Board and SoC
+ * schemas are left out: their compatibles go on the root node. A class of
+ * more than `VENDOR_SPLIT` entries opens onto one sub-section per vendor,
+ * the generic entries first.
+ */
+export function classSections(entries: LibraryEntry[], vendorName: (prefix: string) => string = (v) => v): Section[] {
+  const byClass = new Map<string, LibraryEntry[]>();
+  for (const e of entries) {
+    if (e.root) continue;
+    const c = e.class || "other";
+    const list = byClass.get(c);
+    if (list) list.push(e);
+    else byClass.set(c, [e]);
+  }
+  const known = new Set(CLASSES.map(([id]) => id));
+  const order = [...CLASSES, ...[...byClass.keys()].filter((c) => !known.has(c)).map((c): [string, string] => [c, categoryTitle(c)])];
+  return order
+    .filter(([id]) => byClass.has(id))
+    .map(([id, title]) => {
+      const list = byClass.get(id)!;
+      const section: Section = { id: `class:${id}`, title, category: CLASS_ICONS[id] ?? id, entries: list };
+      if (list.length > VENDOR_SPLIT) section.children = vendorSections(section, vendorName);
+      return section;
+    });
+}
+
+function vendorSections(parent: Section, vendorName: (prefix: string) => string): Section[] {
+  const byVendor = new Map<string, LibraryEntry[]>();
+  for (const e of parent.entries) {
+    const v = vendorOf(e);
+    const list = byVendor.get(v);
+    if (list) list.push(e);
+    else byVendor.set(v, [e]);
+  }
+  const title = (v: string) => (v ? vendorName(v) : "Generic");
+  return [...byVendor.keys()]
+    .sort((a, b) => (a === "" ? -1 : b === "" ? 1 : title(a).localeCompare(title(b))))
+    .map((v) => ({ id: `${parent.id}/vendor:${v}`, title: title(v), category: parent.category, entries: byVendor.get(v)!, depth: 1 }));
 }
 
 export function rowHeight(row: Row, display: Display): number {

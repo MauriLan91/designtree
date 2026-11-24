@@ -9,6 +9,7 @@ import { fitting } from "../fits";
 import {
   TILE_WIDTH,
   categorySections,
+  classSections,
   historySections,
   layoutRows,
   openByDefault,
@@ -186,15 +187,22 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
   };
 
   const searching = results.query.trim() !== "";
-  // Grouped once per result set; a star or an add only changes the history sections.
-  const categories = useMemo(() => (searching ? [] : categorySections(results.entries)), [searching, results]);
+  // Board and SoC schemas are not devices to add: their compatibles go on
+  // the root node, which offers them in the inspector (US-18.6).
+  const devices = useMemo(() => results.entries.filter((e) => !e.root), [results]);
+  // Grouped once per result set; a star or an add only changes the history
+  // sections. A picked category is one folder; otherwise the classes.
+  const categories = useMemo(
+    () => (searching ? [] : category ? categorySections(devices) : classSections(devices)),
+    [searching, devices, category],
+  );
   const basicSection: Section = useMemo(
     () => ({ id: "basic", title: "Basic", category: BASIC_CATEGORY, entries: [...basics.map(basicEntry), EMPTY_ENTRY] }),
     [basics],
   );
   // What fits the scope on show leads the library and the search results;
   // everything else stays below it (US-18.4).
-  const fits = useMemo(() => (fit ? fitting(results.entries, fit.cls) : []), [fit, results]);
+  const fits = useMemo(() => (fit ? fitting(devices, fit.cls) : []), [fit, devices]);
   const fitsTitle = fit ? `Fits here · ${fit.name}` : "";
   const sections: Section[] = useMemo(() => {
     const matches = (entries: LibraryEntry[]): Section[] => {
@@ -205,31 +213,36 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
         { id: "matches", title: "Other matches", entries: entries.filter((e) => !fitSet.has(e)) },
       ];
     };
-    if (searching && category) return matches(results.entries);
+    if (searching && category) return matches(devices);
     if (searching) {
       const words = results.query.toLowerCase().split(/\s+/).filter(Boolean);
       const basicMatches = basicSection.entries.filter((e) =>
         words.every((w) => `${e.title} ${nodeNames.get(e.path) ?? ""}`.toLowerCase().includes(w)),
       );
-      return matches([...basicMatches, ...results.entries]);
+      return matches([...basicMatches, ...devices]);
     }
     // A picked category shows its elements, without the history of other ones.
     if (category) return categories;
     const fitsSection: Section[] = fits.length ? [{ id: "fits", title: fitsTitle, entries: fits }] : [];
     return [...fitsSection, basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
-  }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries, fits, fitsTitle]);
+  }, [searching, results, devices, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries, fits, fitsTitle]);
 
   // Search matches include the basic nodes that match.
-  const shown = searching ? sections.reduce((n, s) => n + s.entries.length, 0) : results.entries.length;
+  const shown = searching ? sections.reduce((n, s) => n + s.entries.length, 0) : devices.length;
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;
     if (row.type === "header") {
       const count = section.entries.length.toLocaleString();
       return (
-        <button className="lib-header" aria-expanded={row.open} onClick={() => toggleSection(section.id)} title={section.category}>
+        <button
+          className={`lib-header${section.depth ? " sub" : ""}`}
+          aria-expanded={row.open}
+          onClick={() => toggleSection(section.id)}
+          title={section.children ? `${section.title}: ${section.children.length} vendors` : section.title}
+        >
           {row.open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-          {section.category && <EntryChip category={section.category} small />}
+          {section.category && !section.depth && <EntryChip category={section.category} small />}
           <span className="lib-header-title">{section.title}</span>
           <span className="lib-count">{count}</span>
         </button>

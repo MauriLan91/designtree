@@ -41,7 +41,7 @@ pub fn kernel_version(linux: &Path) -> Option<String> {
 }
 
 /// Bumped when the cached catalog's shape changes.
-const CACHE_FORMAT: u32 = 4;
+const CACHE_FORMAT: u32 = 5;
 
 /// Bigger cache files are not read: a catalog of the whole kernel, with
 /// the processed schemas, is about 20 megabytes.

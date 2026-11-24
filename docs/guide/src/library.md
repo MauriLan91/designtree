@@ -34,17 +34,28 @@ that documents it: `arm,cortex-a7` and `arm,cortex-a9` are two elements
 named "ARM CPUs". The list holds all of them and scrolls through the whole
 library.
 
-## Browsing by category
+## Browsing by device class
 
 Before you search, the library is grouped like a component palette:
-**Favorites** and **Recent** first, then one section per category (the
-directory of the schema in the kernel, such as *Serial* or *Interrupt
-controller*), each with its icon and the number of elements. Click a
-section header to open or close it; categories start closed so the whole
-library reads as one short list of headers. The two buttons next to the
-category list switch between a **list**, with the schema title of each
-element, and a **grid** of compact tiles that fits more at once. The view
-and the open sections are remembered.
+**Favorites** and **Recent** first, then one section per device class, by
+what a device is rather than where its schema lives: *CPU*, *Memory*,
+*Clock and reset*, *Power*, *Interrupts and DMA*, *Bus*, *Serial and
+messaging*, *GPIO, pins and LEDs*, *Storage*, *Network*, *Display and
+video*, *Audio*, *Sensor*, *Input*, *Security*, *SoC and platform* and
+*Other*. Each header has an icon and the number of elements. A class of
+more than 200 elements opens onto one section per vendor (the generic
+elements, with no vendor prefix, first), each with its own count. Click a
+header to open or close it; classes start closed so the whole library
+reads as one short list of headers. Picking a category in the list shows
+that one schema directory instead. The two buttons next to the category
+list switch between a **list**, with the schema title of each element, and
+a **grid** of compact tiles that fits more at once. The view and the open
+sections are remembered.
+
+Board and SoC schemas, the ones that describe the root node, are not in
+the library: their compatibles belong on `/`. Select the root node and use
+**Board or SoC** under its **Compatible** field to find one; picking it
+puts it first in the list.
 
 Type in the search box: the search is fuzzy over the compatible string, the
 vendor and the schema title, ranked by match quality, so `bme280`, `bosch

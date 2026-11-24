@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Edge } from "@xyflow/react";
 import { backend, inTauri } from "../backend";
 import { PropertyTable, type Reference } from "./PropertyTable";
@@ -202,6 +202,9 @@ function NodeInspector({
         Compatible (most specific first, space separated)
         <CompatibleInput key={node.id} value={data.compatible} disabled={locked} onCommit={(compatible) => onChange(node.id, { compatible })} />
       </label>
+      {data.name === "/" && inTauri && !locked && (
+        <BoardPicker onPick={(c) => onChange(node.id, { compatible: [c, ...data.compatible.filter((x) => x !== c)] })} />
+      )}
       <div className="props-head">
         <span>Properties</span>
         <div className="segmented" role="group" aria-label="Property view">
@@ -275,6 +278,55 @@ function FieldError({ text }: { text: string | null }) {
 
 /** The compatible strings as one line. What was typed stays as typed while
  * it means the same list, so a pause after a space does not eat the space. */
+/**
+ * The root's board and SoC picker (US-18.6): the kernel's root-node schemas
+ * left the device list, so their compatibles are offered here. A pick goes
+ * first in `compatible`, as the most specific.
+ */
+function BoardPicker({ onPick }: { onPick: (compatible: string) => void }) {
+  const id = useId();
+  const [text, setText] = useState("");
+  const [options, setOptions] = useState<{ compatible: string; title: string }[]>([]);
+  const latest = useRef(0);
+  useEffect(() => {
+    const request = ++latest.current;
+    const t = setTimeout(() => {
+      backend.libraryEntries(text, null).then(
+        (entries) => {
+          if (request !== latest.current) return;
+          const roots = entries.filter((e) => e.root && e.compatible);
+          setOptions(roots.slice(0, 100).map((e) => ({ compatible: e.compatible!, title: e.title ?? e.path })));
+        },
+        () => setOptions([]),
+      );
+    }, 150);
+    return () => clearTimeout(t);
+  }, [text]);
+  return (
+    <label>
+      Board or SoC
+      <input
+        type="search"
+        list={id}
+        value={text}
+        placeholder="Find a board or SoC compatible to add"
+        onChange={(e) => {
+          const value = e.target.value;
+          if (options.some((o) => o.compatible === value)) {
+            onPick(value);
+            setText("");
+          } else setText(value);
+        }}
+      />
+      <datalist id={id}>
+        {options.map((o) => (
+          <option key={o.compatible} value={o.compatible} label={o.title} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
 function CompatibleInput({ value, disabled, onCommit }: { value: string[]; disabled: boolean; onCommit: (list: string[]) => void }) {
   const [typed, setTyped] = useState<string | null>(null);
   const same = typed !== null && parseCompatible(typed).join("\0") === value.join("\0");
