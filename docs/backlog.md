@@ -63,7 +63,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M4 v1.0 Public release** | Packaging, docs, onboarding, usability test | G6 | 2027-04-30 |
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
 | **M6 v1.2 Editing comfort** ✅ | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | done 2026-11-15 |
-| **M7 v1.3 Large trees** | Trees of thousands of nodes and decompiled blobs: restored references, node search, compact property table, library by device class with filters, problems at scale | G5 | 2027-01-29 |
+| **M7 v1.3 Large trees** ✅ | Trees of thousands of nodes and decompiled blobs: restored references, node search, compact property table, library by device class with filters, problems at scale | G5 | done 2026-11-24 |
 | **M8 v2.0 Beyond the editor** | Usage and diff views, validation profiles and quick fixes, pin multiplexing, Zephyr, web demo, assistant | – | 2027-09-30 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
