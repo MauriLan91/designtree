@@ -31,7 +31,7 @@ export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selecte
       >
         <PanelBottom size={14} strokeWidth={1.75} aria-hidden />
       </button>
-      <button onClick={onKernels} title="Kernel checkouts">
+      <button onClick={onKernels} title="Change the kernel checkout">
         <span className={kernel ? "dot ok" : "dot"} aria-hidden />
         {kernel ? `Linux ${kernel.version ?? "(unknown version)"}` : "No kernel loaded"}
       </button>

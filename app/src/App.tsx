@@ -274,6 +274,9 @@ const MULTI_SELECT_KEYS = ["Control", "Meta", "Shift"];
 
 const baseName = (path: string) => path.split(/[\\/]/).pop()!;
 
+/** The last entry of the kernel pick, which opens the settings instead. */
+const MANAGE_KERNELS = "\0manage";
+
 export function Editor({
   active,
   start,
@@ -349,7 +352,7 @@ export function Editor({
     [nodes, edges, extras, overriding],
   );
   const history = useHistory(editorState, {
-    key: (s) => JSON.stringify(toDesign(s.nodes, s.edges, { ...s.extras, kernel: undefined })),
+    key: (s) => JSON.stringify(toDesign(s.nodes, s.edges, { ...s.extras, kernel: undefined, kernel_path: undefined })),
     same: (a, b) => a.extras === b.extras && sameNodes(a.nodes, b.nodes) && sameEdges(a.edges, b.edges),
     restore: (s) => {
       // The selection is not part of the history: keep the current one.
@@ -357,7 +360,7 @@ export function Editor({
       const selectedEdges = new Set(edgesRef.current.filter((e) => e.selected).map((e) => e.id));
       setNodes(s.nodes.map((n) => (!!n.selected === selectedNodes.has(n.id) ? n : ({ ...n, selected: !n.selected } as FlowNode))));
       setEdges(s.edges.map((e) => (!!e.selected === selectedEdges.has(e.id) ? e : { ...e, selected: !e.selected })));
-      setExtras({ ...s.extras, kernel: extrasRef.current.kernel });
+      setExtras({ ...s.extras, kernel: extrasRef.current.kernel, kernel_path: extrasRef.current.kernel_path });
       setOverriding(s.overriding);
     },
     settled: (s) => !s.nodes.some((n) => n.dragging || n.resizing),
@@ -1056,6 +1059,42 @@ export function Editor({
     );
   };
 
+  /** The design's own kernel checkout (US-15.10): loaded again when it is
+   * a registered one that is still there, else the registered ones are
+   * offered. A path from a design file is never indexed unasked. */
+  const [kernelOffer, setKernelOffer] = useState<string | null>(null);
+  const reopenKernel = async (path: string | undefined) => {
+    setKernelOffer(null);
+    if (!inTauri || !path || path === kernelRef.current?.path) return;
+    const known = await backend.listKernels().catch(() => []);
+    if (known.some((k) => k.path === path && k.exists)) onUseKernel(path);
+    else setKernelOffer(path);
+  };
+  const kernelRef = useRef(kernel);
+  kernelRef.current = kernel;
+  useEffect(() => {
+    if (kernel && kernel.path === kernelOffer) setKernelOffer(null);
+  }, [kernel, kernelOffer]);
+  /** Picks the kernel checkout to build the library from, in the palette. */
+  const pickKernel = async () => {
+    const known = inTauri ? await backend.listKernels().catch(() => []) : [];
+    setPalettePick({
+      title: "Kernel checkout to use",
+      nodes: [
+        ...known
+          .filter((k) => k.exists)
+          .map((k) => ({ id: k.path, title: `Linux ${k.version ?? "(unknown version)"}${k.path === kernel?.path ? " (in use)" : ""}`, hint: k.path })),
+        { id: MANAGE_KERNELS, title: "Manage kernel checkouts…" },
+      ],
+      onPick: (id) => {
+        setKernelOffer(null);
+        if (id === MANAGE_KERNELS) onOpenSettings("Kernel");
+        else if (id !== kernel?.path) onUseKernel(id);
+      },
+    });
+    setShowPalette(true);
+  };
+
   const loadDesign = async ({ load, path, name }: DesignSource) => {
     try {
       const d = fromDesign(await load());
@@ -1073,6 +1112,7 @@ export function Editor({
       setScopeTab(null);
       autoTidied.current.clear();
       requestAnimationFrame(() => fitView({ maxZoom: 1 }));
+      reopenKernel(d.extras.kernel_path);
     } catch (e) {
       setErrors([failure(String(e))]);
     }
@@ -1286,9 +1326,10 @@ export function Editor({
     try {
       // The design is now built against the library's kernel.
       const version = kernel?.version ?? extras.kernel;
-      await backend.saveDesign(path, { ...toDesign(nodes, edges, extras), kernel: version });
+      const kernelPath = kernel?.path ?? extras.kernel_path;
+      await backend.saveDesign(path, { ...toDesign(nodes, edges, extras), kernel: version, kernel_path: kernelPath });
       markSaved();
-      setExtras((x) => ({ ...x, kernel: version }));
+      setExtras((x) => ({ ...x, kernel: version, kernel_path: kernelPath }));
       setDesignPath(path);
       setTitle(baseName(path));
       return true;
@@ -1979,6 +2020,15 @@ export function Editor({
       run: () => onOpenSettings("Kernel"),
     },
     {
+      id: "use-kernel",
+      title: "Use kernel checkout…",
+      menu: "Tools",
+      group: 1,
+      hint: "Build the library from another registered checkout (also from the status bar)",
+      disabled: !inTauri,
+      run: pickKernel,
+    },
+    {
       id: "dtc",
       title: "Set dtc path…",
       menu: "Tools",
@@ -2123,10 +2173,22 @@ export function Editor({
       <main className={`canvas mode-${mode}`} style={{ "--split": layout.split } as CSSProperties}>
         <ModeSwitch mode={mode} onMode={setMode} />
         <div ref={canvasRef} className="graph" hidden={mode === "dts"} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-          {kernelWarning && (
+          {kernelOffer && (
+            <div className="kernel-warning" role="alert">
+              This design was edited against the kernel checkout at <code>{kernelOffer}</code>, which is not a registered
+              checkout here or is gone.{" "}
+              <button className="link" onClick={pickKernel}>
+                Pick a kernel checkout…
+              </button>
+            </div>
+          )}
+          {!kernelOffer && kernelWarning && (
             <div className="kernel-warning" role="alert">
               This design was edited against Linux {extras.kernel}, but the library is built from Linux {kernel?.version}.
-              Bindings may differ; pick another checkout under Kernels…
+              Bindings may differ.{" "}
+              <button className="link" onClick={pickKernel}>
+                Pick another checkout…
+              </button>
             </div>
           )}
           {active &&
@@ -2354,7 +2416,7 @@ export function Editor({
         warnings={problemCount.warnings}
         nodes={nodes.filter(isDtNode).length}
         selected={selectedNodes.length}
-        onKernels={() => onOpenSettings("Kernel")}
+        onKernels={pickKernel}
         onDtc={() => onOpenSettings("Build")}
         onProblems={() => showPanel("problems")}
         panel={commandById("panel")}

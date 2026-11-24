@@ -47,12 +47,19 @@ struct CatalogSummary {
 struct KernelInfo {
     path: PathBuf,
     version: Option<String>,
+    /// Whether the checkout is still there, with its binding schemas.
+    exists: bool,
 }
 
 impl KernelInfo {
     fn new(path: PathBuf) -> Self {
         let version = designtree_bindings::kernel_version(&path);
-        Self { path, version }
+        let exists = path.join(designtree_bindings::BINDINGS_DIR).is_dir();
+        Self {
+            path,
+            version,
+            exists,
+        }
     }
 }
 

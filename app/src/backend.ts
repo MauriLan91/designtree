@@ -19,6 +19,8 @@ export interface CatalogSummary {
 export interface KernelInfo {
   path: string;
   version: string | null;
+  /** Whether the checkout is still there, with its binding schemas. */
+  exists: boolean;
 }
 
 export interface BuildResult {
