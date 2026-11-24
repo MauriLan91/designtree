@@ -334,7 +334,16 @@ line?: number | null,
 /**
  * The node the message is about, when it could be found.
  */
-node?: NodeId | null, };
+node?: NodeId | null, 
+/**
+ * The property the message is about, when it names one.
+ */
+property?: string, 
+/**
+ * What reports it: dtc's check (`unit_address_vs_reg`) or the binding
+ * (`serial/8250.yaml`), for grouping and filtering (US-5.3).
+ */
+rule?: string, };
 
 export type Severity = "warning" | "error";
 

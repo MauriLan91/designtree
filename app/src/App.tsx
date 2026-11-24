@@ -28,8 +28,9 @@ import { InterruptPanel } from "./components/InterruptPanel";
 import { AddressMapPanel } from "./components/AddressMapPanel";
 import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
-import { SchemaPanel, type SchemaState } from "./components/SchemaPanel";
-import { ProblemList } from "./components/ProblemList";
+import type { SchemaState } from "./components/schemaState";
+import { ProblemsView } from "./components/ProblemsView";
+import { readable, type Tagged } from "./problemView";
 import { NodeProblems } from "./nodeProblems";
 import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
@@ -758,7 +759,8 @@ export function Editor({
   const nodeProblems = useMemo(() => {
     const byNode = new Map<string, string[]>();
     for (const p of [...errors, ...placement, ...(schema.problems ?? [])]) {
-      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), p.message]);
+      const text = readable(p.property ? `${p.property}: ${p.message}` : p.message);
+      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), text]);
     }
     return byNode;
   }, [errors, placement, schema.problems]);
@@ -1531,6 +1533,18 @@ export function Editor({
   const nodesForSearch = useRef(nodes);
   nodesForSearch.current = nodes;
   const paths = useMemo(() => nodePaths(nodesForSearch.current, parents), [searchKey, parents]);
+  const pathOf = useCallback((id: string) => paths.get(id), [paths]);
+  // Every problem with where it comes from (US-5.3); dtc's only while the
+  // build is of the design on show.
+  const taggedProblems = useMemo<Tagged[]>(
+    () => [
+      ...errors.map((problem) => ({ problem, source: "structure" as const })),
+      ...placement.map((problem) => ({ problem: { ...problem, rule: problem.rule ?? "placement" }, source: "schema" as const })),
+      ...(schema.problems ?? []).map((problem) => ({ problem, source: "schema" as const })),
+      ...(build && !buildStale ? build.problems : []).map((problem) => ({ problem, source: "dtc" as const })),
+    ],
+    [errors, placement, schema.problems, build, buildStale],
+  );
   const outlineQuery = outlineFilter.trim();
   const outlineMatches = useMemo(
     () => (outlineQuery ? new Set(searchNodes(nodesForSearch.current, paths, outlineQuery).map((m) => m.id)) : undefined),
@@ -2369,22 +2383,25 @@ export function Editor({
           onResize={(size) => onLayout((l) => ({ ...l, panel: { ...l.panel, size } }))}
           onClose={() => togglePane("panel")}
         >
-          {layout.panel.tab === "problems" && errors.length > 0 && <ProblemList problems={errors} nodeName={nodeName} onFocusNode={focusNode} />}
-          {layout.panel.tab === "problems" && placement.length > 0 && (
-            <section className="build placement">
-              <h2>Placement</h2>
-              <p className="hint">
-                {placement.length} node{placement.length === 1 ? " is" : "s are"} under a parent their binding does not expect
-              </p>
-              <ProblemList problems={placement} nodeName={nodeName} onFocusNode={focusNode} />
-            </section>
+          {layout.panel.tab === "problems" && (
+            <ProblemsView
+              problems={taggedProblems}
+              pathOf={pathOf}
+              onFocusNode={focusNode}
+              notes={
+                <p className="hint">
+                  {!kernel
+                    ? "Load a kernel checkout to check the design against its binding schemas."
+                    : schema.problems === null
+                      ? "Schema check not run: the design has structural errors."
+                      : schema.checking
+                        ? "Checking against the binding schemas…"
+                        : null}
+                  {build && buildStale && build.problems.length > 0 && " dtc's problems are left out: they are from before the last change (build again, Ctrl+B)."}
+                </p>
+              }
+            />
           )}
-          {layout.panel.tab === "problems" &&
-            (kernel ? (
-              <SchemaPanel schema={schema} nodeName={nodeName} onFocusNode={focusNode} />
-            ) : (
-              <p className="hint">Load a kernel checkout to check the design against its binding schemas.</p>
-            ))}
           {layout.panel.tab === "build" &&
             (build ? (
               <BuildPanel build={build} stale={buildStale} nodeName={nodeName} onFocusNode={focusNode} />

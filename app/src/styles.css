@@ -1003,3 +1003,24 @@ button.lib-header:hover { background: var(--hover); }
 .prop-table .pager { display: flex; align-items: center; gap: 6px; padding: 2px 4px; color: var(--muted); font-size: 11px; }
 .prop-table .pager .link { display: flex; padding: 2px; }
 .prop-table .pager .link:disabled { opacity: 0.4; }
+/* The Problems tab (US-5.3). */
+.problems-view { display: flex; flex-direction: column; gap: 6px; }
+.problems-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; position: sticky; top: -8px; z-index: 1; padding: 4px 0; background: var(--panel); }
+.problems-toolbar select { height: 26px; font-size: 12px; }
+.problems-toolbar .search-field { flex: 1 1 220px; max-width: 360px; }
+.problems-toolbar .chip { display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 12px; background: none; color: var(--muted); font-size: 12px; }
+.problems-toolbar .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.problems-toolbar .chip-count { font-size: 11px; color: var(--muted); }
+.problems-total { margin-left: auto; color: var(--muted); font-size: 12px; }
+.problems-view .hint:empty { display: none; }
+.problem-groups { list-style: none; margin: 0; padding: 0; }
+.problem-groups .group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 2px; border: 0; background: none; color: var(--text); font-size: 12px; text-align: left; }
+.problem-groups .group-head:hover { background: var(--hover); }
+.problem-groups .problem-group-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.problem-groups .group-head .hint { margin: 0; font-size: 11px; }
+.problem-groups .problems { max-height: none; margin: 0 0 4px 20px; }
+.problems .problem-property { color: var(--text); }
+.problems .problem-rule { margin-left: auto; padding-left: 8px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.problems li.more { padding: 2px 4px; }
+.problems li.more button { width: auto; color: var(--accent); }
+.problem-groups .group-head > svg, .problem-groups .group-head .badge { flex: none; }

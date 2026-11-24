@@ -14,6 +14,27 @@ DesignTree checks a design at three levels while you edit.
 
 Click a problem in a panel to select its node on the canvas.
 
+## The Problems tab
+
+The **Problems** tab of the bottom panel lists every problem of the three
+checks together; dtc's are there while the last build is of the design on
+show. A vendor tree can have thousands, so the list is made to be worked
+through:
+
+- **Group** them **by rule** (problems of one kind together, such as
+  `"…" is a required property`), **by node** (its path) or **by
+  property**, each group with its count, largest first; or not at all.
+  Click a group to open it.
+- **Filter** by severity, by source (**Structure**, **Schema**, **dtc**,
+  each with its count) and by text, which also matches the node path, the
+  property and the binding.
+- Properties no binding documents, usually vendor ones such as
+  `qcom,msm-id`, are one class of their own at the end, **Undocumented
+  vendor properties**, closed until you open it.
+- Each row shows the node's path, the property and the binding or dtc
+  check that reports it. A value written as bytes that reads as text is
+  shown as text (`"okay"` rather than `[6f 6b 61 79 00]`).
+
 The address map and interrupt views add their own checks: overlapping
 `reg` regions and devices with no usable interrupt parent (see
 [Views](views.md)).

@@ -36,6 +36,15 @@ pub struct Problem {
     /// The node the message is about, when it could be found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node: Option<NodeId>,
+    /// The property the message is about, when it names one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub property: Option<String>,
+    /// What reports it: dtc's check (`unit_address_vs_reg`) or the binding
+    /// (`serial/8250.yaml`), for grouping and filtering (US-5.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub rule: Option<String>,
 }
 
 /// A structural error as a problem on its node, for the editor's list.
@@ -46,6 +55,8 @@ impl From<&ValidationError> for Problem {
             message: error.to_string(),
             line: None,
             node: error.node().cloned(),
+            property: None,
+            rule: None,
         }
     }
 }
@@ -76,8 +87,12 @@ fn parse_line(line: &str, map: &SourceMap) -> Option<Problem> {
     // What follows the position and the check name: `/path: message` or
     // just the message.
     let mut message = line;
+    let mut rule = None;
     if let Some(at) = line.find("): ") {
         message = &line[at + 3..];
+        rule = line[..at]
+            .rsplit_once(" (")
+            .map(|(_, check)| check.to_owned());
     } else if let Some(position) = position {
         let rest = position.trim_start_matches(|c: char| c.is_ascii_digit() || ".-".contains(c));
         message = rest.trim_start_matches(':').trim();
@@ -85,10 +100,13 @@ fn parse_line(line: &str, map: &SourceMap) -> Option<Problem> {
         message = line[at + "error:".len()..].trim();
     }
     let mut path = None;
+    let mut property = None;
     if message.starts_with('/') {
         if let Some((head, rest)) = message.split_once(": ") {
             // `/node:property` names a property of the node.
-            path = Some(head.split(':').next().unwrap_or(head));
+            let mut parts = head.splitn(2, ':');
+            path = parts.next();
+            property = parts.next().map(str::to_owned);
             message = rest;
         }
     }
@@ -102,6 +120,8 @@ fn parse_line(line: &str, map: &SourceMap) -> Option<Problem> {
         message: message.to_owned(),
         line: line_number,
         node,
+        property,
+        rule,
     })
 }
 
@@ -139,6 +159,8 @@ mod tests {
             problems[0].message,
             "node has a unit name, but no reg or ranges property"
         );
+        assert_eq!(problems[0].rule.as_deref(), Some("unit_address_vs_reg"));
+        assert_eq!(problems[0].property, None);
     }
 
     #[test]
@@ -147,6 +169,8 @@ mod tests {
         let problems = parse_problems(text, &map());
         assert_eq!(problems[0].node, Some("n1".into()));
         assert_eq!(problems[0].message, "bad");
+        assert_eq!(problems[0].property.as_deref(), Some("foo"));
+        assert_eq!(problems[0].rule.as_deref(), Some("x"));
     }
 
     #[test]
