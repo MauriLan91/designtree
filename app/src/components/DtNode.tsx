@@ -1,9 +1,12 @@
 import { useContext, useEffect, useRef } from "react";
+import { ChevronRight } from "lucide-react";
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { KINDS, kindOf } from "../categories";
 import { BUS_IN_HANDLE } from "../scopes";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
+import { NodeChildren } from "../nodeChildren";
+import { isDisabled, statusOf } from "../nodeStatus";
 import { consumerHandle, providerHandle } from "../ports";
 import { PHANDLE_HANDLE, REF_HANDLE, baseName, type DtFlowNode } from "../model";
 
@@ -22,6 +25,8 @@ function flush(update: (ids: string[]) => void) {
 export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   const problems = useContext(NodeProblems).get(id) ?? [];
   const ports = useContext(NodePorts).get(id);
+  const children = useContext(NodeChildren);
+  const childCount = children.count.get(id) ?? 0;
   // Optional ports nothing is wired to only show on the selected node, so a
   // board with hundreds of nodes stays readable.
   const consumers = ports?.consumers.filter((c) => selected || c.required || c.wired) ?? [];
@@ -44,9 +49,10 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   const fullName = data.unitAddress ? `${data.name}@${data.unitAddress}` : data.name;
   const kind = kindOf(data.binding?.category, data.name);
   const { Icon, title: kindTitle } = KINDS[kind];
+  const off = isDisabled(data.properties);
   return (
     <div
-      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}`}
+      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}${off ? " disabled" : ""}`}
       title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
     >
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
@@ -62,6 +68,11 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
           {data.label && <span className="dt-node-label">{data.label}:</span>}
           {fullName}
         </span>
+        {off && (
+          <span className="status-mark" title={`status = "${statusOf(data.properties)}": the kernel does not probe this node`}>
+            disabled
+          </span>
+        )}
       </div>
       {data.compatible.length > 0 && <div className="dt-node-compat">{data.compatible[0]}</div>}
       {data.inherited && <div className="dt-node-origin">{baseName(data.inherited.file)}</div>}
@@ -106,6 +117,21 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
             )}
           </ul>
         </div>
+      )}
+      {childCount > 0 && (
+        <button
+          className="dt-node-children nodrag"
+          title="Open: show the nodes inside (double-click does the same)"
+          onClick={(e) => {
+            e.stopPropagation();
+            children.open(id);
+          }}
+        >
+          <span>
+            {childCount} node{childCount === 1 ? "" : "s"} inside
+          </span>
+          <ChevronRight size={14} aria-hidden />
+        </button>
       )}
       <Handle type="source" id={REF_HANDLE} position={Position.Right} className="h-ref" title="References (phandle)" />
     </div>

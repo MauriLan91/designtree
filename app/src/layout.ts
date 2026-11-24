@@ -22,6 +22,8 @@ export interface Layout {
   split: number;
   /** What a left drag on the empty canvas does (US-9.7). */
   tool: CanvasTool;
+  /** Whether nodes whose `status` is not "okay" are left off the canvas and the Outline (US-16.7). */
+  hideDisabled: boolean;
 }
 
 /** `select` draws a selection rectangle, `pan` moves the view. */
@@ -51,6 +53,7 @@ export const DEFAULT_LAYOUT: Layout = {
   panel: { size: 200, open: false, tab: "problems" },
   split: 0.5,
   tool: "select",
+  hideDisabled: false,
 };
 
 const KEY = "designtree.layout";
@@ -79,6 +82,7 @@ export function parseLayout(raw: unknown): Layout {
     panel: { ...pane("panel"), tab: TABS.includes(tab as PanelTab) ? (tab as PanelTab) : DEFAULT_LAYOUT.panel.tab },
     split: typeof obj.split === "number" && Number.isFinite(obj.split) ? clampSplit(obj.split) : DEFAULT_LAYOUT.split,
     tool: obj.tool === "pan" ? "pan" : "select",
+    hideDisabled: obj.hideDisabled === true,
   };
 }
 
