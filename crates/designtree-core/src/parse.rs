@@ -131,6 +131,9 @@ pub struct PropertyDef {
     pub references: Vec<Reference>,
     /// The base its numbers were written in, when it tells (US-17.3).
     pub base: Option<NumberBase>,
+    /// Cells written in another base than `base`, by cell index across the
+    /// value's `<...>` groups (US-17.6, D11); `None` follows `base`.
+    pub bases: Vec<Option<NumberBase>>,
     pub pos: Pos,
 }
 
@@ -214,6 +217,10 @@ struct Parser {
     /// Literals of the property being read, by base: hex, octal, and
     /// decimal of 10 or more (smaller ones read the same in any base).
     literals: [u32; 3],
+    /// The base of the first telling literal of the cell being read.
+    cell_literal: Option<NumberBase>,
+    /// That base for each cell of the property read so far.
+    cell_bases: Vec<Option<NumberBase>>,
 }
 
 impl Parser {
@@ -231,6 +238,8 @@ impl Parser {
             nesting: 0,
             unevaluated: 0,
             literals: [0; 3],
+            cell_literal: None,
+            cell_bases: Vec::new(),
         }
     }
 
@@ -627,6 +636,7 @@ impl Parser {
             }
             Some('=' | ';') => {
                 self.literals = [0; 3];
+                self.cell_bases.clear();
                 let (value, references) = if self.eat('=')? {
                     self.value()?
                 } else {
@@ -638,6 +648,7 @@ impl Parser {
                     value,
                     references,
                     base: self.written_base(),
+                    bases: self.cell_bases_beside(self.written_base()),
                     pos,
                 }))
             }
@@ -782,6 +793,7 @@ impl Parser {
                     cells.push(Cell::Phandle {
                         phandle: reference.target.clone(),
                     });
+                    self.cell_bases.push(None);
                     references.push(reference);
                 }
                 Some(_) if self.at_label() => {
@@ -789,7 +801,9 @@ impl Parser {
                 }
                 None => return self.error(pos, "expected `>`, found end of file"),
                 Some(_) => {
+                    self.cell_literal = None;
                     let value = self.primary()?;
+                    self.cell_bases.push(self.cell_literal);
                     // Like dtc, accept negative values: their bits above
                     // the cell width are all ones.
                     if value > mask && (value | mask) != u64::MAX {
@@ -929,6 +943,20 @@ impl Parser {
         }
     }
 
+    /// The cells whose base differs from the property's, trailing ones
+    /// that follow it left out.
+    fn cell_bases_beside(&self, base: Option<NumberBase>) -> Vec<Option<NumberBase>> {
+        let mut bases: Vec<_> = self
+            .cell_bases
+            .iter()
+            .map(|b| b.filter(|b| Some(*b) != base))
+            .collect();
+        while bases.last() == Some(&None) {
+            bases.pop();
+        }
+        bases
+    }
+
     /// Decimal, hex (`0x`) or octal (leading `0`) literal with optional C
     /// suffixes (`U`, `L`, `UL`, `ULL`).
     fn literal(&mut self) -> Result<u64> {
@@ -961,6 +989,9 @@ impl Parser {
         };
         if let Some(k) = kind {
             self.literals[k] += 1;
+            if self.cell_literal.is_none() {
+                self.cell_literal = Some([NumberBase::Hex, NumberBase::Oct, NumberBase::Dec][k]);
+            }
         }
         Ok(value)
     }

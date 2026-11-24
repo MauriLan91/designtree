@@ -22,7 +22,13 @@ export type Property = { name: string, value: PropertyValue,
  * user picked. `None` writes addresses (`reg`, `ranges`) in hex and
  * everything else in decimal.
  */
-base?: NumberBase, };
+base?: NumberBase, 
+/**
+ * Cells written in another base than the property's (US-17.6, D11), by
+ * index among all the value's cells across its `<...>` groups; `None`
+ * and cells past the end follow `base`. Designs from before have none.
+ */
+bases?: Array<NumberBase | null>, };
 
 export type Inherited = { 
 /**

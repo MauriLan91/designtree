@@ -132,6 +132,24 @@ pub struct Property {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub base: Option<NumberBase>,
+    /// Cells written in another base than the property's (US-17.6, D11), by
+    /// index among all the value's cells across its `<...>` groups; `None`
+    /// and cells past the end follow `base`. Designs from before have none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<Vec<Option<NumberBase>>>")]
+    pub bases: Vec<Option<NumberBase>>,
+}
+
+impl Property {
+    /// The base cell `index` of the value is written in.
+    pub fn cell_base(&self, index: usize) -> NumberBase {
+        self.bases
+            .get(index)
+            .copied()
+            .flatten()
+            .or(self.base)
+            .unwrap_or_else(|| NumberBase::default_for(&self.name))
+    }
 }
 
 /// The base numbers of a property are written in.

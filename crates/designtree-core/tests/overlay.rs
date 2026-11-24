@@ -58,6 +58,7 @@ fn set(node: &mut Node, name: &str, value: PropertyValue) {
         name: name.into(),
         value,
         base: None,
+        bases: Vec::new(),
     });
 }
 

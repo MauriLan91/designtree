@@ -971,7 +971,17 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .add-item .link, .prop-table .add-property { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .prop-table .add-property { padding: 2px 4px; color: var(--muted); }
 .prop-table select { padding: 0 0 0 2px; font-family: inherit; font-size: 11px; color: var(--muted); text-overflow: ellipsis; }
-.prop-table .base-select { height: 20px; margin-top: 2px; font-size: 10px; }
+/* The base toggle (US-17.6): the base's letter inside the end of a number
+   field. Quiet until pointed at, so a column of numbers reads as numbers. */
+.prop-table .with-addon { position: relative; display: flex; flex: 1 1 11ch; min-width: 0; }
+.prop-table .entry-cells > .with-addon { min-width: 11ch; }
+.prop-table .with-addon > input:not([type="checkbox"]), .prop-table .with-addon > select { padding-right: 22px; }
+.base-toggle { position: absolute; top: 50%; right: 3px; transform: translateY(-50%); width: 16px; height: 16px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: none; color: var(--muted); font: 600 10px/14px var(--mono); text-align: center; cursor: pointer; opacity: 0.7; transition: opacity 80ms, background-color 80ms; }
+.prop-table tr:hover .base-toggle, .base-toggle:focus-visible { opacity: 1; }
+.base-toggle:hover { border-color: var(--border-strong); background: var(--panel); color: var(--text); }
+.base-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.base-toggle:disabled { cursor: default; opacity: 0.4; }
+.base-toggle.mixed::after { content: ""; position: absolute; top: 1px; right: 1px; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
 .prop-table .add-item td { padding-left: 4px; }
 /* Required properties without a value (US-17.2). */
 .prop-table .missing-row .key-text { color: var(--muted); }

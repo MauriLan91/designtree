@@ -81,6 +81,7 @@ pub fn overlay_on(base: &Graph, base_file: &str) -> Graph {
                     name: "compatible".into(),
                     value: PropertyValue::Strings(node.compatible.clone()),
                     base: None,
+                    bases: Vec::new(),
                 },
             );
         }
@@ -107,6 +108,7 @@ pub fn overlay_on(base: &Graph, base_file: &str) -> Graph {
             name,
             value: PropertyValue::Mixed(chunks),
             base: None,
+            bases: Vec::new(),
         }));
         node.inherited = Some(Inherited {
             file: base_file.to_owned(),

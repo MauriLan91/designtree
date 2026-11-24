@@ -4,7 +4,7 @@
 // into one child row per item, each edited the same way. This module is the
 // table's model: what a value looks like as rows and how an edit of one row
 // changes the value. The component only draws it.
-import { formatCell, type Cell, type NumberBase, type PropertyValue, type ValueChunk } from "./model";
+import { baseAt, formatCell, withCellOffsets, type Bases, type Cell, type NumberBase, type PropertyValue, type ValueChunk } from "./model";
 
 /** The types the table offers for a property. */
 export type ValueKind = "flag" | "string" | "strings" | "cells" | "bytes" | "reference" | "mixed";
@@ -104,10 +104,10 @@ function cellChunk(value: PropertyValue): (ValueChunk & { type: "cells" }) | nul
   return value.type === "mixed" && value.value.length === 1 && value.value[0].type === "cells" ? value.value[0] : null;
 }
 
-function chunkText(chunk: ValueChunk, base: NumberBase): string {
+function chunkText(chunk: ValueChunk, base: Bases, first = 0): string {
   switch (chunk.type) {
     case "cells":
-      return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${chunk.cells.map((c) => cellText(c, base)).join(" ")}>`;
+      return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${chunk.cells.map((c, i) => cellText(c, baseAt(base, first + i))).join(" ")}>`;
     case "string":
       return JSON.stringify(chunk.value);
     case "bytes":
@@ -116,6 +116,8 @@ function chunkText(chunk: ValueChunk, base: NumberBase): string {
       return formatRef(chunk.target);
   }
 }
+
+const mixedTexts = (chunks: ValueChunk[], base: Bases) => withCellOffsets(chunks).map(([c, first]) => chunkText(c, base, first));
 
 /** A chunk of a mixed value from its DTS text: `<…>`, `"…"`, `[…]` or `&ref`. */
 export function parseChunkText(text: string): ValueChunk {
@@ -143,7 +145,7 @@ export function parseChunkText(text: string): ValueChunk {
  * schema says and when there is none, unless the schema's `type` declares a
  * list; typing a second number makes it a list.
  */
-export function itemRows(value: PropertyValue, kind: ValueKind, base: NumberBase, type?: string | null): string[] | null {
+export function itemRows(value: PropertyValue, kind: ValueKind, base: Bases, type?: string | null): string[] | null {
   const items = itemsOf(value, kind, base);
   if (kind === "cells" && (items?.length ?? 0) <= 1 && !/array|matrix/.test(type ?? "")) return null;
   return items;
@@ -151,20 +153,20 @@ export function itemRows(value: PropertyValue, kind: ValueKind, base: NumberBase
 
 /** The child rows of a value, as the text each one edits; null when the
  * value has no parts (a flag, or a plain string). */
-export function itemsOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex"): string[] | null {
+export function itemsOf(value: PropertyValue, kind = kindOf(value), base: Bases = "hex"): string[] | null {
   switch (value.type) {
     case "empty":
       return null;
     case "strings":
       return kind === "string" ? null : value.value;
     case "cells":
-      return value.value.map((c) => formatNumber(c, base));
+      return value.value.map((c, i) => formatNumber(c, baseAt(base, i)));
     case "bytes":
       return value.value.map(formatByte);
     case "mixed":
       if (referenceOf(value) !== null) return null;
       // One chunk of cells is shown as its cells, like a plain cell list.
-      return cellChunk(value)?.cells.map((c) => cellText(c, base)) ?? value.value.map((c) => chunkText(c, base));
+      return cellChunk(value)?.cells.map((c, i) => cellText(c, baseAt(base, i))) ?? mixedTexts(value.value, base);
   }
 }
 
@@ -228,10 +230,10 @@ export function blankItem(value: PropertyValue): string {
 
 /** The one-line text of a value, as the row shows and edits it. A cell
  * list `width` cells per entry reads as its groups, `<a b>, <c d>`. */
-export function summaryOf(value: PropertyValue, kind = kindOf(value), base: NumberBase = "hex", width?: number): string {
+export function summaryOf(value: PropertyValue, kind = kindOf(value), base: Bases = "hex", width?: number): string {
   const cells = cellsOf(value);
   if (cells && width && width > 1 && cells.length > width) {
-    return entriesOf(cells.map((c) => cellText(c, base)), width)
+    return entriesOf(cells.map((c, i) => cellText(c, baseAt(base, i))), width)
       .map((e) => `<${e.join(" ")}>`)
       .join(", ");
   }
@@ -241,11 +243,11 @@ export function summaryOf(value: PropertyValue, kind = kindOf(value), base: Numb
     case "strings":
       return kind === "string" ? value.value[0] : value.value.map((s) => JSON.stringify(s)).join(", ");
     case "cells":
-      return value.value.map((c) => formatNumber(c, base)).join(" ");
+      return value.value.map((c, i) => formatNumber(c, baseAt(base, i))).join(" ");
     case "bytes":
       return value.value.map(formatByte).join(" ");
     case "mixed":
-      return cellChunk(value)?.cells.map((c) => cellText(c, base)).join(" ") ?? value.value.map((c) => chunkText(c, base)).join(", ");
+      return cellChunk(value)?.cells.map((c, i) => cellText(c, baseAt(base, i))).join(" ") ?? mixedTexts(value.value, base).join(", ");
   }
 }
 
@@ -292,7 +294,7 @@ export function parseSummary(kind: ValueKind, text: string, current?: PropertyVa
   }
 }
 
-const cellWords = (text: string) => text.replace(/[<>,]/g, " ").trim().split(/\s+/).filter(Boolean);
+export const cellWords = (text: string) => text.replace(/[<>,]/g, " ").trim().split(/\s+/).filter(Boolean);
 
 // ---------------------------------------------------------------------------
 // Entries (US-17.4): a cell list read as groups of `width` cells, such as

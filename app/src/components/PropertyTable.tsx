@@ -7,11 +7,27 @@
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
-import { baseOf, type DtMacro, type NumberBase, type Property, type PropertySpec, type PropertyValue } from "../model";
+import {
+  baseAt,
+  baseOf,
+  basesOf,
+  literalBase,
+  nextBase,
+  withCellBase,
+  withoutCellBases,
+  withTypedBases,
+  type Bases,
+  type DtMacro,
+  type NumberBase,
+  type Property,
+  type PropertySpec,
+  type PropertyValue,
+} from "../model";
 import {
   KIND_TITLES,
   blank,
   blankItem,
+  cellWords,
   convert,
   entriesOf,
   formatNumber,
@@ -115,6 +131,10 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
       setErrors((s) => ({ ...s, [key]: (e as Error).message }));
     }
   };
+
+  /** Runs an edit of `key`'s row that changes more of property `name` than its value. */
+  const update = (key: string, name: string, edit: (p: Property) => Property | null) =>
+    attempt(key, () => properties.flatMap((q) => (q.name !== name ? [q] : (edit(q) ?? []))), name);
 
   const rename = (from: string, to: string) => {
     const name = to.trim();
@@ -223,7 +243,18 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
           const base = baseOf(p);
-          const items = itemRows(p.value, kind, base, spec?.type);
+          const bases = basesOf(p);
+          const items = itemRows(p.value, kind, bases, spec?.type);
+          // The base toggle of one cell (US-17.6), and of the whole value.
+          const cellToggle = (i: number, label: string) =>
+            isCellList(p.value) && typeof cellsAt(p.value, i) === "number" ? (
+              <BaseToggle base={baseAt(bases, i)} label={label} disabled={locked} onCycle={() => update(`${p.name}[${i}]`, p.name, (q) => withCellBase(q, nextBase(baseAt(bases, i)), i))} />
+            ) : undefined;
+          /** A cell typed in a base that tells keeps it. */
+          const typedCell = (q: Property, i: number, text: string) => {
+            const b = literalBase(text);
+            return b ? withCellBase(q, b, i) : q;
+          };
           // A cell list with a known entry width expands into its entries.
           const width = entryCells?.[p.name] ?? spec?.entry_cells;
           const entries = width && width > 1 && items && isCellList(p.value) ? entriesOf(items, width) : null;
@@ -292,22 +323,6 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       ))}
                     </select>
                   )}
-                  {hasNumbers(p.value) && (
-                    <select
-                      className="base-select"
-                      aria-label={`Number base of ${p.name}`}
-                      title="Show and write the numbers in decimal, hexadecimal or octal"
-                      value={base}
-                      disabled={locked}
-                      onChange={(e) => onChange(properties.map((q) => (q.name === p.name ? { ...q, base: e.target.value as NumberBase } : q)))}
-                    >
-                      {BASES.map(([b, title]) => (
-                        <option key={b} value={b}>
-                          {title}
-                        </option>
-                      ))}
-                    </select>
-                  )}
                   {kind !== "flag" && kind !== "reference" && (
                     <span className="value-size" title="Size of the value in the blob">
                       {sizeText(sizeOf(p.value))}
@@ -318,15 +333,30 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                   <ValueCell
                     name={p.name}
                     value={p.value}
-                    base={base}
+                    base={bases}
                     kind={kind}
+                    toggle={
+                      hasNumbers(p.value) ? (
+                        <BaseToggle
+                          base={base}
+                          label={`Number base of ${p.name}`}
+                          mixed={!!p.bases?.length}
+                          disabled={locked}
+                          onCycle={() => update(p.name, p.name, (q) => withCellBase(q, nextBase(base)))}
+                        />
+                      ) : undefined
+                    }
                     width={entries ? width : undefined}
                     spec={spec}
                     disabled={locked}
                     // Clearing a value removes the property, as deleting its line in the DTS
                     // would; a required one goes back to its to-do row.
                     onCommit={(text) => {
-                      attempt(p.name, () => (text.trim() ? parseSummary(kind, text, p.value) : null));
+                      if (!text.trim()) return attempt(p.name, () => null);
+                      update(p.name, p.name, (q) => {
+                        const next = { ...q, value: parseSummary(kind, text, p.value) };
+                        return isCellList(next.value) ? withTypedBases(next, cellWords(text)) : next;
+                      });
                     }}
                     onSet={(value) => attempt(p.name, () => value)}
                     labels={labels}
@@ -394,7 +424,13 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                                 value={text}
                                 label={`${p.name} entry ${i} cell ${j}`}
                                 disabled={locked}
-                                onCommit={(t) => attempt(key, () => withItem(p.value, i * width! + j, t), p.name)}
+                                toggle={cellToggle(i * width! + j, `Number base of ${p.name} entry ${i} cell ${j}`)}
+                                onCommit={(t, typed) =>
+                                  update(key, p.name, (q) => {
+                                    const next = { ...q, value: withItem(p.value, i * width! + j, t) };
+                                    return typed ? typedCell(next, i * width! + j, t) : next;
+                                  })
+                                }
                               />
                             ))}
                           </div>
@@ -403,7 +439,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       </td>
                       <td>
                         {!locked && (
-                          <button className="row-remove" aria-label={`Remove entry ${i}`} onClick={() => attempt(key, () => withoutEntry(p.value, i, width!), p.name)}>
+                          <button className="row-remove" aria-label={`Remove entry ${i}`} onClick={() => update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutEntry(p.value, i, width!) }, i * width!, width!))}>
                             <X size={12} aria-hidden />
                           </button>
                         )}
@@ -429,7 +465,13 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                             value={text}
                             label={`${p.name} cell ${i}`}
                             disabled={locked}
-                            onCommit={(t) => attempt(key, () => withItem(p.value, i, t), p.name)}
+                            toggle={cellToggle(i, `Number base of ${p.name} cell ${i}`)}
+                            onCommit={(t, typed) =>
+                              update(key, p.name, (q) => {
+                                const next = { ...q, value: withItem(p.value, i, t) };
+                                return typed ? typedCell(next, i, t) : next;
+                              })
+                            }
                           />
                         ) : (
                           <CommitInput
@@ -444,7 +486,12 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       </td>
                       <td>
                         {!locked && (
-                          <button className="row-remove" aria-label={`Remove item ${i}`} onClick={() => attempt(key, () => withoutItem(p.value, i), p.name)}>
+                          <button className="row-remove" aria-label={`Remove item ${i}`} onClick={() =>
+                              isCellList(p.value)
+                                ? update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutItem(p.value, i) }, i))
+                                : attempt(key, () => withoutItem(p.value, i), p.name)
+                            }
+                          >
                             <X size={12} aria-hidden />
                           </button>
                         )}
@@ -588,11 +635,28 @@ function parseUntyped(text: string): PropertyValue {
   }
 }
 
-const BASES: [NumberBase, string][] = [
-  ["dec", "Dec"],
-  ["hex", "Hex"],
-  ["oct", "Oct"],
-];
+const BASE_NAMES: Record<NumberBase, string> = { dec: "decimal", hex: "hexadecimal", oct: "octal" };
+
+/**
+ * The base of a number field (US-17.6): its letter inside the field, h, d
+ * or o. One click goes on to the next base and the field shows the number
+ * in it at once; the tooltip says which base comes next.
+ */
+function BaseToggle({ base, label, mixed, disabled, onCycle }: { base: NumberBase; label: string; mixed?: boolean; disabled?: boolean; onCycle: () => void }) {
+  const next = nextBase(base);
+  const title = `Shown in ${BASE_NAMES[base]}${mixed ? " (some cells have their own base)" : ""}. Click for ${BASE_NAMES[next]}${mixed ? ", for every cell" : ""}.`;
+  return (
+    <button type="button" className={`base-toggle base-${base}${mixed ? " mixed" : ""}`} aria-label={`${label}: ${BASE_NAMES[base]}`} title={title} disabled={disabled} onClick={onCycle}>
+      {base[0]}
+    </button>
+  );
+}
+
+/** Cell `i` of a cell list. */
+function cellsAt(v: PropertyValue, i: number) {
+  if (v.type === "cells") return v.value[i];
+  return v.type === "mixed" && v.value[0]?.type === "cells" ? v.value[0].cells[i] : undefined;
+}
 
 /** Whether a value holds a number a base applies to. */
 function hasNumbers(v: PropertyValue): boolean {
@@ -623,11 +687,14 @@ function ValueCell({
   onSet,
   onClear,
   labels,
+  toggle,
 }: {
   labels: string[];
   name: string;
   value: PropertyValue;
-  base: NumberBase;
+  base: Bases;
+  /** The base toggle drawn inside the field. */
+  toggle?: ReactNode;
   kind: ValueKind;
   /** Cells per entry, when the value reads as `<…>, <…>` groups. */
   width?: number;
@@ -668,18 +735,20 @@ function ValueCell({
   }
   if (kind === "cells" && spec?.enum?.length && spec.enum.every((v) => typeof v === "number") && isCellList(value) && summaryOf(value).split(" ").length <= 1) {
     const current = summaryOf(value, kind, base);
-    return (
+    const first = baseAt(base, 0);
+    const select = (
       <select aria-label={name} value={current} disabled={disabled} onChange={(e) => onCommit(e.target.value)}>
-        {!spec.enum.map((v) => formatNumber(v as number, base)).includes(current) && <option value={current}>{current || "(select)"}</option>}
+        {!spec.enum.map((v) => formatNumber(v as number, first)).includes(current) && <option value={current}>{current || "(select)"}</option>}
         {spec.enum.map((v) => (
-          <option key={String(v)} value={formatNumber(v as number, base)}>
+          <option key={String(v)} value={formatNumber(v as number, first)}>
             {String(v)}
           </option>
         ))}
       </select>
     );
+    return toggle ? <WithAddon addon={toggle}>{select}</WithAddon> : select;
   }
-  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} multiline={kind === "string"} disabled={disabled} onCommit={onCommit} />;
+  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} multiline={kind === "string"} disabled={disabled} onCommit={onCommit} addon={toggle} />;
 }
 
 /** Characters past which a string gets a box of several lines. */
@@ -695,10 +764,13 @@ function CommitInput({
   onInput,
   placeholder,
   multiline,
+  addon,
 }: {
   value: string;
   label: string;
   placeholder?: string;
+  /** A control drawn inside the field, at its end (the base toggle). */
+  addon?: ReactNode;
   /** A long text (a string over a line) is edited in a box of several
    * lines (US-17.8). Enter still applies it; Shift+Enter breaks the line. */
   multiline?: boolean;
@@ -740,7 +812,7 @@ function CommitInput({
       />
     );
   }
-  return (
+  const input = (
     <input
       aria-label={label}
       value={text}
@@ -759,14 +831,37 @@ function CommitInput({
       }}
     />
   );
+  return addon ? <WithAddon addon={addon}>{input}</WithAddon> : input;
 }
+
+/** A field with a control inside its end. */
+const WithAddon = ({ addon, children }: { addon: ReactNode; children: ReactNode }) => (
+  <span className="with-addon">
+    {children}
+    {addon}
+  </span>
+);
 
 /**
  * A cell: a number, a reference, or a `dt-bindings` constant, suggested as
  * it is typed. A constant becomes its number when the loaded kernel knows it,
  * as in the specifier editor; otherwise its name is kept.
  */
-function CellInput({ value, label, disabled, onCommit }: { value: string; label: string; disabled?: boolean; onCommit: (text: string) => void }) {
+/** A cell: a number, a macro or a reference. `typed` is false when the
+ * text is a macro's value filled in for it, whose base tells nothing. */
+function CellInput({
+  value,
+  label,
+  disabled,
+  onCommit,
+  toggle,
+}: {
+  value: string;
+  label: string;
+  disabled?: boolean;
+  onCommit: (text: string, typed: boolean) => void;
+  toggle?: ReactNode;
+}) {
   const [suggestions, setSuggestions] = useState<DtMacro[]>([]);
   const id = useId();
   const latest = useRef(0);
@@ -789,13 +884,13 @@ function CellInput({ value, label, disabled, onCommit }: { value: string; label:
     })();
     if (typeof cell === "string" && inTauri) {
       const [n] = await backend.resolveDtMacros([cell]).catch(() => [null]);
-      if (typeof n === "number") return onCommit(formatNumber(n));
+      if (typeof n === "number") return onCommit(formatNumber(n), false);
     }
-    onCommit(text);
+    onCommit(text, true);
   };
   return (
     <>
-      <CommitInput value={value} label={label} disabled={disabled} list={id} onInput={search} onCommit={commit} />
+      <CommitInput value={value} label={label} disabled={disabled} list={id} onInput={search} onCommit={commit} addon={toggle} />
       <datalist id={id}>
         {suggestions.map((m) => (
           <option key={`${m.header}:${m.name}`} value={m.name} label={`${formatNumber(m.value)} · ${m.header}`} />
