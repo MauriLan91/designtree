@@ -4,7 +4,7 @@
 // The rows are drawn from the model in propertyTable.ts. The binding's
 // required properties are pinned on top and never go away (US-17.2): one
 // without a value is an empty to-do row until it gets one.
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Minus, Plus, RotateCcw, X } from "lucide-react";
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { backend, inTauri } from "../backend";
 import {
@@ -24,11 +24,13 @@ import {
   type PropertyValue,
 } from "../model";
 import {
+  KIND_CHIPS,
   KIND_TITLES,
   blank,
   blankItem,
   cellWords,
   convert,
+  elideMiddle,
   entriesOf,
   formatNumber,
   HEX_LINE,
@@ -43,6 +45,7 @@ import {
   sizeText,
   summaryOf,
   itemRows,
+  typeChip,
   withEntry,
   withHexLine,
   withItem,
@@ -109,6 +112,13 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
   const [pages, setPages] = useState<Record<string, number>>({});
   // A node with thousands of properties draws the first ones until asked (US-11.3).
   const [allRows, setAllRows] = useState(false);
+  const [keyWidth, setKeyWidth] = useKeyWidth();
+  /** Characters of a key that fit its column: the column less the twisty,
+   * the field's padding, the size (`16 B`, 10px digits) and the required
+   * mark, at the mono's 0.6em per character. */
+  const keyFit = (size = "", required = false) =>
+    Math.max(4, Math.floor((keyWidth - 30 - (size ? size.length * 6 + 6 : 0) - (required ? 10 : 0)) / 7.2));
+  const keyChars = keyFit("", true);
   // Errors are keyed by row; any change of the properties can shift the rows.
   useEffect(() => setErrors({}), [properties]);
   const specOf = (name: string) => specs.find((s) => s.name === name);
@@ -200,13 +210,17 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                 {expanded ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
               </button>
               <span className="key-text" title={property}>
-                {property}
+                {elideMiddle(property, keyChars)}
               </span>
               {required && <b title="Required by the binding">*</b>}
             </div>
           </th>
-          <td className="type">{refs.length > 1 ? "Phandle list" : "Phandle"}</td>
-          <td className="ref-summary">{refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map((c) => formatNumber(c)).join(" ")}` : ""}`).join(", ")}</td>
+          <td>
+            <TypeChip short={refs.length > 1 ? "phandle[]" : "phandle"} title={refs.length > 1 ? "Phandle list" : "Phandle"} />
+          </td>
+          <td className="ref-summary" title={refSummary(refs)}>
+            {refSummary(refs)}
+          </td>
           <td />
         </tr>
         {expanded &&
@@ -215,7 +229,9 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
               <th scope="row">
                 <span className="item-index ref-target">{r.target}</span>
               </th>
-              <td className="type">Cells</td>
+              <td>
+                <TypeChip short="cells" title="Specifier cells" />
+              </td>
               <td colSpan={2}>
                 <SpecifierEditor compact disabled={locked} args={r.args} expected={r.expected} onChange={(args) => onReferenceChange(r.id, args)} />
               </td>
@@ -227,9 +243,18 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
 
   return (
     <table className="prop-table">
+      <colgroup>
+        <col style={{ width: keyWidth }} />
+        <col className="col-type" />
+        <col />
+        <col className="col-actions" />
+      </colgroup>
       <thead>
         <tr>
-          <th scope="col">Key</th>
+          <th scope="col" className="key-head">
+            Key
+            <KeyResizer width={keyWidth} onResize={setKeyWidth} />
+          </th>
           <th scope="col">Type</th>
           <th scope="col">Value</th>
           <th aria-label="Remove" />
@@ -239,7 +264,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
         {(allRows ? rows : rows.slice(0, ROW_LIMIT)).map(({ name, prop: p, refs }) => {
           const spec = specOf(name);
           if (refs && !p) return refRows(name, refs, spec?.required ?? false);
-          if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
+          if (!p) return <MissingRow key={name} spec={spec!} keyChars={keyChars} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
           const fixed = specKind(spec);
           const kind = kindOf(p.value, fixed === "strings" || lists.has(p.name));
           const base = baseOf(p);
@@ -268,6 +293,20 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
           const shown = <T,>(list: T[]) => (total > PAGE ? list.slice(first, first + PAGE) : list);
           const warning = errors[p.name] ?? checkValue(spec ?? { name: p.name, required: false }, p.value, width);
           const isTodo = todo?.includes(p.name);
+          const size = kind !== "flag" && kind !== "reference" ? sizeText(sizeOf(p.value)) : "";
+          // Items are added at the end of the list, on its last row (US-17.7).
+          const what = entries ? "entry" : itemKind(p.value).toLowerCase();
+          const addItem = !locked && (
+            <button
+              className="row-add"
+              aria-label={`Add ${what} to ${p.name}`}
+              title={`Add ${what}`}
+              onClick={() => attempt(p.name, () => (entries ? withEntry(p.value, width!) : withItem(p.value, items!.length, blankItem(p.value))))}
+            >
+              <Plus size={12} aria-hidden />
+            </button>
+          );
+          const last = (i: number) => i === total - 1;
           return (
             <Fragment key={p.name}>
               <tr className={`${isTodo ? "todo " : ""}${warning ? "invalid" : ""}`}>
@@ -284,50 +323,46 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                     </button>
                     <CommitInput
                       value={p.name}
+                      shown={elideMiddle(p.name, keyFit(size, spec?.required))}
+                      title={spec?.description ? `${p.name}\n${spec.description}` : p.name}
                       label="Property name"
                       disabled={locked || spec?.required}
                       onCommit={(to) => rename(p.name, to)}
                     />
                     {spec?.required && <b title="Required by the binding">*</b>}
+                    {size && (
+                      <span className="value-size" title="Size of the value in the blob">
+                        {size}
+                      </span>
+                    )}
                   </div>
                 </th>
                 <td>
-                  {fixed ? (
-                    <span className="type" title={`Type from the binding: ${spec!.type}`}>
-                      {spec!.type}
-                    </span>
-                  ) : referencesOnly && kind === "reference" ? (
-                    <span className="type" title="Every property of this node is a reference">
-                      Reference
-                    </span>
-                  ) : (
-                    <select
-                      aria-label={`Type of ${p.name}`}
-                      value={kind}
-                      disabled={locked}
-                      onChange={(e) => {
-                        const to = e.target.value as ValueKind;
-                        setLists((s) => {
-                          const next = new Set(s);
-                          if (to === "strings") next.add(p.name);
-                          else next.delete(p.name);
-                          return next;
-                        });
-                        attempt(p.name, () => convert(p.value, to));
-                      }}
-                    >
-                      {(referencesOnly ? [kind, "reference" as const] : KINDS).map((k) => (
-                        <option key={k} value={k}>
-                          {KIND_TITLES[k]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {kind !== "flag" && kind !== "reference" && (
-                    <span className="value-size" title="Size of the value in the blob">
-                      {sizeText(sizeOf(p.value))}
-                    </span>
-                  )}
+                  <span className="type-cell">
+                    {fixed ? (
+                      <TypeChip short={typeChip(spec!.type!)} title={`Type from the binding: ${spec!.type}`} />
+                    ) : referencesOnly && kind === "reference" ? (
+                      <TypeChip short={KIND_CHIPS.reference} title="Every property of this node is a reference" />
+                    ) : (
+                      <TypeChip
+                        short={KIND_CHIPS[kind]}
+                        title={`${KIND_TITLES[kind]}: click to change the type`}
+                        label={`Type of ${p.name}`}
+                        value={kind}
+                        options={referencesOnly ? [kind, "reference" as const] : KINDS}
+                        disabled={locked}
+                        onPick={(to) => {
+                          setLists((s) => {
+                            const next = new Set(s);
+                            if (to === "strings") next.add(p.name);
+                            else next.delete(p.name);
+                            return next;
+                          });
+                          attempt(p.name, () => convert(p.value, to));
+                        }}
+                      />
+                    )}
+                  </span>
                 </td>
                 <td>
                   <ValueCell
@@ -434,14 +469,17 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                               />
                             ))}
                           </div>
+                          {last(i) && addItem}
                         </div>
                         {errors[key] && <span className="row-error">{errors[key]}</span>}
                       </td>
                       <td>
                         {!locked && (
-                          <button className="row-remove" aria-label={`Remove entry ${i}`} onClick={() => update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutEntry(p.value, i, width!) }, i * width!, width!))}>
-                            <X size={12} aria-hidden />
-                          </button>
+                          <span className="item-actions">
+                            <button className="row-remove" aria-label={`Remove entry ${i}`} title="Remove this entry" onClick={() => update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutEntry(p.value, i, width!) }, i * width!, width!))}>
+                              <Minus size={12} aria-hidden />
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -458,63 +496,67 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
                       <th scope="row">
                         <span className="item-index">{i}</span>
                       </th>
-                      <td className="type">{itemKind(p.value)}</td>
                       <td>
-                        {isCellList(p.value) ? (
-                          <CellInput
-                            value={text}
-                            label={`${p.name} cell ${i}`}
-                            disabled={locked}
-                            toggle={cellToggle(i, `Number base of ${p.name} cell ${i}`)}
-                            onCommit={(t, typed) =>
-                              update(key, p.name, (q) => {
-                                const next = { ...q, value: withItem(p.value, i, t) };
-                                return typed ? typedCell(next, i, t) : next;
-                              })
-                            }
-                          />
-                        ) : (
-                          <CommitInput
-                            value={text}
-                            label={`${p.name} item ${i}`}
-                            multiline={p.value.type === "strings"}
-                            disabled={locked}
-                            onCommit={(t) => attempt(key, () => withItem(p.value, i, t), p.name)}
-                          />
-                        )}
+                        <TypeChip short={itemKind(p.value).toLowerCase()} title={itemKind(p.value)} />
+                      </td>
+                      <td>
+                        <span className="item-value">
+                          {isCellList(p.value) ? (
+                            <CellInput
+                              value={text}
+                              label={`${p.name} cell ${i}`}
+                              disabled={locked}
+                              toggle={cellToggle(i, `Number base of ${p.name} cell ${i}`)}
+                              onCommit={(t, typed) =>
+                                update(key, p.name, (q) => {
+                                  const next = { ...q, value: withItem(p.value, i, t) };
+                                  return typed ? typedCell(next, i, t) : next;
+                                })
+                              }
+                            />
+                          ) : (
+                            <CommitInput
+                              value={text}
+                              title={text}
+                              label={`${p.name} item ${i}`}
+                              multiline={p.value.type === "strings"}
+                              disabled={locked}
+                              onCommit={(t) => attempt(key, () => withItem(p.value, i, t), p.name)}
+                            />
+                          )}
+                          {last(i) && addItem}
+                        </span>
                         {errors[key] && <span className="row-error">{errors[key]}</span>}
                       </td>
                       <td>
                         {!locked && (
-                          <button className="row-remove" aria-label={`Remove item ${i}`} onClick={() =>
-                              isCellList(p.value)
-                                ? update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutItem(p.value, i) }, i))
-                                : attempt(key, () => withoutItem(p.value, i), p.name)
-                            }
-                          >
-                            <X size={12} aria-hidden />
-                          </button>
+                          <span className="item-actions">
+                            <button
+                              className="row-remove"
+                              aria-label={`Remove item ${i}`}
+                              title={`Remove this ${what}`}
+                              onClick={() =>
+                                isCellList(p.value)
+                                  ? update(key, p.name, (q) => withoutCellBases({ ...q, value: withoutItem(p.value, i) }, i))
+                                  : attempt(key, () => withoutItem(p.value, i), p.name)
+                              }
+                            >
+                              <Minus size={12} aria-hidden />
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>
                   );
                 })}
-              {expanded && !locked && !grid && (
-                <tr className="item-row add-item">
+              {expanded && !locked && !grid && total === 0 && (
+                <tr className="item-row empty-list">
                   <th scope="row" />
                   <td colSpan={3}>
-                    {entries ? (
-                      <button className="link" onClick={() => attempt(p.name, () => withEntry(p.value, width!))}>
-                        <Plus size={12} aria-hidden /> Add entry
-                      </button>
-                    ) : (
-                      <button
-                        className="link"
-                        onClick={() => attempt(p.name, () => withItem(p.value, items!.length, blankItem(p.value)))}
-                      >
-                        <Plus size={12} aria-hidden /> Add {itemKind(p.value).toLowerCase()}
-                      </button>
-                    )}
+                    <span className="item-value">
+                      <span className="row-hint">No {what === "entry" ? "entries" : `${what}s`}</span>
+                      {addItem}
+                    </span>
                   </td>
                 </tr>
               )}
@@ -556,11 +598,13 @@ function ResetButton({ spec, onReset }: { spec: PropertySpec; onReset: () => voi
 /** A required property the node does not have yet: typing a value adds it. */
 function MissingRow({
   spec,
+  keyChars,
   locked,
   onSet,
   onReset,
 }: {
   spec: PropertySpec;
+  keyChars: number;
   locked: boolean;
   onSet: (value: PropertyValue) => void;
   onReset: () => void;
@@ -585,12 +629,14 @@ function MissingRow({
       <th scope="row" title={spec.description ?? undefined}>
         <div className="key">
           <span className="twisty" aria-hidden />
-          <span className="key-text">{spec.name}</span>
+          <span className="key-text" title={spec.name}>
+            {elideMiddle(spec.name, keyChars)}
+          </span>
           <b title="Required by the binding">*</b>
         </div>
       </th>
       <td>
-        <span className="type">{spec.type ?? "Any"}</span>
+        <TypeChip short={spec.type ? typeChip(spec.type) : "any"} title={spec.type ? `Type from the binding: ${spec.type}` : "Any type"} />
       </td>
       <td>
         {reference ? (
@@ -633,6 +679,110 @@ function parseUntyped(text: string): PropertyValue {
   } catch {
     return parseSummary("cells", text);
   }
+}
+
+const refSummary = (refs: Reference[]) =>
+  refs.map((r) => `${r.target}${r.args.length ? ` ${r.args.map((c) => formatNumber(c)).join(" ")}` : ""}`).join(", ");
+
+/**
+ * The type of a row as a short chip (US-17.7): `u32[]`, `str`, `cells`.
+ * With options, a click opens the type list; a native select lies over the
+ * chip, so the list and the keyboard work as everywhere else.
+ */
+function TypeChip<T extends string>({
+  short,
+  title,
+  label,
+  value,
+  options,
+  disabled,
+  onPick,
+}: {
+  short: string;
+  title: string;
+  label?: string;
+  value?: T;
+  options?: readonly T[];
+  disabled?: boolean;
+  onPick?: (to: T) => void;
+}) {
+  if (!options || !onPick) {
+    return (
+      <span className="type-chip" title={title}>
+        {short}
+      </span>
+    );
+  }
+  return (
+    <span className={`type-chip pick${disabled ? " disabled" : ""}`} title={title}>
+      {short}
+      <ChevronDown size={10} aria-hidden />
+      <select aria-label={label} value={value} disabled={disabled} onChange={(e) => onPick(e.target.value as T)}>
+        {options.map((k) => (
+          <option key={k} value={k}>
+            {KIND_TITLES[k as ValueKind] ?? k}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+const KEY_WIDTH = { key: "designtree.propertyKeyWidth", min: 72, max: 360, initial: 120 };
+
+/** The width of the Key column, kept for the user across nodes and sessions. */
+function useKeyWidth(): [number, (width: number) => void] {
+  const [width, setWidth] = useState(() => {
+    const stored = Number(localStorage.getItem(KEY_WIDTH.key));
+    return Number.isFinite(stored) && stored >= KEY_WIDTH.min ? Math.min(stored, KEY_WIDTH.max) : KEY_WIDTH.initial;
+  });
+  const set = (w: number) => {
+    const clamped = Math.round(Math.min(KEY_WIDTH.max, Math.max(KEY_WIDTH.min, w)));
+    setWidth(clamped);
+    try {
+      localStorage.setItem(KEY_WIDTH.key, String(clamped));
+    } catch {
+      // Storage can be blocked; the width then lasts for this session.
+    }
+  };
+  return [width, set];
+}
+
+/** The edge of the Key header: drag to resize, arrows to nudge, double-click to reset. */
+function KeyResizer({ width, onResize }: { width: number; onResize: (width: number) => void }) {
+  return (
+    <span
+      className="col-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Key column width"
+      aria-valuenow={width}
+      aria-valuemin={KEY_WIDTH.min}
+      aria-valuemax={KEY_WIDTH.max}
+      tabIndex={0}
+      title="Drag to resize the Key column; double-click to reset"
+      onPointerDown={(e) => {
+        const start = e.clientX;
+        const from = width;
+        const target = e.currentTarget;
+        target.setPointerCapture(e.pointerId);
+        const move = (m: PointerEvent) => onResize(from + m.clientX - start);
+        const up = () => {
+          target.removeEventListener("pointermove", move);
+          target.removeEventListener("pointerup", up);
+        };
+        target.addEventListener("pointermove", move);
+        target.addEventListener("pointerup", up);
+      }}
+      onDoubleClick={() => onResize(KEY_WIDTH.initial)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") onResize(width - 8);
+        else if (e.key === "ArrowRight") onResize(width + 8);
+        else return;
+        e.preventDefault();
+      }}
+    />
+  );
 }
 
 const BASE_NAMES: Record<NumberBase, string> = { dec: "decimal", hex: "hexadecimal", oct: "octal" };
@@ -748,7 +898,8 @@ function ValueCell({
     );
     return toggle ? <WithAddon addon={toggle}>{select}</WithAddon> : select;
   }
-  return <CommitInput value={summaryOf(value, kind, base, width)} label={name} multiline={kind === "string"} disabled={disabled} onCommit={onCommit} addon={toggle} />;
+  const text = summaryOf(value, kind, base, width);
+  return <CommitInput value={text} title={text} label={name} multiline={kind === "string"} disabled={disabled} onCommit={onCommit} addon={toggle} />;
 }
 
 /** Characters past which a string gets a box of several lines. */
@@ -765,9 +916,15 @@ function CommitInput({
   placeholder,
   multiline,
   addon,
+  shown: display,
+  title,
 }: {
   value: string;
   label: string;
+  /** What the field shows while it is not being edited (a key elided in the middle). */
+  shown?: string;
+  /** The tooltip: the full text, when the field may cut it. */
+  title?: string;
   placeholder?: string;
   /** A control drawn inside the field, at its end (the base toggle). */
   addon?: ReactNode;
@@ -786,6 +943,7 @@ function CommitInput({
     shown.current = value;
     if (text !== value) setText(value);
   }
+  const [editing, setEditing] = useState(false);
   const commit = () => text !== value && onCommit(text);
   if (multiline && (value.length > LONG_TEXT || value.includes("\n"))) {
     return (
@@ -815,8 +973,10 @@ function CommitInput({
   const input = (
     <input
       aria-label={label}
-      value={text}
+      value={display !== undefined && !editing && text === value ? display : text}
+      title={title}
       disabled={disabled}
+      onFocus={() => setEditing(true)}
       list={list}
       placeholder={placeholder}
       spellCheck={false}
@@ -824,7 +984,10 @@ function CommitInput({
         setText(e.target.value);
         onInput?.(e.target.value);
       }}
-      onBlur={commit}
+      onBlur={() => {
+        setEditing(false);
+        commit();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit();
         if (e.key === "Escape") setText(value);

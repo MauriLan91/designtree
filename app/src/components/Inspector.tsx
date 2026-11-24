@@ -151,7 +151,8 @@ function NodeInspector({
   const locked = data.inherited !== undefined && !overriding;
 
   return (
-    <section className="inspector">
+    // Text mode gives the properties the rest of the pane (US-17.7).
+    <section className={raw ? "inspector text-mode" : "inspector"}>
       <h2>Node</h2>
       {binding?.title && <p className="hint">{binding.title}</p>}
       {data.inherited && (

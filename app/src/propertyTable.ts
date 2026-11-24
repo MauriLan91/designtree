@@ -465,3 +465,36 @@ export function withHexLine(bytes: number[], line: number, text: string): number
 
 /** Items per page of a long list (US-17.8). */
 export const PAGE = 64;
+
+// ---------------------------------------------------------------------------
+// Compact rows (US-17.7)
+
+/** `text` cut to `max` characters by taking out its middle, so the start
+ * (`qcom,`) and the end (`-supply`) that tell keys apart both stay. */
+export function elideMiddle(text: string, max: number): string {
+  if (text.length <= max) return text;
+  if (max < 3) return text.slice(0, Math.max(0, max));
+  const keep = max - 1;
+  const head = Math.ceil(keep / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - (keep - head))}`;
+}
+
+/** The short name of a table type, for the type chip. */
+export const KIND_CHIPS: Record<ValueKind, string> = {
+  flag: "bool",
+  string: "str",
+  strings: "str[]",
+  cells: "cells",
+  bytes: "bytes",
+  reference: "ref",
+  mixed: "mixed",
+};
+
+/** The short name of a schema type (`uint32-array` → `u32[]`). */
+export function typeChip(type: string): string {
+  const t = type.replace(/^non-unique-/, "");
+  const int = /^(u?)int(8|16|32|64)(-array|-matrix)?$/.exec(t);
+  if (int) return `${int[1] ? "u" : "i"}${int[2]}${int[3] === "-array" ? "[]" : int[3] ? "[][]" : ""}`;
+  const known: Record<string, string> = { flag: "bool", string: "str", "string-array": "str[]", "phandle-array": "phandle[]", address: "addr" };
+  return known[t] ?? t;
+}
