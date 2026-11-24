@@ -81,6 +81,9 @@ function specKind(spec: PropertySpec | undefined): ValueKind | null {
 }
 
 
+/** Rows drawn before "Show more": past it a table of every row is slow to draw. */
+const ROW_LIMIT = 100;
+
 export function PropertyTable({ properties, specs, todo, references, locked, onChange, onReferenceChange, entryCells, labels = [], referencesOnly }: Props) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -88,6 +91,8 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
   const [lists, setLists] = useState<ReadonlySet<string>>(new Set());
   // The page shown of each long list (US-17.8).
   const [pages, setPages] = useState<Record<string, number>>({});
+  // A node with thousands of properties draws the first ones until asked (US-11.3).
+  const [allRows, setAllRows] = useState(false);
   // Errors are keyed by row; any change of the properties can shift the rows.
   useEffect(() => setErrors({}), [properties]);
   const specOf = (name: string) => specs.find((s) => s.name === name);
@@ -211,7 +216,7 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
         </tr>
       </thead>
       <tbody>
-        {rows.map(({ name, prop: p, refs }) => {
+        {(allRows ? rows : rows.slice(0, ROW_LIMIT)).map(({ name, prop: p, refs }) => {
           const spec = specOf(name);
           if (refs && !p) return refRows(name, refs, spec?.required ?? false);
           if (!p) return <MissingRow key={name} spec={spec!} locked={locked} onSet={(value) => onChange([...properties, { name, value }])} onReset={() => reset(name)} />;
@@ -469,6 +474,15 @@ export function PropertyTable({ properties, specs, todo, references, locked, onC
             </Fragment>
           );
         })}
+        {!allRows && rows.length > ROW_LIMIT && (
+          <tr className="more-rows">
+            <td colSpan={4}>
+              <button className="link" onClick={() => setAllRows(true)}>
+                Show {rows.length - ROW_LIMIT} more properties
+              </button>
+            </td>
+          </tr>
+        )}
         {!locked && (
           <tr className="add-row">
             <td colSpan={4}>

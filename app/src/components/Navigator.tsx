@@ -7,7 +7,13 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { KINDS, kindOf } from "../categories";
 import { isDtNode, type FlowNode } from "../model";
 import type { TreeRow } from "../scopes";
+import { scrollRowIntoView, useVisibleRows } from "../visibleRows";
 import { SearchField } from "./Palette";
+
+/** Height of a row, in pixels; the stylesheet gives rows the same. */
+const ROW = 26;
+/** The element that scrolls the Outline. */
+const SCROLLER = ".outline-slot";
 
 interface Props {
   rows: TreeRow[];
@@ -26,9 +32,13 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
   const list = useRef<HTMLUListElement>(null);
   const current = rows.findIndex((r) => selected.has(r.id));
 
+  // Only the rows in view are drawn (US-11.3): a 5,000-node tree opened
+  // all the way, or filtered, stays fluid.
+  const { start, end } = useVisibleRows(list, SCROLLER, rows.length, ROW);
+
   // Keep the selection in view when it changes elsewhere (canvas, text).
   useEffect(() => {
-    if (current >= 0) list.current?.querySelector(`[data-row="${current}"]`)?.scrollIntoView({ block: "nearest" });
+    if (current >= 0) scrollRowIntoView(list.current, SCROLLER, current, ROW);
   }, [current]);
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -68,8 +78,16 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
         placeholder="Name, label, compatible, path, phandle"
         onKeyDown={onFilterKey}
       />
-      <ul ref={list} role="tree" aria-label="Devicetree" tabIndex={0} onKeyDown={onKeyDown}>
-        {rows.map((r, i) => {
+      <ul
+        ref={list}
+        role="tree"
+        aria-label="Devicetree"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        style={{ paddingTop: start * ROW, paddingBottom: (rows.length - end) * ROW }}
+      >
+        {rows.slice(start, end).map((r, k) => {
+          const i = start + k;
           const n = nodes.get(r.id);
           if (!n || !isDtNode(n)) return null;
           const name = n.data.unitAddress ? `${n.data.name}@${n.data.unitAddress}` : n.data.name;

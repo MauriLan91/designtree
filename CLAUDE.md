@@ -52,7 +52,10 @@ CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, 
 - **G5 benchmark** (1,000-node generated board): `designtree bench` times the
   backend; for the canvas, `npm run build` in `app`, then
   `node bench/g5.mjs <design.json>` (needs the `playwright` package; write the
-  design with `designtree bench --design`). CI reports both next to the last run on main.
+  design with `designtree bench --design`). For the long lists (US-11.3),
+  `node bench/lists.mjs <design.json> --problems 8000` on a 5,000-node design
+  adds generated problems and times the Problems tab and the Outline. CI
+  reports all three next to the last run on main.
 - **User guide**: `mdbook build docs/guide` (mdBook 0.5); update the chapter
   when a feature's UI changes.
 - **Releases**: `scripts/bump-version.sh <version>` sets the version and writes

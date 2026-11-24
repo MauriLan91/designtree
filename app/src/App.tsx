@@ -598,6 +598,17 @@ export function Editor({
     return () => clearTimeout(t);
   }, [schemaKey, kernel]);
 
+  // In a plain browser, `?problems=<url>` stands in for the schema check:
+  // the benchmark of long lists (US-11.3) loads a design's problems so.
+  useEffect(() => {
+    if (inTauri) return;
+    const url = new URLSearchParams(window.location.search).get("problems");
+    if (!url) return;
+    fetch(url)
+      .then((r) => r.json())
+      .then((problems: Problem[]) => setSchema({ checking: false, problems }));
+  }, []);
+
 
   useEffect(() => {
     if (!showInterrupts || !inTauri) return;

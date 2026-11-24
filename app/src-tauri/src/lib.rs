@@ -614,7 +614,7 @@ fn base64(bytes: &[u8]) -> String {
 #[tauri::command]
 fn save_design(path: PathBuf, design: Graph) -> Result<(), String> {
     writable(&path, &["json"])?;
-    let json = serde_json::to_string_pretty(&design).map_err(|e| e.to_string())?;
+    let json = designtree_core::to_design_json(&design).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())
 }
 
