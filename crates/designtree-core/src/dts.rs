@@ -336,10 +336,7 @@ fn override_body<'a>(
         .flat_map(|b| &b.properties)
         .map(|p| {
             let value = with_primary_labels(primary_labels, &p.value);
-            (
-                p.name.as_str(),
-                one_line(&property_items(&value, base_of(p))),
-            )
+            (p.name.as_str(), one_line(&property_items(&value, p)))
         })
         .collect();
 
@@ -441,7 +438,7 @@ fn with_primary_labels(
 fn node_properties(graph: &Graph, node: &Node) -> Vec<(String, Option<Vec<Item>>)> {
     let mut props = Vec::new();
     for prop in &node.properties {
-        let mut items = property_items(&prop.value, base_of(prop));
+        let mut items = property_items(&prop.value, prop);
         if let (Some(items), Some(width)) = (&mut items, entry_cells(graph, node, &prop.name)) {
             *items = in_entries(std::mem::take(items), width);
         }
@@ -501,17 +498,11 @@ fn in_entries(items: Vec<Item>, width: usize) -> Vec<Item> {
     }
 }
 
-/// The base a property's numbers are written in.
-fn base_of(property: &Property) -> NumberBase {
-    property
-        .base
-        .unwrap_or_else(|| NumberBase::default_for(&property.name))
-}
-
-fn property_items(value: &PropertyValue, base: NumberBase) -> Option<Vec<Item>> {
+/// `value` written with the bases of `property`'s cells (US-17.6, D11).
+fn property_items(value: &PropertyValue, property: &Property) -> Option<Vec<Item>> {
     match value {
         PropertyValue::Empty => None,
-        value => Some(value_items(value, base)),
+        value => Some(value_items(value, &|i| property.cell_base(i))),
     }
 }
 
@@ -654,26 +645,45 @@ fn write_property(out: &mut String, depth: usize, name: &str, items: Vec<Item>) 
     out.push('\n');
 }
 
-fn value_items(value: &PropertyValue, base: NumberBase) -> Vec<Item> {
+/// The items of a value; `base` gives the base of each cell by its index
+/// among all the value's cells.
+fn value_items(value: &PropertyValue, base: &dyn Fn(usize) -> NumberBase) -> Vec<Item> {
     match value {
         PropertyValue::Empty => vec![],
         PropertyValue::Cells(cells) => {
-            let cells = cells.iter().map(|c| base.format(u64::from(*c))).collect();
+            let cells = cells
+                .iter()
+                .enumerate()
+                .map(|(i, c)| base(i).format(u64::from(*c)))
+                .collect();
             vec![Item::cells("<".into(), cells)]
         }
         PropertyValue::Strings(strings) => strings.iter().map(|s| Item::single(quote(s))).collect(),
         PropertyValue::Bytes(bytes) => vec![Item::bytes(bytes)],
-        PropertyValue::Mixed(chunks) => chunks.iter().map(|c| chunk_item(c, base)).collect(),
+        PropertyValue::Mixed(chunks) => {
+            let mut first = 0;
+            chunks
+                .iter()
+                .map(|c| {
+                    let item = chunk_item(c, &|i| base(first + i));
+                    if let ValueChunk::Cells { cells, .. } = c {
+                        first += cells.len();
+                    }
+                    item
+                })
+                .collect()
+        }
     }
 }
 
-fn chunk_item(chunk: &ValueChunk, base: NumberBase) -> Item {
+fn chunk_item(chunk: &ValueChunk, base: &dyn Fn(usize) -> NumberBase) -> Item {
     match chunk {
         ValueChunk::Cells { bits, cells } => {
             let cells = cells
                 .iter()
-                .map(|cell| match cell {
-                    Cell::Number(n) => base.format(*n),
+                .enumerate()
+                .map(|(i, cell)| match cell {
+                    Cell::Number(n) => base(i).format(*n),
                     Cell::Phandle { phandle } => format_reference(phandle),
                 })
                 .collect();
@@ -772,11 +782,13 @@ mod tests {
                 name: "#clock-cells".into(),
                 value: PropertyValue::Cells(vec![0]),
                 base: None,
+                bases: Vec::new(),
             },
             Property {
                 name: "clock-frequency".into(),
                 value: PropertyValue::Cells(vec![24_000_000]),
                 base: None,
+                bases: Vec::new(),
             },
         ];
         let mut uart = node("uart", "serial");
@@ -786,6 +798,7 @@ mod tests {
             name: "reg".into(),
             value: PropertyValue::Cells(vec![0x1000_0000, 0x100]),
             base: None,
+            bases: Vec::new(),
         }];
 
         let graph = Graph {
@@ -859,6 +872,7 @@ mod tests {
             name: "ranges".into(),
             value: PropertyValue::Cells(cells),
             base: None,
+            bases: Vec::new(),
         }]))
         .unwrap();
         let lines: Vec<_> = dts.lines().filter(|l| l.contains("0x1000")).collect();
@@ -882,6 +896,7 @@ mod tests {
             name: "names".into(),
             value: PropertyValue::Strings(strings),
             base: None,
+            bases: Vec::new(),
         }]))
         .unwrap();
         let lines: Vec<_> = dts.lines().filter(|l| l.contains("vendor")).collect();
@@ -929,6 +944,7 @@ mod tests {
                 name: "model".into(),
                 value: PropertyValue::Strings(vec!["a \"b\"\n".into()]),
                 base: None,
+                bases: Vec::new(),
             },
             Property {
                 name: "mixed".into(),
@@ -949,6 +965,7 @@ mod tests {
                     },
                 ]),
                 base: None,
+                bases: Vec::new(),
             },
         ];
         let mut graph = Graph {

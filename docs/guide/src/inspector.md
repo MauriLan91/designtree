@@ -6,10 +6,16 @@ Select a node to edit it in the inspector.
   come first.
 - **Properties**: a table with a **Key**, a **Type** and a **Value** column,
   one row per property, edited the same way whatever the value holds.
-  Clearing a value removes the property.
+  Clearing a value removes the property. Every row has the same height:
+  the type is a short chip (`cells`, `str[]`, `u32`) and the size of the
+  value in the blob sits at the end of the key. Drag the edge of the
+  **Key** header to widen the column (double-click it to reset); a key too
+  long for it is cut in the middle (`qcom,g…ranges`), and hovering a key
+  or a value shows it in full.
   - Rows with several parts (cell arrays such as `reg`, string lists, bytes)
     have an arrow that opens one child row per item. Edit an item in place,
-    remove it with its ×, or add one with **Add cell**. A cell takes a number,
+    remove it with the − beside it, or add one with the **+** at the end of
+    the last item. A cell takes a number,
     a `&label` reference or a `dt-bindings` name such as `GIC_SPI`; names are
     suggested as you type when the kernel bindings are loaded. A cell
     property holding one number, such as `#address-cells = <1>`, is a single
@@ -18,8 +24,8 @@ Select a node to edit it in the inspector.
   - A cell list made of entries opens one row per entry instead, with a
     field for each cell: `reg` and `ranges` take their entry size from
     `#address-cells` and `#size-cells`, `interrupts` from the interrupt
-    parent's `#interrupt-cells`, other properties from the binding. **Add
-    entry** appends one of zeros. The row itself reads and takes the groups
+    parent's `#interrupt-cells`, other properties from the binding. The
+    **+** after the last entry appends one of zeros. The row itself reads and takes the groups
     as in the source, `<0x1c81000 0x1000>, <0x1c82000 0x2000>`, and the DTS
     source writes `reg`, `ranges` and `interrupts` the same way. Warnings
     about the number of items count entries.
@@ -29,8 +35,7 @@ Select a node to edit it in the inspector.
     use the empty last line to add bytes. A list of more than 64 items or
     entries shows them 64 at a time, with arrows to the other pages. A
     long string gets a box of several lines; Enter applies it and
-    Shift+Enter breaks the line. Under each row's type is the size of its
-    value in the blob.
+    Shift+Enter breaks the line.
   - A node with more than 100 properties shows the first 100, with
     **Show N more properties** under them.
   - With a kernel checkout loaded, the binding fixes the type of the
@@ -46,22 +51,27 @@ Select a node to edit it in the inspector.
     under the text.
   - **Add a property…** offers the binding's optional properties as you
     type, with their type and description.
-  - For a property the schema does not describe, pick the type yourself:
+  - For a property the schema does not describe, click its type chip and
+    pick the type yourself:
     Boolean, String, String list, Cells, Bytes, Reference or Mixed.
     Changing it keeps what can be kept, so cells become bytes and back.
-  - A row holding numbers has a **Dec**, **Hex** or **Oct** selector under
-    its type: the numbers are shown, and written to the DTS, in that base.
-    Addresses (`reg`, `ranges`) start in hex and everything else in
-    decimal; an imported file keeps the base each property was written in.
-    A value can be typed in any base (`24000000`, `0x16e3600`, `0644`).
+  - A number field ends in its base's letter: **d** (decimal), **h**
+    (hexadecimal) or **o** (octal). Click it for the next base; the number
+    is shown, and written to the DTS, in it. Each cell keeps its own base,
+    so a list can mix `0x10` and `24000000`: the letter on a property's row
+    sets every cell, the one on a cell's row only that cell (a dot on the
+    row's letter says some cells differ). Addresses (`reg`, `ranges`) start
+    in hex and everything else in decimal; an imported file keeps the base
+    each number was written in. A value can be typed in any base
+    (`24000000`, `0x16e3600`, `0644`), and keeps the base it was typed in.
   - A **Reference** names a node by its label, picked from a list, and is
     written as `&label` (the DTS turns it into the node's path). Under
     `aliases` every property is one. Renaming the label updates it.
   - References drawn on the canvas (`clocks`, `interrupt-parent`, `gpios`)
-    are rows of type **Phandle**; open one to edit the specifier cells of
+    are rows of type **phandle**; open one to edit the specifier cells of
     each target.
   - **Text** switches to the raw mode: every property as `name = value`,
-    one per line, as in the DTS. It reads values as the DTS source panel
+    one per line, as in the DTS, in a box that fills the rest of the panel. It reads values as the DTS source panel
     does, so `<0x1000 0x100>, <0x2000 0x100>`, `&uart0` and `<&gic 0 4>`
     are accepted and `010` is octal; the `;` is optional. A `compatible`
     line goes to the **Compatible** field. **Table** switches back.

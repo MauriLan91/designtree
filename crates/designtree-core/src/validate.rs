@@ -547,6 +547,7 @@ mod tests {
             name: name.into(),
             value: PropertyValue::Empty,
             base: None,
+            bases: Vec::new(),
         }
     }
 
@@ -640,6 +641,7 @@ mod tests {
                 target: "uart0".into(),
             }]),
             base: None,
+            bases: Vec::new(),
         }];
         let errors = validate(&graph(vec![node("root", "/"), aliases]));
         assert_eq!(

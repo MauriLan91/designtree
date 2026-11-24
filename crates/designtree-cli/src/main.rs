@@ -477,6 +477,7 @@ fn bench(
                 name: "designtree-bench".into(),
                 value: designtree_core::PropertyValue::Empty,
                 base: None,
+                bases: Vec::new(),
             });
         designtree_core::to_dts_mapped(&edited)
     };

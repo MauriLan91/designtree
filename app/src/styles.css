@@ -928,15 +928,40 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .nav-name { overflow: hidden; text-overflow: ellipsis; }
 
 /* Property table (US-17.1): Key · Type · Value, plist style. */
+.inspector.text-mode { flex: 1; min-height: 0; }
+.inspector.text-mode > * { flex: none; }
+.inspector.text-mode > textarea { flex: 1 1 auto; min-height: 12em; resize: none; }
 .props-head { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .segmented { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); }
 .segmented button { height: 20px; padding: 0 8px; border: none; border-radius: 4px; background: none; color: var(--muted); font-size: 12px; }
 .segmented button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 .prop-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .prop-table thead th { padding: 4px 6px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
-.prop-table thead th:nth-child(1) { width: 42%; }
-.prop-table thead th:nth-child(2) { width: 22%; }
-.prop-table thead th:nth-child(4) { width: 22px; }
+/* Compact rows (US-17.7): one 28px row per property, the type a short
+   chip in a fixed column, the key column as wide as the user drags it. */
+.prop-table .col-type { width: 60px; }
+.prop-table .col-actions { width: 24px; }
+.prop-table thead th.key-head { position: relative; }
+.prop-table .col-resizer { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; z-index: 1; }
+.prop-table .col-resizer::after { content: ""; position: absolute; top: 4px; bottom: 4px; left: 2px; width: 2px; border-radius: 1px; background: transparent; }
+.prop-table .col-resizer:hover::after, .prop-table .col-resizer:focus-visible::after { background: var(--accent); }
+.prop-table .col-resizer:focus-visible { outline: none; }
+.prop-table tbody > tr > th, .prop-table tbody > tr > td { height: 28px; }
+.prop-table .type-cell { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
+.type-chip { position: relative; display: inline-flex; flex: none; align-items: center; gap: 1px; max-width: 100%; height: 18px; padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font: 11px/18px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.type-chip.pick { cursor: pointer; }
+.type-chip.pick:hover { background: var(--border); color: var(--text); }
+.type-chip.pick:focus-within { outline: 2px solid var(--accent); outline-offset: 0; }
+.type-chip.pick.disabled { cursor: default; }
+.prop-table .type-chip select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: none; opacity: 0; cursor: inherit; }
+.prop-table .value-size { flex: none; padding: 0 2px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prop-table .item-value { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.prop-table .item-value > .row-hint, .prop-table .item-value > input, .prop-table .item-value > textarea { flex: 1; min-width: 0; }
+.prop-table .entry > .row-add { margin-top: 2px; }
+.prop-table .item-actions { display: flex; align-items: center; justify-content: flex-end; }
+.prop-table .row-add { flex: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 4px; background: none; color: var(--accent); }
+.prop-table .row-add:hover { background: var(--accent-soft); }
+.prop-table .row-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .prop-table tbody th, .prop-table tbody td { padding: 1px 2px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); vertical-align: middle; font-weight: normal; text-align: left; }
 .prop-table tr:hover > * { background: var(--hover); }
 .prop-table .key { display: flex; align-items: center; gap: 2px; min-width: 0; }
@@ -971,7 +996,17 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .prop-table .add-item .link, .prop-table .add-property { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .prop-table .add-property { padding: 2px 4px; color: var(--muted); }
 .prop-table select { padding: 0 0 0 2px; font-family: inherit; font-size: 11px; color: var(--muted); text-overflow: ellipsis; }
-.prop-table .base-select { height: 20px; margin-top: 2px; font-size: 10px; }
+/* The base toggle (US-17.6): the base's letter inside the end of a number
+   field. Quiet until pointed at, so a column of numbers reads as numbers. */
+.prop-table .with-addon { position: relative; display: flex; flex: 1 1 11ch; min-width: 0; }
+.prop-table .entry-cells > .with-addon { min-width: 11ch; }
+.prop-table .with-addon > input:not([type="checkbox"]), .prop-table .with-addon > select { padding-right: 22px; }
+.base-toggle { position: absolute; top: 50%; right: 3px; transform: translateY(-50%); width: 16px; height: 16px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: none; color: var(--muted); font: 600 10px/14px var(--mono); text-align: center; cursor: pointer; opacity: 0.7; transition: opacity 80ms, background-color 80ms; }
+.prop-table tr:hover .base-toggle, .base-toggle:focus-visible { opacity: 1; }
+.base-toggle:hover { border-color: var(--border-strong); background: var(--panel); color: var(--text); }
+.base-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.base-toggle:disabled { cursor: default; opacity: 0.4; }
+.base-toggle.mixed::after { content: ""; position: absolute; top: 1px; right: 1px; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
 .prop-table .add-item td { padding-left: 4px; }
 /* Required properties without a value (US-17.2). */
 .prop-table .missing-row .key-text { color: var(--muted); }
@@ -1002,7 +1037,7 @@ button.lib-header:hover { background: var(--hover); }
 /* A build result from before the last edit stays readable but recedes. */
 .build.stale .problems, .build.stale > pre { opacity: 0.55; }
 /* Long values (US-17.8). */
-.prop-table .value-size { display: block; padding: 0 4px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+
 .prop-table textarea.long-text { width: 100%; min-width: 0; padding: 3px 4px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: 12px var(--mono); resize: vertical; overflow-wrap: anywhere; }
 .prop-table textarea.long-text:hover { border-color: var(--border); }
 .prop-table textarea.long-text:focus { border-color: var(--accent); background: var(--panel); outline: none; }
@@ -1041,3 +1076,23 @@ button.lib-header:hover { background: var(--hover); }
 .problem-items .problem-property { color: var(--text); }
 .problem-items .problem-message { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
 .problem-items .problem-rule { flex: none; padding-left: 8px; color: var(--muted); font-size: 11px; }
+/* A class split by vendor (US-18.6): the vendor headers sit under it. */
+.lib-header.sub { height: 26px; padding-left: 24px; font-weight: 500; color: var(--muted); }
+.lib-header.sub:hover { color: var(--text); }
+/* Library filters (US-18.7): chips that read as their name until set, then
+   as their value, tinted, with a × to clear. */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.filter-chip { position: relative; display: inline-flex; align-items: center; max-width: 100%; height: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 12px; white-space: nowrap; }
+.filter-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.filter-chip:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filter-chip-text { position: relative; display: inline-flex; align-items: center; gap: 2px; min-width: 0; padding: 0 6px 0 10px; overflow: hidden; text-overflow: ellipsis; }
+.filter-chip-text select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.filter-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.filter-chip-clear { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 2px; padding: 0; border: none; border-radius: 10px; background: none; color: var(--muted); }
+.filter-chip-clear:hover { background: var(--hover); color: var(--text); }
+button.filter-chip.toggle { padding: 0 10px; cursor: pointer; }
+button.filter-chip.toggle:disabled { cursor: default; opacity: 0.5; }
+button.filter-chip.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lib-total .link { font-size: inherit; }
+.filter-chips .segmented { margin-left: auto; }
+.filter-chips .segmented button { display: flex; align-items: center; height: 22px; padding: 0 6px; }

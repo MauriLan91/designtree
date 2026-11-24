@@ -123,6 +123,9 @@ impl Hit<'_> {
             title: self.binding.title.clone(),
             compatible: self.compatible.map(str::to_string),
             buses: self.binding.buses.clone(),
+            class: crate::classes::device_class(&self.binding.category, &self.binding.path)
+                .to_owned(),
+            root: self.binding.root,
         }
     }
 }
@@ -142,6 +145,16 @@ pub struct LibraryEntry {
     /// Where the schema's examples put it (US-18.4), for "Fits here".
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub buses: Vec<String>,
+    /// What the device is (US-18.6), one of [`crate::classes::CLASSES`];
+    /// empty for the basic nodes, which have a section of their own.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[ts(optional, as = "Option<String>")]
+    pub class: String,
+    /// A board or SoC schema: its compatible goes on the root node, so the
+    /// device list leaves it out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<bool>")]
+    pub root: bool,
 }
 
 /// The library entries of one schema: one per compatible it documents (not
@@ -229,6 +242,7 @@ mod tests {
             properties: Vec::new(),
             node_name: None,
             buses: Vec::new(),
+            root: false,
         }
     }
 

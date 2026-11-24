@@ -528,6 +528,7 @@ impl Tree {
                             name: def.name.clone(),
                             value,
                             base: def.base,
+                            bases: def.bases.clone(),
                         })
                     }
                     Classified::Phandles(entries) => {
@@ -590,6 +591,7 @@ impl Tree {
                         name: def.name.clone(),
                         value,
                         base: def.base,
+                        bases: def.bases.clone(),
                     }
                 })
                 .collect();
@@ -757,6 +759,7 @@ pub fn parse_properties(text: &str) -> std::result::Result<Vec<Property>, Import
                         name: def.name.clone(),
                         value,
                         base: def.base,
+                        bases: def.bases.clone(),
                     };
                     // As in a .dts, a later definition replaces an earlier one.
                     match properties.iter_mut().find(|p| p.name == def.name) {
@@ -1104,11 +1107,13 @@ mod tests {
                     name: "status".into(),
                     value: PropertyValue::Strings(vec!["okay".into()]),
                     base: None,
+                    bases: Vec::new(),
                 },
                 Property {
                     name: "extra".into(),
                     value: PropertyValue::Empty,
                     base: None,
+                    bases: Vec::new(),
                 },
             ]
         );
@@ -1517,5 +1522,47 @@ mod tests {
         assert!(dts.contains("freq = <24000000>;"), "{dts}");
         assert!(dts.contains("mask = <0xff 0 1>;"), "{dts}");
         assert!(dts.contains("mode = <0644>;"), "{dts}");
+    }
+
+    #[test]
+    fn each_cell_keeps_its_own_base() {
+        let graph = import(
+            "/dts-v1/;\n/ {\n\
+             \tclock-names-and-rates = <0x10 24000000 0x20 48000000>;\n\
+             \tmixed = <0x1000 (1 << 4)>, <0644 &{/}>, <100>;\n\
+             };\n",
+        );
+        let prop = |name: &str| {
+            node(&graph, "/")
+                .properties
+                .iter()
+                .find(|p| p.name == name)
+                .unwrap()
+                .clone()
+        };
+        let rates = prop("clock-names-and-rates");
+        assert_eq!(rates.cell_base(0), NumberBase::Hex);
+        assert_eq!(rates.cell_base(1), NumberBase::Dec);
+        let mixed = prop("mixed");
+        assert_eq!(mixed.cell_base(2), NumberBase::Oct);
+        assert_eq!(mixed.cell_base(4), NumberBase::Dec);
+        let dts = crate::to_dts(&graph).unwrap();
+        assert!(
+            dts.contains("clock-names-and-rates = <0x10 24000000 0x20 48000000>;"),
+            "{dts}"
+        );
+        assert!(dts.contains("<0644 &{/}>, <100>;"), "{dts}");
+    }
+
+    #[test]
+    fn a_design_with_one_base_per_property_still_opens() {
+        let property: crate::model::Property = serde_json::from_str(
+            r#"{"name":"mode","value":{"type":"cells","value":[420]},"base":"oct"}"#,
+        )
+        .unwrap();
+        assert!(property.bases.is_empty());
+        assert_eq!(property.cell_base(0), NumberBase::Oct);
+        let json = serde_json::to_string(&property).unwrap();
+        assert!(!json.contains("bases"), "{json}");
     }
 }

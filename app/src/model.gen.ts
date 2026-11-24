@@ -22,7 +22,13 @@ export type Property = { name: string, value: PropertyValue,
  * user picked. `None` writes addresses (`reg`, `ranges`) in hex and
  * everything else in decimal.
  */
-base?: NumberBase, };
+base?: NumberBase, 
+/**
+ * Cells written in another base than the property's (US-17.6, D11), by
+ * index among all the value's cells across its `<...>` groups; `None`
+ * and cells past the end follow `base`. Designs from before have none.
+ */
+bases?: Array<NumberBase | null>, };
 
 export type Inherited = { 
 /**
@@ -397,7 +403,12 @@ node_name?: string | null,
  * The bus classes the schema's examples put its nodes under (`i2c`,
  * `spi`, `cpus`, `mmio`; see [`bus_class`]); empty when they do not say.
  */
-buses?: Array<string>, };
+buses?: Array<string>, 
+/**
+ * The schema describes the root node (`$nodename: const: '/'`): a board
+ * or SoC, whose compatibles go on `/`, not a device to add (US-18.6).
+ */
+root?: boolean, };
 
 export type LibraryEntry = { 
 /**
@@ -407,7 +418,17 @@ path: string, category: string, title?: string | null, compatible?: string | nul
 /**
  * Where the schema's examples put it (US-18.4), for "Fits here".
  */
-buses?: Array<string>, };
+buses?: Array<string>, 
+/**
+ * What the device is (US-18.6), one of [`crate::classes::CLASSES`];
+ * empty for the basic nodes, which have a section of their own.
+ */
+class?: string, 
+/**
+ * A board or SoC schema: its compatible goes on the root node, so the
+ * device list leaves it out.
+ */
+root?: boolean, };
 
 export type DtMacro = { name: string, value: number, 
 /**

@@ -318,9 +318,84 @@ export function formatCell(c: number, base: NumberBase = "hex"): string {
 // decimal: the same list as `NumberBase::default_for` in the core.
 const HEX_PROPERTIES = new Set(["reg", "ranges", "dma-ranges", "interrupt-map", "interrupt-map-mask"]);
 
-/** The base a property's numbers are shown and written in. */
+/** The base a property's numbers are shown and written in, unless a cell
+ * has one of its own. */
 export function baseOf(p: Pick<Property, "name" | "base">): NumberBase {
   return p.base ?? (HEX_PROPERTIES.has(p.name) ? "hex" : "dec");
+}
+
+/** The bases of a value's cells (US-17.6, D11): one for all, or one per
+ * cell index across the value's `<...>` groups. */
+export type Bases = NumberBase | ((index: number) => NumberBase);
+
+export const baseAt = (bases: Bases, index: number): NumberBase => (typeof bases === "function" ? bases(index) : bases);
+
+/** The base of each cell of a property: its own, else the property's. */
+export function basesOf(p: Pick<Property, "name" | "base" | "bases">): Bases {
+  const all = baseOf(p);
+  const own = p.bases;
+  return own?.length ? (i) => own[i] ?? all : all;
+}
+
+/** The order the base toggle goes through. */
+export const nextBase = (b: NumberBase): NumberBase => (b === "dec" ? "hex" : b === "hex" ? "oct" : "dec");
+
+/** The base a number was typed in, when it tells: hex (`0x`), octal
+ * (leading 0) or decimal from 10 up; smaller numbers read alike in all. */
+export function literalBase(text: string): NumberBase | null {
+  const t = text.trim();
+  if (/^0x[0-9a-f]+$/i.test(t)) return "hex";
+  if (/^0[0-7]+$/.test(t)) return "oct";
+  if (/^[1-9]\d+$/.test(t)) return "dec";
+  return null;
+}
+
+/**
+ * `p` with cell `index` in `base`, or every cell when `index` is omitted.
+ * Cells that match the property's base keep no base of their own, so a
+ * property in one base stores only `base`, as designs did before.
+ */
+export function withCellBase(p: Property, base: NumberBase, index?: number): Property {
+  if (index === undefined) {
+    const { bases: _, ...rest } = p;
+    return { ...rest, base };
+  }
+  const all = baseOf(p);
+  const bases = [...(p.bases ?? [])];
+  while (bases.length <= index) bases.push(null);
+  bases[index] = base === all ? null : base;
+  while (bases.length && bases[bases.length - 1] === null) bases.pop();
+  const { bases: _, ...rest } = p;
+  return bases.length ? { ...rest, bases } : rest;
+}
+
+/**
+ * `p` after its cells were typed anew as `words`: each takes the base it
+ * was typed in, the most common one becoming the property's; numbers that
+ * read alike in every base follow it.
+ */
+export function withTypedBases(p: Property, words: string[]): Property {
+  const told = words.map(literalBase);
+  const counts = new Map<NumberBase, number>();
+  for (const b of told) if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
+  const { bases: _, ...rest } = p;
+  if (counts.size === 0) return rest;
+  const most = [...counts].sort((x, y) => y[1] - x[1])[0][0];
+  let q: Property = { ...rest, base: most };
+  told.forEach((b, i) => {
+    if (b && b !== most) q = withCellBase(q, b, i);
+  });
+  return q;
+}
+
+/** `p` without cells `index` to `index + count - 1`, the bases of the
+ * later cells moved down with them. */
+export function withoutCellBases(p: Property, index: number, count = 1): Property {
+  if (!p.bases || p.bases.length <= index) return p;
+  const bases = p.bases.filter((_, i) => i < index || i >= index + count);
+  while (bases.length && bases[bases.length - 1] === null) bases.pop();
+  const { bases: _, ...rest } = p;
+  return bases.length ? { ...rest, bases } : rest;
 }
 
 function formatBytes(bytes: number[]): string {
@@ -335,11 +410,11 @@ function formatReference(target: string): string {
   return target.startsWith("/") ? `&{${target}}` : `&${target}`;
 }
 
-function formatChunk(chunk: ValueChunk, base: NumberBase): string {
+function formatChunk(chunk: ValueChunk, base: Bases, first = 0): string {
   switch (chunk.type) {
     case "cells": {
-      const cells = chunk.cells.map((c) =>
-        typeof c === "number" ? formatCell(c, base) : typeof c === "string" ? c : formatReference(c.phandle),
+      const cells = chunk.cells.map((c, i) =>
+        typeof c === "number" ? formatCell(c, baseAt(base, first + i)) : typeof c === "string" ? c : formatReference(c.phandle),
       );
       return `${chunk.bits === 32 ? "" : `/bits/ ${chunk.bits} `}<${cells.join(" ")}>`;
     }
@@ -352,8 +427,18 @@ function formatChunk(chunk: ValueChunk, base: NumberBase): string {
   }
 }
 
+/** Each chunk with the index of its first cell among the value's cells. */
+export function withCellOffsets(chunks: ValueChunk[]): [ValueChunk, number][] {
+  let first = 0;
+  return chunks.map((c) => {
+    const at = first;
+    if (c.type === "cells") first += c.cells.length;
+    return [c, at];
+  });
+}
+
 function formatProperty(p: Property): string {
-  const base = baseOf(p);
+  const base = basesOf(p);
   switch (p.value.type) {
     case "empty":
       return p.name;
@@ -364,7 +449,7 @@ function formatProperty(p: Property): string {
     case "bytes":
       return `${p.name} = ${formatBytes(p.value.value)}`;
     case "mixed":
-      return `${p.name} = ${p.value.value.map((c) => formatChunk(c, base)).join(", ")}`;
+      return `${p.name} = ${withCellOffsets(p.value.value).map(([c, first]) => formatChunk(c, base, first)).join(", ")}`;
   }
 }
 

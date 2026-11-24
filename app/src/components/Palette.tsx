@@ -5,13 +5,16 @@ import { loadList, loadPrefs, saveList, savePrefs, toggled, withRecent } from ".
 import { BASIC_CATEGORY, EMPTY_ENTRY, basicEntry, bindingOf, entryKey, entryOfKey, highlight } from "../library";
 import type { Binding, LibraryEntry } from "../model";
 import { KINDS, kindOf } from "../categories";
-import { fitting } from "../fits";
+import { classTitle } from "../fits";
+import { activeCount, applyFilters, busTitle, facet, loadFilters, NO_FILTERS, saveFilters, type Filters } from "../libraryFilters";
 import {
+  CLASSES,
   TILE_WIDTH,
-  categorySections,
+  classSections,
   historySections,
   layoutRows,
   openByDefault,
+  vendorOf,
   rowHeight,
   rowOffsets,
   visibleRange,
@@ -42,7 +45,12 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string>("");
+  const [filters, setFilters] = useState<Filters>(loadFilters);
+  const updateFilters = (next: Filters) => {
+    setFilters(next);
+    saveFilters(next);
+  };
+  const [vendorNames, setVendorNames] = useState<Record<string, string>>({});
   // The entries with the query they answer, which the count and the
   // highlights follow rather than the text still being typed.
   const [results, setResults] = useState<{ query: string; entries: LibraryEntry[] }>({ query: "", entries: [] });
@@ -90,7 +98,7 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
   useEffect(() => {
     if (!summary) return;
     const t = setTimeout(() => {
-      backend.libraryEntries(query, category || null).then(
+      backend.libraryEntries(query, null).then(
         (entries) => {
           setResults({ query, entries });
           setError(null);
@@ -99,7 +107,12 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
       );
     }, 150);
     return () => clearTimeout(t);
-  }, [summary, query, category]);
+  }, [summary, query]);
+
+  // Vendor names from the kernel's vendor-prefixes.yaml, for the filter.
+  useEffect(() => {
+    if (summary) backend.libraryVendors().then((v) => setVendorNames(v ?? {}), () => setVendorNames({}));
+  }, [summary]);
 
   // Favorites and recents are kept by schema path and compatible; the
   // loaded kernel resolves them, and the app itself the basic nodes.
@@ -186,50 +199,61 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
   };
 
   const searching = results.query.trim() !== "";
+  // Board and SoC schemas are not devices to add: their compatibles go on
+  // the root node, which offers them in the inspector (US-18.6).
+  const devices = useMemo(() => results.entries.filter((e) => !e.root), [results]);
+  const vendorName = useCallback((v: string) => (v ? (vendorNames[v] ?? v) : "Generic"), [vendorNames]);
+  // The filters (US-18.7) narrow the devices; "Fits here" also ranks them.
+  const fitCls = fit?.cls ?? null;
+  const filtered = useMemo(() => applyFilters(devices, filters, fitCls), [devices, filters, fitCls]);
+  const filtering = activeCount(filters) > 0 && !(filters.fits && !fitCls && activeCount(filters) === 1);
+  // Each filter offers the values the other filters leave, with counts.
+  const facets = useMemo(() => {
+    const without = (patch: Partial<Filters>) => applyFilters(devices, { ...filters, ...patch }, fitCls);
+    return {
+      cls: facet(without({ cls: undefined }), (e) => [e.class || "other"]),
+      vendor: facet(without({ vendor: undefined }), (e) => [vendorOf(e)]),
+      bus: facet(without({ bus: undefined }), (e) => e.buses ?? []),
+    };
+  }, [devices, filters, fitCls]);
   // Grouped once per result set; a star or an add only changes the history sections.
-  const categories = useMemo(() => (searching ? [] : categorySections(results.entries)), [searching, results]);
+  const classes = useMemo(() => (searching ? [] : classSections(filtered, vendorName)), [searching, filtered, vendorName]);
   const basicSection: Section = useMemo(
     () => ({ id: "basic", title: "Basic", category: BASIC_CATEGORY, entries: [...basics.map(basicEntry), EMPTY_ENTRY] }),
     [basics],
   );
-  // What fits the scope on show leads the library and the search results;
-  // everything else stays below it (US-18.4).
-  const fits = useMemo(() => (fit ? fitting(results.entries, fit.cls) : []), [fit, results]);
   const fitsTitle = fit ? `Fits here · ${fit.name}` : "";
   const sections: Section[] = useMemo(() => {
-    const matches = (entries: LibraryEntry[]): Section[] => {
-      if (!fits.length) return [{ id: "matches", title: "Matches", entries, headless: true }];
-      const fitSet = new Set(fits);
-      return [
-        { id: "fits", title: fitsTitle, entries: fits },
-        { id: "matches", title: "Other matches", entries: entries.filter((e) => !fitSet.has(e)) },
-      ];
-    };
-    if (searching && category) return matches(results.entries);
+    // What fits the scope is one ranked list: the ranking is the point.
+    if (filters.fits && fitCls) return [{ id: "fits", title: fitsTitle, entries: filtered, headless: true }];
     if (searching) {
       const words = results.query.toLowerCase().split(/\s+/).filter(Boolean);
-      const basicMatches = basicSection.entries.filter((e) =>
-        words.every((w) => `${e.title} ${nodeNames.get(e.path) ?? ""}`.toLowerCase().includes(w)),
-      );
-      return matches([...basicMatches, ...results.entries]);
+      const basicMatches = filtering
+        ? []
+        : basicSection.entries.filter((e) => words.every((w) => `${e.title} ${nodeNames.get(e.path) ?? ""}`.toLowerCase().includes(w)));
+      return [{ id: "matches", title: "Matches", entries: [...basicMatches, ...filtered], headless: true }];
     }
-    // A picked category shows its elements, without the history of other ones.
-    if (category) return categories;
-    const fitsSection: Section[] = fits.length ? [{ id: "fits", title: fitsTitle, entries: fits }] : [];
-    return [...fitsSection, basicSection, ...historySections(favoriteEntries, recentEntries), ...categories];
-  }, [searching, results, category, categories, basicSection, nodeNames, favoriteEntries, recentEntries, fits, fitsTitle]);
+    // Filtered, the library shows only what the filters keep.
+    if (filtering) return classes;
+    return [basicSection, ...historySections(favoriteEntries, recentEntries), ...classes];
+  }, [searching, results, filtered, filtering, filters.fits, fitCls, classes, basicSection, nodeNames, favoriteEntries, recentEntries, fitsTitle]);
 
   // Search matches include the basic nodes that match.
-  const shown = searching ? sections.reduce((n, s) => n + s.entries.length, 0) : results.entries.length;
+  const shown = searching ? sections.reduce((n, s) => n + s.entries.length, 0) : filtered.length;
 
   const renderRow = (row: Row, columns: number) => {
     const { section } = row;
     if (row.type === "header") {
       const count = section.entries.length.toLocaleString();
       return (
-        <button className="lib-header" aria-expanded={row.open} onClick={() => toggleSection(section.id)} title={section.category}>
+        <button
+          className={`lib-header${section.depth ? " sub" : ""}`}
+          aria-expanded={row.open}
+          onClick={() => toggleSection(section.id)}
+          title={section.children ? `${section.title}: ${section.children.length} vendors` : section.title}
+        >
           {row.open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-          {section.category && <EntryChip category={section.category} small />}
+          {section.category && !section.depth && <EntryChip category={section.category} small />}
           <span className="lib-header-title">{section.title}</span>
           <span className="lib-count">{count}</span>
         </button>
@@ -268,6 +292,22 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
     );
   };
 
+  const viewToggle = (
+    <div className="segmented" role="group" aria-label="Library view">
+      {(["list", "grid"] as Display[]).map((d) => (
+        <button
+          key={d}
+          aria-pressed={prefs.display === d}
+          aria-label={d === "list" ? "List" : "Grid"}
+          title={d === "list" ? "List" : "Grid"}
+          onClick={() => updatePrefs({ ...prefs, display: d })}
+        >
+          {d === "list" ? <List size={14} aria-hidden /> : <LayoutGrid size={14} aria-hidden />}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <aside className="panel palette">
       <h2>Library</h2>
@@ -291,42 +331,97 @@ export function Palette({ onAdd, fit, requestedKernel, onKernelLoaded }: Props) 
           <SearchField value={query} onChange={setQuery} />
         </>
       )}
-      <div className="lib-filters">
-        {summary && (
-          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-            <option value="">All categories</option>
-            {summary.categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        )}
-        <div className="segmented" role="group" aria-label="Library view">
-          {(["list", "grid"] as Display[]).map((d) => (
-            <button
-              key={d}
-              aria-pressed={prefs.display === d}
-              aria-label={d === "list" ? "List" : "Grid"}
-              title={d === "list" ? "List" : "Grid"}
-              onClick={() => updatePrefs({ ...prefs, display: d })}
-            >
-              {d === "list" ? <List size={14} aria-hidden /> : <LayoutGrid size={14} aria-hidden />}
-            </button>
-          ))}
+      {!summary && <div className="lib-filters">{viewToggle}</div>}
+      {summary && (
+        <div className="filter-chips" role="group" aria-label="Filters">
+          <FilterChip
+            label="Class"
+            value={filters.cls}
+            options={facets.cls.map(([c, n]) => [c, CLASSES.find(([id]) => id === c)?.[1] ?? c, n])}
+            onChange={(cls) => updateFilters({ ...filters, cls })}
+          />
+          <FilterChip
+            label="Vendor"
+            value={filters.vendor}
+            options={facets.vendor.map(([v, n]) => [v, vendorName(v), n] as [string, string, number]).sort((a, b) => a[1].localeCompare(b[1]))}
+            onChange={(vendor) => updateFilters({ ...filters, vendor })}
+          />
+          <FilterChip label="Bus" value={filters.bus} options={facets.bus.map(([b, n]) => [b, busTitle(b), n])} onChange={(bus) => updateFilters({ ...filters, bus })} />
+          <button
+            className={`filter-chip toggle${filters.fits && fitCls ? " active" : ""}`}
+            aria-pressed={filters.fits}
+            disabled={!fit}
+            title={fit ? `Only what goes under ${classTitle(fit.cls)} (${fit.name}), made-for-it first` : "Open a bus node's scope to see what fits there"}
+            onClick={() => updateFilters({ ...filters, fits: !filters.fits })}
+          >
+            Fits here
+          </button>
+          {viewToggle}
         </div>
-      </div>
+      )}
       {summary && (
         <p className="lib-total" aria-live="polite">
-          {shown.toLocaleString()} {searching ? (shown === 1 ? "match" : "matches") : category ? `in ${category}` : "devices"}
+          {shown.toLocaleString()} {searching ? (shown === 1 ? "match" : "matches") : shown === 1 ? "device" : "devices"}
+          {filters.fits && fit && ` under ${fit.name}`}
+          {activeCount(filters) > 0 && (
+            <>
+              {" · "}
+              <button className="link" onClick={() => updateFilters(NO_FILTERS)}>
+                Clear filters
+              </button>
+            </>
+          )}
         </p>
       )}
       <SectionList
         sections={sections}
-        isOpen={searching || category ? alwaysOpen : isOpen}
+        isOpen={searching || (filtering && filtered.length <= 500) ? alwaysOpen : isOpen}
         display={prefs.display}
         render={renderRow}
         resetKey={results}
       />
     </aside>
+  );
+}
+
+/**
+ * A filter as a chip (US-18.7): its name while unset, its value once
+ * picked. A native select over the chip opens the values, each with how
+ * many devices it keeps; the × beside a set chip clears it.
+ */
+function FilterChip({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | undefined;
+  options: [string, string, number][];
+  onChange: (value: string | undefined) => void;
+}) {
+  const current = value === undefined ? undefined : (options.find(([v]) => v === value)?.[1] ?? value);
+  return (
+    <span className={`filter-chip${value !== undefined ? " active" : ""}`}>
+      <span className="filter-chip-text" title={current ? `${label}: ${current}` : `Filter by ${label.toLowerCase()}`}>
+        {current ?? label}
+        <ChevronDown size={12} aria-hidden />
+        <select aria-label={`Filter by ${label.toLowerCase()}`} value={value ?? "\u0000"} onChange={(e) => onChange(e.target.value === "\u0000" ? undefined : e.target.value)}>
+          <option value={"\u0000"}>Any {label.toLowerCase()}</option>
+          {value !== undefined && !options.some(([v]) => v === value) && <option value={value}>{current} (0)</option>}
+          {options.map(([v, title, n]) => (
+            <option key={v} value={v}>
+              {title} ({n.toLocaleString()})
+            </option>
+          ))}
+        </select>
+      </span>
+      {value !== undefined && (
+        <button className="filter-chip-clear" aria-label={`Clear the ${label.toLowerCase()} filter`} onClick={() => onChange(undefined)}>
+          <X size={12} aria-hidden />
+        </button>
+      )}
+    </span>
   );
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseOf, formatCell, formatProperties, type PropertyValue } from "./model";
+import { baseOf, basesOf, formatCell, formatProperties, literalBase, nextBase, withCellBase, withoutCellBases, withTypedBases, type Property, type PropertyValue } from "./model";
 import { summaryOf, parseSummary } from "./propertyTable";
 
 describe("number base", () => {
@@ -32,5 +32,61 @@ describe("number base", () => {
     for (const base of ["dec", "hex", "oct"] as const) {
       expect(parseSummary("cells", summaryOf(value, "cells", base))).toEqual(value);
     }
+  });
+});
+
+describe("base per cell (US-17.6)", () => {
+  const rates: Property = { name: "rates", value: { type: "cells", value: [16, 24000000, 32, 48000000] } };
+
+  it("cycles decimal, hex, octal", () => {
+    expect(["dec", "hex", "oct"].map((b) => nextBase(b as "dec"))).toEqual(["hex", "oct", "dec"]);
+  });
+
+  it("keeps a base for one cell and writes it", () => {
+    const p = withCellBase(withCellBase(rates, "hex", 0), "hex", 2);
+    expect(p.bases).toEqual(["hex", null, "hex"]);
+    expect(formatProperties([p])).toBe("rates = <0x10 24000000 0x20 48000000>");
+    expect(summaryOf(p.value, "cells", basesOf(p))).toBe("0x10 24000000 0x20 48000000");
+  });
+
+  it("stores nothing per cell when a cell goes back to the property's base", () => {
+    const p = withCellBase(withCellBase(rates, "hex", 1), "dec", 1);
+    expect(p.bases).toBeUndefined();
+  });
+
+  it("sets every cell from the whole field", () => {
+    const p = withCellBase(withCellBase(rates, "hex", 1), "oct");
+    expect(p).toEqual({ ...rates, base: "oct" });
+  });
+
+  it("moves the bases of later cells down when one goes", () => {
+    const p = withCellBase(rates, "hex", 2);
+    expect(withoutCellBases(p, 0).bases).toEqual([null, "hex"]);
+    expect(withoutCellBases(p, 2).bases).toBeUndefined();
+  });
+
+  it("takes the bases a value was typed in", () => {
+    expect(literalBase("0x10")).toBe("hex");
+    expect(literalBase("010")).toBe("oct");
+    expect(literalBase("24")).toBe("dec");
+    expect(literalBase("4")).toBeNull();
+    const p = withTypedBases(rates, ["0x10", "24000000", "0x20", "48000000", "1"]);
+    expect(p.base).toBe("hex");
+    expect(p.bases).toEqual([null, "dec", null, "dec"]);
+  });
+
+  it("opens a design that kept one base per property", () => {
+    const p: Property = { name: "mode", value: { type: "cells", value: [0o644, 0o755] }, base: "oct" };
+    expect(baseOf(p)).toBe("oct");
+    expect(formatProperties([p])).toBe("mode = <0644 0755>");
+  });
+
+  it("counts cells across the groups of a mixed value", () => {
+    const p: Property = {
+      name: "m",
+      value: { type: "mixed", value: [{ type: "cells", bits: 32, cells: [16] }, { type: "string", value: "x" }, { type: "cells", bits: 32, cells: [16] }] },
+      bases: [null, "hex"],
+    };
+    expect(formatProperties([p])).toBe('m = <16>, "x", <0x10>');
   });
 });

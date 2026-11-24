@@ -236,3 +236,22 @@ describe("long values (US-17.8)", () => {
     expect(() => withHexLine(bytes, 0, "123")).toThrow();
   });
 });
+
+describe("compact rows (US-17.7)", () => {
+  it("elides long keys in the middle", async () => {
+    const { elideMiddle } = await import("./propertyTable");
+    expect(elideMiddle("clock-names", 20)).toBe("clock-names");
+    expect(elideMiddle("qcom,gpio-reserved-ranges", 13)).toBe("qcom,g…ranges");
+    expect(elideMiddle("qcom,gpio-reserved-ranges", 13)).toHaveLength(13);
+  });
+
+  it("shortens schema types for the chip", async () => {
+    const { typeChip } = await import("./propertyTable");
+    expect(typeChip("uint32")).toBe("u32");
+    expect(typeChip("uint32-array")).toBe("u32[]");
+    expect(typeChip("int8-matrix")).toBe("i8[][]");
+    expect(typeChip("non-unique-string-array")).toBe("str[]");
+    expect(typeChip("phandle-array")).toBe("phandle[]");
+    expect(typeChip("object")).toBe("object");
+  });
+});

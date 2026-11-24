@@ -61,6 +61,8 @@ export const backend = {
   /** One entry per compatible; all of them without a limit (US-18.1). */
   libraryEntries: (query: string, category: string | null, limit?: number) =>
     invoke<LibraryEntry[]>("library_entries", { query, category, limit: limit ?? null }),
+  /** Vendor names by compatible prefix, from the kernel's `vendor-prefixes.yaml` (US-18.7). */
+  libraryVendors: () => invoke<Record<string, string> | null>("library_vendors"),
   /** The basic devicetree nodes, without a kernel (US-18.3). */
   basicBindings: () => invoke<Binding[]>("basic_bindings"),
   getBindings: (paths: string[]) => invoke<Binding[]>("get_bindings", { paths }),
