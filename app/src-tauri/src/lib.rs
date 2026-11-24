@@ -421,9 +421,11 @@ fn check_schemas(design: Graph, state: State<AppState>) -> Result<Option<Vec<Pro
             .into_iter()
             .map(|p| Problem {
                 severity: Severity::Error,
-                message: format!("{p}"),
                 line: None,
                 node: dtb.node_at(&p.node).cloned(),
+                rule: (!p.schema.is_empty()).then(|| p.schema.clone()),
+                property: p.property,
+                message: p.message,
             })
             .collect(),
     ))
