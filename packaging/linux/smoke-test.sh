@@ -46,6 +46,15 @@ case $pkg in
 	test -f /usr/share/designtree/examples/simple-board.json
 	app=designtree-app
 	;;
+*.flatpak)
+	# The runtime comes from the image the bundle was built in.
+	flatpak install -y --noninteractive --bundle "$pkg" >/dev/null
+	id=io.github.maurilan91.designtree
+	flatpak run --command=designtree $id --version
+	flatpak run --command=dtc $id --version
+	flatpak run --command=test $id -f /app/share/designtree/examples/simple-board.json
+	app="flatpak run $id"
+	;;
 *.AppImage)
 	# shellcheck disable=SC2086
 	$installer $desktop >/dev/null
@@ -55,7 +64,7 @@ case $pkg in
 	app=$pkg
 	;;
 *)
-	echo "usage: $0 <.deb | .rpm | .pkg.tar.zst | .AppImage>" >&2
+	echo "usage: $0 <.deb | .rpm | .pkg.tar.zst | .flatpak | .AppImage>" >&2
 	exit 2
 	;;
 esac
@@ -69,7 +78,8 @@ sleep 2
 # 20 seconds (timeout exits 124) and printed no panic.
 log=$(mktemp)
 status=0
-DISPLAY=:99 timeout 20 "$app" >"$log" 2>&1 || status=$?
+# shellcheck disable=SC2086
+DISPLAY=:99 timeout 20 $app >"$log" 2>&1 || status=$?
 cat "$log"
 if [ "$status" -ne 124 ]; then
 	echo "::error::$app exited with status $status before the timeout" >&2

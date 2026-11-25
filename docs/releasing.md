@@ -19,8 +19,8 @@ disagree (`scripts/bump-version.sh --check`).
    git push origin v<version>
    ```
 
-4. The release workflow builds the Arch package, `.deb`, `.rpm` and
-   AppImage, installs each one in clean containers of its distributions
+4. The release workflow builds the Arch package, `.deb`, `.rpm`,
+   Flatpak bundle and AppImage, installs each one in clean containers of its distributions
    (the app must start there), and creates a draft release with the
    changelog section as notes. Check it, then publish it.
 5. Update the AUR package from the release's `PKGBUILD` and

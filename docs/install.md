@@ -8,11 +8,13 @@ DesignTree runs on Linux; there are no Windows or macOS builds. Each
 | Arch Linux, Manjaro, EndeavourOS | `PKGBUILD` (also on the AUR) | [Arch Linux and Manjaro](#arch-linux-and-manjaro) |
 | Debian 12+, Ubuntu 22.04+, Linux Mint, Pop!_OS | `DesignTree_<version>_amd64.deb` | [Debian and Ubuntu](#debian-and-ubuntu) |
 | Fedora, openSUSE Tumbleweed | `DesignTree-<version>-1.x86_64.rpm` | [Fedora and openSUSE](#fedora-and-opensuse) |
+| Any, with Flatpak | `DesignTree_<version>_x86_64.flatpak` | [Flatpak](#flatpak) |
 | Any other, glibc 2.35 or newer | `DesignTree_<version>_amd64.AppImage` | [AppImage](#appimage) |
 
 Every package installs the desktop app (`designtree-app`, with a menu entry),
 the `designtree` command line and the example designs, and brings `dtc`
-for **Build .dtb** as a dependency. Before a release is published, CI
+for **Build .dtb** (as a dependency, or inside the Flatpak; the AppImage
+uses the system's). Before a release is published, CI
 installs each package in clean containers of the distributions above and
 checks that the app starts.
 
@@ -69,6 +71,20 @@ The package depends on `dtc` and the WebKitGTK 4.1 runtime, which the
 package manager installs with it. openSUSE Leap 15 is too old for it; use
 the AppImage there.
 
+## Flatpak
+
+```sh
+flatpak install --user ./DesignTree_<version>_x86_64.flatpak
+flatpak run io.github.maurilan91.designtree
+```
+
+The bundle uses the GNOME runtime from [Flathub](https://flathub.org/setup),
+which `flatpak install` fetches when Flathub is configured, and carries its
+own `dtc`. It can read and write your home folder, where kernel checkouts and
+board files live, and reach `api.github.com` for the update check. The
+command line runs with
+`flatpak run --command=designtree io.github.maurilan91.designtree`.
+
 ## AppImage
 
 ```sh
@@ -100,7 +116,7 @@ Once a day at start, DesignTree asks GitHub for the latest published
 release (one request to `api.github.com`, nothing else is sent). When it is
 newer than the running version, a bar at the bottom says so and how to
 update for the way it was installed: the AUR helper or PKGBUILD on Arch, a
-new `.deb`, `.rpm` or AppImage elsewhere. The app does not replace itself; on Arch
+new `.deb`, `.rpm`, Flatpak bundle or AppImage elsewhere. The app does not replace itself; on Arch
 the package manager stays in charge. **Don't check** in the bar turns the
 check off; **Check for updates now** in the command palette (Ctrl+K) checks
 at once and turns it back on.

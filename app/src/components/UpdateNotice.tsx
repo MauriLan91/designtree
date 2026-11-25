@@ -9,6 +9,7 @@ const HOW: Record<InstallKind, string> = {
   pacman: "Update it with your AUR helper, or rebuild the PKGBUILD from the release.",
   deb: "Install the new .deb from the release page.",
   rpm: "Install the new .rpm from the release page.",
+  flatpak: "Install the new .flatpak bundle from the release page.",
   appimage: "Download the new AppImage from the release page.",
   other: "Get it from the release page.",
 };

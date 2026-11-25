@@ -1,9 +1,10 @@
 name: Linux packages
 
 # Builds every Linux package and installs each one in clean containers of the
-# distributions it is meant for, where the app has to start. Called by the
-# packaging workflow (pull requests) and the release workflow (tags): only
-# Arch can be tried by hand, the rest is checked here.
+# distributions it is meant for, where the app has to start (the Flatpak in
+# the image it is built in). Called by the packaging workflow (pull requests)
+# and the release workflow (tags): only Arch can be tried by hand, the rest
+# is checked here.
 on:
   workflow_call:
     inputs:
@@ -51,6 +52,39 @@ jobs:
             target/release/bundle/deb/*.deb
             target/release/bundle/rpm/*.rpm
             target/release/bundle/appimage/*.AppImage
+          retention-days: 7
+
+  flatpak:
+    needs: bundles
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      # bubblewrap needs it, to build and to run the smoke test.
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-bundles
+          path: packages
+      - name: Bundle name
+        id: name
+        run: |
+          deb=$(find packages -name '*.deb')
+          cp "$deb" packaging/flatpak/designtree.deb
+          version=$(basename "$deb" | cut -d_ -f2)
+          echo "bundle=DesignTree_${version}_x86_64.flatpak" >> "$GITHUB_OUTPUT"
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.maurilan91.designtree.yml
+          bundle: ${{ steps.name.outputs.bundle }}
+          upload-artifact: false
+          cache: false
+      - run: packaging/linux/smoke-test.sh "${{ steps.name.outputs.bundle }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: ${{ steps.name.outputs.bundle }}
           retention-days: 7
 
   smoke-test:

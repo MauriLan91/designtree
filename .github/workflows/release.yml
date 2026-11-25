@@ -68,6 +68,7 @@ jobs:
             assets/*.pkg.tar.zst
             assets/*.deb
             assets/*.rpm
+            assets/*.flatpak
             assets/*.AppImage
       - name: Release notes
         env:
