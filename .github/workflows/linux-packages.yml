@@ -1,8 +1,8 @@
 name: Linux packages
 
 # Builds every Linux package and installs each one in clean containers of the
-# distributions it is meant for, where the app has to start (the Flatpak in
-# the image it is built in). Called by the packaging workflow (pull requests)
+# distributions it is meant for, where the app has to start (the Flatpak on
+# a plain Ubuntu runner, with its runtime from Flathub). Called by the packaging workflow (pull requests)
 # and the release workflow (tags): only Arch can be tried by hand, the rest
 # is checked here.
 on:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
-      # bubblewrap needs it, to build and to run the smoke test.
+      # bubblewrap needs it.
       options: --privileged
     steps:
       - uses: actions/checkout@v4
@@ -80,12 +80,22 @@ jobs:
           bundle: ${{ steps.name.outputs.bundle }}
           upload-artifact: false
           cache: false
-      - run: packaging/linux/smoke-test.sh "${{ steps.name.outputs.bundle }}"
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak
           path: ${{ steps.name.outputs.bundle }}
           retention-days: 7
+
+  flatpak-smoke-test:
+    needs: flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak
+          path: packages
+      - run: sudo packaging/linux/smoke-test.sh packages/*.flatpak
 
   smoke-test:
     needs: [arch, bundles]

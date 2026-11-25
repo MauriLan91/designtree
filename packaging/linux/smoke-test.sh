@@ -47,7 +47,9 @@ case $pkg in
 	app=designtree-app
 	;;
 *.flatpak)
-	# The runtime comes from the image the bundle was built in.
+	command -v flatpak >/dev/null || $installer flatpak >/dev/null
+	# The bundle names Flathub for its runtime.
+	flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 	flatpak install -y --noninteractive --bundle "$pkg" >/dev/null
 	id=io.github.maurilan91.designtree
 	flatpak run --command=designtree $id --version
