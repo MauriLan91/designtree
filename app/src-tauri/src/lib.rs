@@ -432,7 +432,10 @@ fn check_schemas(design: Graph, state: State<AppState>) -> Result<Option<Vec<Pro
         problems
             .into_iter()
             .map(|p| Problem {
-                severity: Severity::Error,
+                severity: match p.severity {
+                    designtree_bindings::Severity::Error => Severity::Error,
+                    designtree_bindings::Severity::Warning => Severity::Warning,
+                },
                 line: None,
                 node: dtb.node_at(&p.node).cloned(),
                 rule: (!p.schema.is_empty()).then(|| p.schema.clone()),

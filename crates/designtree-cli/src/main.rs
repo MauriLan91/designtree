@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use designtree_bindings::{Checker, PhandleKind};
+use designtree_bindings::{Checker, PhandleKind, Severity};
 use designtree_core::{Graph, ImportOptions, PhandleType, PhandleTypes};
 
 /// DesignTree: build Linux devicetrees as node graphs.
@@ -416,11 +416,24 @@ fn check(input: &Path, linux: &Path, cache: Option<&Path>, json: bool) -> Result
         println!("{}", serde_json::to_string_pretty(&problems)?);
     } else {
         for p in &problems {
-            println!("{}: {p}", p.node);
+            let severity = match p.severity {
+                Severity::Error => "error",
+                Severity::Warning => "warning",
+            };
+            println!("{}: {severity}: {p}", p.node);
         }
     }
-    if !problems.is_empty() {
-        bail!("{} problem(s) found", problems.len());
+    // Warnings alone build and boot, like dtc's: the check passes.
+    let errors = problems
+        .iter()
+        .filter(|p| p.severity == Severity::Error)
+        .count();
+    let warnings = problems.len() - errors;
+    if errors > 0 {
+        bail!("{errors} error(s) and {warnings} warning(s) found");
+    }
+    if warnings > 0 {
+        eprintln!("{warnings} warning(s) found");
     }
     Ok(())
 }

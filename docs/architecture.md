@@ -129,6 +129,13 @@ the same errors (goal G3):
    numbers do not carry a width. Disabled nodes may miss or have extra
    properties.
 
+Each problem has a severity, taken from the keyword that failed: what no
+binding documents (`additionalProperties`, `unevaluatedProperties`,
+dt-core.yaml's catch-all type) and what the check cannot resolve are
+warnings, everything else is an error. The validator ignores `deprecated`,
+so the checker looks up the compatibles, properties and bindings a schema
+marks deprecated on the side and warns about them.
+
 The processed schemas are part of the catalog (and its cache), and a
 validator is compiled per schema on first use. The input is a blob, so
 bindings stay independent of the design model; the app compiles the design

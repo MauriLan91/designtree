@@ -500,7 +500,15 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .typed-field .error { font-size: 11px; }
 .dt-node-todo { color: var(--ref); font-size: 11px; }
 .dt-node.invalid { border-color: var(--danger); }
-.dt-node-errors { color: var(--danger); font-size: 11px; }
+.dt-node.suspect { border-color: var(--warn); }
+.dt-node-problems { display: flex; gap: 8px; font-size: 11px; }
+.dt-node-problems > span { display: inline-flex; align-items: center; gap: 3px; }
+.dt-node-problems .error { color: var(--danger); }
+.dt-node-problems .warning { color: var(--warn); }
+/* One colour per severity wherever its icon is drawn (US-5.6). */
+.severity-icon { flex: none; }
+.severity-icon.error { color: var(--danger); }
+.severity-icon.warning { color: var(--warn); }
 /* A node the kernel does not probe (US-16.7): faded, with a mark that says so
    in words, since a fade alone reads as "loading" or "inherited". */
 .dt-node.disabled { background: var(--panel); border-style: dashed; }
@@ -518,7 +526,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .problems button { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 3px 4px; font-size: 12px; color: var(--text); }
 .problems button:enabled:hover { background: var(--code); cursor: pointer; }
 .problems .error b { color: var(--danger); }
-.problems .warning b { color: var(--ref); }
+.problems .warning b { color: var(--warn); }
 .problems code { color: var(--accent); }
 .macro-suggestions { list-style: none; margin: -4px 0 0; padding: 2px; border: 1px solid var(--border); border-radius: 6px; max-height: 160px; overflow: auto; }
 .macro-suggestions button { display: flex; justify-content: space-between; width: 100%; border: 0; background: none; padding: 2px 6px; font-size: 12px; text-align: left; color: var(--text); }
@@ -924,6 +932,9 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; user-select:
 .navigator li.ancestor .nav-name { color: var(--muted); }
 .navigator li.disabled .nav-name, .navigator li.disabled .kind-chip { opacity: 0.55; }
 .navigator .status-mark { margin-right: 4px; font-size: 9px; line-height: 14px; }
+.navigator .problem-mark { display: inline-flex; flex: none; margin-left: auto; padding-right: 4px; }
+.navigator .problem-mark + .status-mark { margin-left: 0; }
+.navigator .problem-mark.below { opacity: 0.6; }
 .navigator li.hint { padding-left: 8px; color: var(--muted); font-family: inherit; }
 .nav-name { overflow: hidden; text-overflow: ellipsis; }
 
@@ -1071,7 +1082,7 @@ button.lib-header:hover { background: var(--hover); }
 .problem-items .group-head > svg, .problem-items .group-head .badge, .problem-items b, .problem-items code { flex: none; }
 .problem-items li.in-group button { padding-left: 24px; }
 .problem-items .error b { color: var(--danger); }
-.problem-items .warning b { color: var(--ref); }
+.problem-items .warning b { color: var(--warn); }
 .problem-items code { color: var(--accent); max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .problem-items .problem-property { color: var(--text); }
 .problem-items .problem-message { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }

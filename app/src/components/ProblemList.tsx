@@ -1,4 +1,5 @@
 import type { Problem } from "../model";
+import { SEVERITY_TITLES, SeverityIcon } from "./SeverityIcon";
 
 interface Props {
   problems: Problem[];
@@ -20,7 +21,8 @@ export function ProblemList({ problems, nodeName, onFocusNode }: Props) {
               onClick={() => p.node && onFocusNode(p.node)}
               title={p.node ? "Show the node on the canvas" : p.line ? `Line ${p.line} of the generated source` : undefined}
             >
-              <b>{p.severity}</b>
+              <SeverityIcon severity={p.severity} />
+              <b>{SEVERITY_TITLES[p.severity]}</b>
               {name && <code>{name}</code>}
               <span>{p.message}</span>
             </button>

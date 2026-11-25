@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-use jsonschema::error::ValidationErrorKind;
+use jsonschema::error::{TypeKind, ValidationErrorKind};
 use jsonschema::paths::LocationSegment;
 use jsonschema::{Draft, Keyword, Registry, Retrieve, Uri, ValidationError, Validator};
 use serde::{Deserialize, Serialize};
@@ -177,9 +177,21 @@ fn merge_trivial_patterns(schema: &mut Map<String, Value>) {
     patterns.insert(merged.join("|"), json!(true));
 }
 
+/// How bad a schema problem is (US-5.6): an error makes the tree wrong, a
+/// warning is suspect but builds and boots.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    #[default]
+    Error,
+    Warning,
+}
+
 /// A schema error on one node of a devicetree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SchemaProblem {
+    #[serde(default)]
+    pub severity: Severity,
     /// Full path of the node (`/soc/serial@1000`).
     pub node: String,
     /// The property the error is about, when it is about one.
@@ -308,6 +320,58 @@ pub struct Checker {
     /// Schemas left out of the registry, with why: one that cannot be
     /// registered would leave every other schema unchecked.
     broken: HashMap<String, String>,
+    /// What each schema marks `deprecated`; the validator ignores the
+    /// keyword, so it is looked up apart.
+    deprecated: HashMap<String, Deprecated>,
+}
+
+/// What a schema marks `deprecated: true`.
+#[derive(Default)]
+struct Deprecated {
+    /// The whole binding.
+    schema: bool,
+    /// Top-level properties.
+    properties: HashSet<String>,
+    /// Compatible strings, from the choices of its `compatible`.
+    compatibles: HashSet<String>,
+}
+
+impl Deprecated {
+    fn of(schema: &Value) -> Option<Self> {
+        fn flagged(value: &Value) -> bool {
+            value.get("deprecated") == Some(&Value::Bool(true))
+        }
+        fn walk(value: &Value, out: &mut HashSet<String>) {
+            match value {
+                // A deprecated list names its most specific string first;
+                // the fallbacks after it often stay valid elsewhere.
+                Value::Object(_) if flagged(value) => match value.get("items") {
+                    Some(Value::Array(items)) => {
+                        out.extend(items.first().map(node_compatibles).unwrap_or_default())
+                    }
+                    _ => out.extend(node_compatibles(value)),
+                },
+                Value::Object(map) => map.values().for_each(|v| walk(v, out)),
+                Value::Array(list) => list.iter().for_each(|v| walk(v, out)),
+                _ => {}
+            }
+        }
+        let mut found = Deprecated {
+            schema: flagged(schema),
+            ..Default::default()
+        };
+        if let Some(Value::Object(properties)) = schema.get("properties") {
+            for (name, property) in properties {
+                if flagged(property) {
+                    found.properties.insert(name.clone());
+                } else if name == "compatible" {
+                    walk(property, &mut found.compatibles);
+                }
+            }
+        }
+        let any = found.schema || !found.properties.is_empty() || !found.compatibles.is_empty();
+        any.then_some(found)
+    }
 }
 
 impl Checker {
@@ -316,7 +380,11 @@ impl Checker {
         types.compile();
         let mut by_compatible = HashMap::new();
         let mut selecting = Vec::new();
+        let mut deprecated = HashMap::new();
         for (id, schema) in &schemas {
+            if let Some(found) = Deprecated::of(schema) {
+                deprecated.insert(id.clone(), found);
+            }
             match schema.get("select") {
                 Some(Value::Bool(false)) => {}
                 Some(select) => selecting.push((id.clone(), select.clone())),
@@ -364,6 +432,7 @@ impl Checker {
             selecting,
             validators: RwLock::default(),
             broken,
+            deprecated,
         }
     }
 
@@ -453,6 +522,7 @@ impl Checker {
         let mut problems: Vec<SchemaProblem> = decode_errors
             .into_iter()
             .map(|e| SchemaProblem {
+                severity: Severity::Error,
                 node: e.path,
                 property: Some(e.property),
                 message: e.message,
@@ -524,6 +594,11 @@ impl Checker {
                 ids.push(id);
             }
         }
+        for id in &ids {
+            if let Some(found) = self.deprecated.get(*id) {
+                deprecations(instance, path, id, found, out);
+            }
+        }
         for id in ids {
             let validator = match self.validator(id) {
                 Ok(validator) => validator,
@@ -535,7 +610,9 @@ impl Checker {
                         .iter()
                         .any(|p| p.schema == schema && p.message.starts_with(CANNOT_CHECK))
                     {
+                        // The check's own limit, not something wrong in the tree.
                         out.push(SchemaProblem {
+                            severity: Severity::Warning,
                             node: path.to_owned(),
                             property: None,
                             message: format!("{CANNOT_CHECK}: {reason}"),
@@ -552,6 +629,44 @@ impl Checker {
                 out.push(problem(instance, path, id, &error));
             }
         }
+    }
+}
+
+/// Warnings for what the node uses that the schema `id` deprecates.
+fn deprecations(
+    instance: &Value,
+    path: &str,
+    id: &str,
+    found: &Deprecated,
+    out: &mut Vec<SchemaProblem>,
+) {
+    let schema = schema_path(id);
+    let mut warn = |property: Option<&str>, message: String| {
+        out.push(SchemaProblem {
+            severity: Severity::Warning,
+            node: path.to_owned(),
+            property: property.map(str::to_owned),
+            message,
+            schema: schema.clone(),
+        })
+    };
+    if found.schema {
+        warn(None, "the binding is deprecated".to_owned());
+    }
+    let compatibles = instance.get("compatible").and_then(Value::as_array);
+    for compatible in compatibles.into_iter().flatten().filter_map(Value::as_str) {
+        if found.compatibles.contains(compatible) {
+            warn(Some("compatible"), format!("'{compatible}' is deprecated"));
+        }
+    }
+    let mut used: Vec<&String> = found
+        .properties
+        .iter()
+        .filter(|p| instance.get(p.as_str()).is_some())
+        .collect();
+    used.sort();
+    for property in used {
+        warn(Some(property), "the property is deprecated".to_owned());
     }
 }
 
@@ -635,11 +750,46 @@ fn problem(instance: &Value, path: &str, id: &str, error: &ValidationError) -> S
             }
         }
     }
+    let schema = schema_path(id);
     SchemaProblem {
+        severity: severity(error, &schema),
         node,
         property,
         message: describe(error),
-        schema: schema_path(id),
+        schema,
+    }
+}
+
+/// The severity of a failed keyword. What no binding documents and what the
+/// check cannot resolve are warnings: the tree builds and the kernel may
+/// well use it. A wrong type or length, a missing required property, a
+/// value or name the binding forbids are errors.
+fn severity(error: &ValidationError, schema: &str) -> Severity {
+    match error.kind() {
+        ValidationErrorKind::AdditionalProperties { .. }
+        | ValidationErrorKind::UnevaluatedProperties { .. } => Severity::Warning,
+        // dt-core.yaml's catch-all for a name no binding gives a type: a
+        // vendor property, documented nowhere.
+        ValidationErrorKind::Type {
+            kind: TypeKind::Multiple(_),
+        } if schema == "dt-core.yaml" => Severity::Warning,
+        ValidationErrorKind::FalseSchema if error.instance_path().segments().next().is_none() => {
+            Severity::Warning
+        }
+        // None of the choices fits: only a warning when every choice fails
+        // for warnings alone.
+        ValidationErrorKind::AnyOf { context } | ValidationErrorKind::OneOfNotValid { context } => {
+            let all_warnings = context
+                .iter()
+                .flatten()
+                .all(|sub| severity(sub, schema) == Severity::Warning);
+            if all_warnings && context.iter().flatten().next().is_some() {
+                Severity::Warning
+            } else {
+                Severity::Error
+            }
+        }
+        _ => Severity::Error,
     }
 }
 

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use designtree_bindings::{index_dir, Checker, FdtNode, SchemaProblem};
+use designtree_bindings::{index_dir, Checker, FdtNode, SchemaProblem, Severity};
 
 fn checker() -> Checker {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/check");
@@ -77,6 +77,7 @@ fn reports_missing_required_properties() {
     assert_eq!(found[0].node, "/widget@1000");
     assert_eq!(found[0].property, None);
     assert!(found[0].message.contains("\"reg\" is a required property"));
+    assert_eq!(found[0].severity, Severity::Error);
 }
 
 #[test]
@@ -106,6 +107,66 @@ fn reports_undocumented_properties() {
     let found = problems(widget(vec![("acme,unknown", cells(&[1]))]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].message.contains("acme,unknown"), "{found:?}");
+    // Suspect, but the tree builds: a warning (US-5.6).
+    assert_eq!(found[0].severity, Severity::Warning);
+}
+
+#[test]
+fn values_outside_the_schema_are_errors() {
+    let found = problems(widget(vec![("acme,gain", cells(&[9]))]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].severity, Severity::Error);
+}
+
+#[test]
+fn vendor_properties_no_binding_types_are_warnings() {
+    let found: Vec<_> = checker()
+        .check_tree(&tree(node(
+            "thing@2000",
+            vec![
+                ("compatible", string("acme,thing")),
+                ("reg", cells(&[0x2000, 0x10])),
+                ("acme,label", string("x")),
+            ],
+            vec![],
+        )))
+        .into_iter()
+        .filter(|p| p.property.as_deref() == Some("acme,label"))
+        .collect();
+    assert!(!found.is_empty());
+    assert!(
+        found.iter().all(|p| p.severity == Severity::Warning),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn deprecated_compatibles_and_properties_are_warnings() {
+    let mut old = widget(vec![("acme,legacy", vec![])]);
+    old.properties[0].1 = string("acme,widget-old");
+    let found = problems(old);
+    let messages: Vec<_> = found
+        .iter()
+        .map(|p| (p.property.as_deref(), p.message.as_str(), p.severity))
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            (
+                Some("compatible"),
+                "'acme,widget-old' is deprecated",
+                Severity::Warning
+            ),
+            (
+                Some("acme,legacy"),
+                "the property is deprecated",
+                Severity::Warning
+            ),
+        ],
+        "{found:?}"
+    );
+    // The current compatible is not.
+    assert_eq!(problems(widget(vec![])), []);
 }
 
 #[test]

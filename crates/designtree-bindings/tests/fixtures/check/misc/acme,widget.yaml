@@ -11,9 +11,12 @@ maintainers:
 
 properties:
   compatible:
-    enum:
-      - acme,widget
-      - acme,widget-v2
+    oneOf:
+      - enum:
+          - acme,widget
+          - acme,widget-v2
+      - const: acme,widget-old
+        deprecated: true
 
   reg:
     maxItems: 1
@@ -35,6 +38,10 @@ properties:
   acme,gain:
     $ref: /schemas/types.yaml#/definitions/uint32
     maximum: 7
+
+  acme,legacy:
+    $ref: /schemas/types.yaml#/definitions/flag
+    deprecated: true
 
   acme,window:
     description: A 32- or 64-bit address window.

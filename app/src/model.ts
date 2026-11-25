@@ -31,6 +31,7 @@ import type {
   Region,
   PropertyType,
   PropertyValue,
+  Severity,
   SocDtsi,
   ValueChunk,
 } from "./model.gen";
@@ -60,6 +61,7 @@ export type {
   PropertySpec,
   PropertyType,
   PropertyValue,
+  Severity,
   SocDtsi,
   ValueChunk,
 };
