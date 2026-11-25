@@ -51,6 +51,10 @@ case $pkg in
 	# The bundle names Flathub for its runtime.
 	flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 	flatpak install -y --noninteractive --bundle "$pkg" >/dev/null
+	# Under sudo the runtime dir is still the calling user's, which bwrap
+	# cannot use as root.
+	XDG_RUNTIME_DIR=$(mktemp -d)
+	export XDG_RUNTIME_DIR
 	id=io.github.maurilan91.designtree
 	flatpak run --command=designtree $id --version
 	flatpak run --command=dtc $id --version
