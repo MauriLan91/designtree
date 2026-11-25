@@ -168,3 +168,69 @@ fn reads_blobs() {
     let checker = checker();
     assert!(checker.check_dtb(b"not a blob").is_err());
 }
+
+fn gadget(size_cells: u32) -> FdtNode {
+    node(
+        "gadget@2000",
+        vec![
+            ("compatible", string("acme,gadget")),
+            ("reg", cells(&[0x2000, 0x100])),
+            ("#size-cells", cells(&[size_cells])),
+        ],
+        vec![],
+    )
+}
+
+#[test]
+fn follows_references_with_a_bare_hash_in_the_pointer() {
+    let found = |n| -> Vec<SchemaProblem> {
+        checker()
+            .check_tree(&tree(gadget(n)))
+            .into_iter()
+            .filter(|p| p.schema == "misc/acme,gadget.yaml")
+            .collect()
+    };
+    assert_eq!(found(0), []);
+    let wrong = found(1);
+    assert_eq!(wrong.len(), 1, "{wrong:?}");
+    assert_eq!(wrong[0].property.as_deref(), Some("#size-cells"));
+}
+
+#[test]
+fn a_schema_that_cannot_be_used_is_reported_once_and_spares_the_others() {
+    let mut root = tree(widget(vec![]));
+    root.children.push(gadget(0));
+    let found = checker().check_tree(&root);
+    let broken: Vec<_> = found
+        .iter()
+        .filter(|p| p.schema == "misc/acme,broken.yaml")
+        .collect();
+    assert_eq!(broken.len(), 1, "{found:?}");
+    assert!(broken[0]
+        .message
+        .starts_with("the binding cannot be checked"));
+    // The other schemas still check: the fixture root lacks `model`.
+    assert!(found
+        .iter()
+        .any(|p| p.message.contains("\"model\" is a required")));
+    assert!(
+        found
+            .iter()
+            .all(|p| p.schema == "misc/acme,broken.yaml" || !p.message.contains("not loaded")),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn names_the_node_a_schema_forbids() {
+    // `port@...` children are allowed; `additionalProperties: false`
+    // rejects any other node by name.
+    let mut w = widget(vec![
+        ("#address-cells", cells(&[1])),
+        ("#size-cells", cells(&[0])),
+    ]);
+    w.children.push(node("memory", vec![], vec![]));
+    let found = problems(w);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(!found[0].message.contains("False schema"), "{found:?}");
+}
