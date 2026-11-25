@@ -30,6 +30,8 @@ build() {
 	export RUSTUP_TOOLCHAIN=stable
 	# Absolute: tauri runs cargo from app/src-tauri.
 	export CARGO_TARGET_DIR="$PWD/target"
+	# The tarball has no .git: the About page names the tag instead.
+	export DESIGNTREE_COMMIT="v$pkgver"
 	# `tauri build` builds the frontend (beforeBuildCommand) and embeds it;
 	# a plain `cargo build` would load the dev server URL instead.
 	(cd app && ./node_modules/.bin/tauri build --no-bundle -- --frozen)

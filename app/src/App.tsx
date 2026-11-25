@@ -55,6 +55,7 @@ import { bindingOf as entryBinding } from "./library";
 import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import { align, cornerOf, distribute, grid, layered, mostReferenced, star, tree, type Alignment, type Box, type Link, type Positions } from "./tidy";
+import { AboutDialog } from "./components/AboutDialog";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -444,6 +445,7 @@ export function Editor({
   const [showPalette, setShowPalette] = useState(false);
   const [palettePick, setPalettePick] = useState<NodePick | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [interrupts, setInterrupts] = useState<InterruptTree | null>(null);
   const showAddressMap = panelTab === "address-map";
   // Each tab has its own mode; the last one chosen is where new tabs start.
@@ -2104,6 +2106,7 @@ export function Editor({
     },
     { id: "shortcuts", title: "Keyboard shortcuts", shortcut: "F1", menu: "Help", run: () => setShowShortcuts(true) },
     { id: "updates", title: "Check for updates now", menu: "Help", disabled: !inTauri, run: onCheckUpdates },
+    { id: "about", title: "About DesignTree", menu: "Help", group: 1, run: () => setShowAbout(true) },
   ];
   const commands = withShortcuts(registry, settings.shortcuts, FIXED_SHORTCUTS);
   const commandById = (id: string) => commands.find((c) => c.id === id)!;
@@ -2495,6 +2498,7 @@ export function Editor({
         nodes={nodes.filter(isDtNode).length}
         selected={selectedNodes.length}
         onKernels={pickKernel}
+        onAbout={() => setShowAbout(true)}
         onDtc={() => onOpenSettings("Build")}
         onProblems={() => showPanel("problems")}
         panel={commandById("panel")}
@@ -2528,6 +2532,7 @@ export function Editor({
         />
       )}
       {showShortcuts && <ShortcutSheet shortcuts={shortcutList} onClose={() => setShowShortcuts(false)} />}
+      {showAbout && <AboutDialog kernel={kernel} dtcVersion={dtcVersion} onClose={() => setShowAbout(false)} />}
       {pickingSoc && (
         <SocPicker
           onClose={() => setPickingSoc(false)}

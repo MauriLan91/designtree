@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "./s
 import type { Section } from "./components/SettingsPanel";
 import { DEFAULT_LAYOUT, loadLayout, saveLayout, type Layout } from "./layout";
 import { Splitter } from "./components/Splitter";
+import { BUILD } from "./buildInfo";
 
 interface Tab {
   id: number;
@@ -224,6 +225,15 @@ export default function Workspace() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [requestClose]);
+
+  // The design on show and the build in the window title (US-13.5), so
+  // that a screenshot or a window list says both.
+  const shown = statuses.get(active);
+  const windowTitle = `${shown?.dirty ? "● " : ""}${shown?.title ?? "Untitled"} — DesignTree ${BUILD.version}`;
+  useEffect(() => {
+    document.title = windowTitle;
+    if (inTauri) getCurrentWindow().setTitle(windowTitle).catch(() => {});
+  }, [windowTitle]);
 
   const closingStatus = closing !== null ? statuses.get(closing) : undefined;
   const unsaved = [...statuses.values()].filter((s) => s.dirty);
