@@ -50,4 +50,12 @@ describe("the problem list", () => {
     expect(filterProblems(list, { ...all, text: "uart required" }, pathOf).map((t) => t.problem.node)).toEqual(["b"]);
     expect(filterProblems(list, { ...all, text: "qcom,x" }, pathOf)).toEqual([list[2]]);
   });
+
+  it("puts errors before warnings, in a group and among groups", () => {
+    const warn = (node: string) => ({ problem: p("suspect", { node, severity: "warning" as const }), source: "dtc" as const });
+    const mixed: Tagged[] = [warn("a"), warn("a"), warn("b"), { problem: p("wrong", { node: "b" }), source: "schema" }];
+    const groups = groupProblems(mixed, "node", pathOf);
+    expect(groups.map((g) => g.title)).toEqual(["/soc/uart@1000", "/soc"]);
+    expect(groups[0].problems.map((t) => t.problem.severity)).toEqual(["error", "warning"]);
+  });
 });

@@ -2,6 +2,7 @@
 // check, the binding schemas and the last build, grouped and filtered so a
 // vendor tree's thousands stay workable.
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { SEVERITY_TITLES, SeverityIcon } from "./SeverityIcon";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SOURCES, filterProblems, groupProblems, readable, type GroupBy, type ProblemFilter, type ProblemGroup, type ProblemSource, type Tagged } from "../problemView";
 import { useVisibleRows } from "../visibleRows";
@@ -139,6 +140,8 @@ function ProblemItems({
             <li key={`head:${g.key}`} className={g.undocumented ? "group undocumented" : "group"}>
               <button className="group-head" aria-expanded={item.expanded} onClick={() => onToggle(g.key)}>
                 {item.expanded ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                {/* Errors come first in a group: the first is its worst. */}
+                {g.problems[0] && <SeverityIcon severity={g.problems[0].problem.severity} />}
                 <span className="problem-group-title" title={g.title}>
                   {g.title}
                 </span>
@@ -158,7 +161,8 @@ function ProblemItems({
               onClick={() => p.node && onFocusNode(p.node)}
               title={[path, p.property, message].filter(Boolean).join(" · ")}
             >
-              <b>{p.severity}</b>
+              <SeverityIcon severity={p.severity} />
+              <b>{SEVERITY_TITLES[p.severity]}</b>
               {path && by !== "node" && <code>{path}</code>}
               {p.property && by !== "property" && <code className="problem-property">{p.property}</code>}
               <span className="problem-message">{message}</span>

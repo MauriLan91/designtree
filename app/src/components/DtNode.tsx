@@ -5,6 +5,7 @@ import { KINDS, kindOf } from "../categories";
 import { BUS_IN_HANDLE } from "../scopes";
 import { NodePorts } from "../nodePorts";
 import { NodeProblems } from "../nodeProblems";
+import { SeverityIcon } from "./SeverityIcon";
 import { NodeChildren } from "../nodeChildren";
 import { isDisabled, statusOf } from "../nodeStatus";
 import { consumerHandle, providerHandle } from "../ports";
@@ -24,6 +25,8 @@ function flush(update: (ids: string[]) => void) {
  */
 export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   const problems = useContext(NodeProblems).get(id) ?? [];
+  const errors = problems.filter((p) => p.severity === "error");
+  const warnings = problems.filter((p) => p.severity !== "error");
   const ports = useContext(NodePorts).get(id);
   const children = useContext(NodeChildren);
   const childCount = children.count.get(id) ?? 0;
@@ -52,7 +55,7 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
   const off = isDisabled(data.properties);
   return (
     <div
-      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${problems.length ? " invalid" : ""}${off ? " disabled" : ""}`}
+      className={`dt-node${selected ? " selected" : ""}${isRoot ? " root" : ""}${data.inherited ? " inherited" : ""}${errors.length ? " invalid" : warnings.length ? " suspect" : ""}${off ? " disabled" : ""}`}
       title={data.inherited ? `Defined in ${data.inherited.file}` : undefined}
     >
       <Handle type="target" id={PHANDLE_HANDLE} position={Position.Left} className="h-ref" title="Referenced by (phandle)" />
@@ -85,8 +88,19 @@ export function DtNode({ id, data, selected }: NodeProps<DtFlowNode>) {
         <div className="dt-node-todo" title={`Fill in: ${data.todo.join(", ")}`}>to do: {data.todo.join(", ")}</div>
       )}
       {problems.length > 0 && (
-        <div className="dt-node-errors" title={problems.join("\n")}>
-          {problems.length} error{problems.length === 1 ? "" : "s"}
+        <div className="dt-node-problems">
+          {errors.length > 0 && (
+            <span className="error" title={errors.map((p) => p.text).join("\n")}>
+              <SeverityIcon severity="error" size={11} />
+              {errors.length} error{errors.length === 1 ? "" : "s"}
+            </span>
+          )}
+          {warnings.length > 0 && (
+            <span className="warning" title={warnings.map((p) => p.text).join("\n")}>
+              <SeverityIcon severity="warning" size={11} />
+              {warnings.length} warning{warnings.length === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       )}
       {ports && (ports.providers.length > 0 || consumers.length > 0 || hidden > 0) && (

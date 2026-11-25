@@ -31,7 +31,7 @@ import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import type { SchemaState } from "./components/schemaState";
 import { ProblemsView } from "./components/ProblemsView";
 import { readable, type Tagged } from "./problemView";
-import { NodeProblems } from "./nodeProblems";
+import { NodeProblems, problemMarks, type NodeProblem } from "./nodeProblems";
 import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
 import { NodeChildren } from "./nodeChildren";
@@ -771,13 +771,14 @@ export function Editor({
   const placement = useMemo(() => placementFound, [placementKey]);
 
   const nodeProblems = useMemo(() => {
-    const byNode = new Map<string, string[]>();
+    const byNode = new Map<string, NodeProblem[]>();
     for (const p of [...errors, ...placement, ...(schema.problems ?? [])]) {
       const text = readable(p.property ? `${p.property}: ${p.message}` : p.message);
-      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), text]);
+      if (p.node) byNode.set(p.node, [...(byNode.get(p.node) ?? []), { severity: p.severity, text }]);
     }
     return byNode;
   }, [errors, placement, schema.problems]);
+  const outlineMarks = useMemo(() => problemMarks(nodeProblems, parents), [nodeProblems, parents]);
 
   // Ports only depend on node data, bindings and references: moving or
   // selecting nodes reuses the previous sets, so nodes do not re-render.
@@ -2268,6 +2269,7 @@ export function Editor({
               onFilter={setOutlineFilter}
               matched={outlineMatches}
               disabled={disabled}
+              problems={outlineMarks}
             />,
             outlineSlot,
           )}

@@ -76,7 +76,8 @@ export function filterProblems(list: Tagged[], filter: ProblemFilter, pathOf: (i
 /**
  * The problems in groups, largest first, with the undocumented vendor
  * properties in a class of their own at the end. With no grouping there is
- * one group of the rest.
+ * one group of the rest. Errors come before warnings, in each group and
+ * among groups (US-5.6): they are what to fix first.
  */
 export function groupProblems(list: Tagged[], by: GroupBy, pathOf: (id: string) => string | undefined): ProblemGroup[] {
   const groups = new Map<string, ProblemGroup>();
@@ -99,9 +100,16 @@ export function groupProblems(list: Tagged[], by: GroupBy, pathOf: (id: string) 
     group.problems.push(t);
     groups.set(key, group);
   }
-  const sorted = [...groups.values()].sort((a, b) => b.problems.length - a.problems.length);
+  const errorsFirst = (list: Tagged[]) => {
+    const errors = list.filter((t) => t.problem.severity === "error");
+    return errors.length === list.length ? list : [...errors, ...list.filter((t) => t.problem.severity !== "error")];
+  };
+  const hasErrors = (g: ProblemGroup) => (g.problems[0]?.problem.severity === "error" ? 1 : 0);
+  const sorted = [...groups.values()]
+    .map((g) => ({ ...g, problems: errorsFirst(g.problems) }))
+    .sort((a, b) => hasErrors(b) - hasErrors(a) || b.problems.length - a.problems.length);
   if (undocumented.length) {
-    sorted.push({ key: "\0undocumented", title: "Undocumented vendor properties", problems: undocumented, undocumented: true });
+    sorted.push({ key: "\0undocumented", title: "Undocumented vendor properties", problems: errorsFirst(undocumented), undocumented: true });
   }
   return sorted;
 }

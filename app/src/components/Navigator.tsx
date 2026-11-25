@@ -6,9 +6,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { KINDS, kindOf } from "../categories";
 import { isDtNode, type FlowNode } from "../model";
+import type { ProblemMark } from "../nodeProblems";
 import type { TreeRow } from "../scopes";
 import { scrollRowIntoView, useVisibleRows } from "../visibleRows";
 import { SearchField } from "./Palette";
+import { SeverityIcon } from "./SeverityIcon";
 
 /** Height of a row, in pixels; the stylesheet gives rows the same. */
 const ROW = 26;
@@ -28,9 +30,11 @@ interface Props {
   matched?: ReadonlySet<string>;
   /** Nodes whose status is not "okay" (US-16.7), drawn dimmed. */
   disabled?: ReadonlySet<string>;
+  /** The problems on each node and below it (US-5.6). */
+  problems?: ReadonlyMap<string, ProblemMark>;
 }
 
-export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, filter, onFilter, matched, disabled }: Props) {
+export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, filter, onFilter, matched, disabled, problems }: Props) {
   const list = useRef<HTMLUListElement>(null);
   const current = rows.findIndex((r) => selected.has(r.id));
 
@@ -127,6 +131,7 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
                 {n.data.label && <span className="dt-node-label">{n.data.label}:</span>}
                 {name}
               </span>
+              <OutlineMark mark={problems?.get(r.id)} collapsed={r.branch && !r.expanded} />
               {disabled?.has(r.id) && (
                 <span className="status-mark" title="Disabled: its status is not &quot;okay&quot;">
                   off
@@ -138,5 +143,24 @@ export function Navigator({ rows, nodes, selected, onToggle, onSelect, onOpen, f
         {filter && rows.length === 0 && <li className="hint">No node matches</li>}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The worst problem of a row: its own, or for a collapsed branch the worst
+ * below it too, drawn hollow so that it does not read as the node's own.
+ */
+function OutlineMark({ mark, collapsed }: { mark?: ProblemMark; collapsed: boolean }) {
+  const below = collapsed ? mark?.below : undefined;
+  const severity = mark?.own === "error" || below === "error" ? "error" : (mark?.own ?? below);
+  if (!severity) return null;
+  const own = mark?.own === severity;
+  const title = [mark?.own && `${mark.own === "error" ? "Errors" : "Warnings"} on this node`, below && `${below === "error" ? "errors" : "warnings"} below it`]
+    .filter(Boolean)
+    .join(", ");
+  return (
+    <span className={own ? "problem-mark" : "problem-mark below"} title={title.charAt(0).toUpperCase() + title.slice(1)}>
+      <SeverityIcon severity={severity} size={12} />
+    </span>
   );
 }
