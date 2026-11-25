@@ -117,12 +117,12 @@ jobs:
           - { image: 'opensuse/tumbleweed', package: '*.AppImage' }
     name: smoke-test (${{ matrix.package }} on ${{ matrix.image }})
     steps:
-      # actions/checkout and download-artifact need tar and gzip, which some
-      # minimal images leave out.
+      # actions/checkout needs tar and gzip, and the next steps find, which
+      # the openSUSE image leaves out.
       - name: Tools the actions need
         shell: sh
         run: |
-          if command -v zypper >/dev/null; then zypper --non-interactive -q install tar gzip; fi
+          if command -v zypper >/dev/null; then zypper --non-interactive -q install tar gzip findutils; fi
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
