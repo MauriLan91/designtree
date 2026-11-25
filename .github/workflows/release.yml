@@ -16,7 +16,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         name: Check the tag against the workspace version
         shell: bash
@@ -47,11 +47,11 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # changelog.sh reads the merges since the previous tag.
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
@@ -62,7 +62,7 @@ jobs:
           # The PKGBUILD and .SRCINFO are the AUR files, not installers.
           find . -type f ! -name PKGBUILD ! -name .SRCINFO -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
           mv .SRCINFO designtree.SRCINFO
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             assets/*.pkg.tar.zst

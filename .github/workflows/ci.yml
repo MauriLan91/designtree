@@ -9,7 +9,7 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -33,8 +33,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -51,13 +51,13 @@ jobs:
       KERNEL_TAG: v7.3
       DESIGNTREE_G1_THRESHOLD: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache the kernel devicetree sources
         id: kernel
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/linux-g1
           # The key names everything that decides what the checkout holds.
@@ -97,9 +97,9 @@ jobs:
       DTSCHEMA_VERSION: "2026.9"
       DESIGNTREE_G3_THRESHOLD: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "dtschema==$DTSCHEMA_VERSION"
@@ -107,7 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Cache the kernel devicetree sources
         id: kernel
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/linux-g1
           key: linux-g1-${{ env.KERNEL_TAG }}-${{ hashFiles('scripts/fetch-kernel-dts.sh') }}
@@ -148,10 +148,10 @@ jobs:
     env:
       PLAYWRIGHT_VERSION: "1.63.0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -176,7 +176,7 @@ jobs:
           ../target/release/designtree bench --nodes 5000 --runs 1 --json --design ../g5-lists-design.json > /dev/null
           node bench/lists.mjs ../g5-lists-design.json --problems 8000 --out ../g5-lists.json
       - name: Fetch the last report from main
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v28
         with:
           workflow: ci.yml
           branch: main
@@ -185,7 +185,7 @@ jobs:
           if_no_artifact_found: warn
       - name: Report
         run: node app/bench/g5-report.mjs g5-backend.json g5-canvas.json g5-lists.json g5.json previous/g5.json >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: g5
           path: g5.json
