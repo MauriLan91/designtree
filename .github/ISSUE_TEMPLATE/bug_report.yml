@@ -35,7 +35,7 @@ body:
     id: version
     attributes:
       label: DesignTree version
-      description: `designtree --version`, the package version, or the commit you built.
+      description: "`designtree --version`, the package version, or the commit you built."
     validations:
       required: true
   - type: dropdown
