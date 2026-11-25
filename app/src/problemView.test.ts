@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Problem } from "./model";
-import { filterProblems, groupProblems, isUndocumented, readable, ruleOf, SOURCES, type Tagged } from "./problemView";
+import { filterProblems, groupProblems, isUndocumented, problemsInView, readable, ruleOf, SOURCES, subtreeOf, type Tagged } from "./problemView";
 
 const p = (message: string, extra: Partial<Problem> = {}): Problem => ({ severity: "error", message, ...extra });
 const vendor = p('"[00 00 00 11]" is not of types "null", "boolean", "integer", "array", "object"', {
@@ -57,5 +57,23 @@ describe("the problem list", () => {
     const groups = groupProblems(mixed, "node", pathOf);
     expect(groups.map((g) => g.title)).toEqual(["/soc/uart@1000", "/soc"]);
     expect(groups[0].problems.map((t) => t.problem.severity)).toEqual(["error", "warning"]);
+  });
+
+  it("keeps the problems of the nodes on show and those of no node", () => {
+    const loose: Tagged = { problem: p("syntax error"), source: "dtc" };
+    const shown = problemsInView([...list, loose], new Set(["b"]));
+    expect(shown.map((t) => t.problem.node)).toEqual(["b", "b", undefined]);
+    expect(problemsInView(list, null)).toBe(list);
+  });
+
+  it("finds a scope and the nodes below it", () => {
+    const parents = new Map([
+      ["soc", "root"],
+      ["uart", "soc"],
+      ["dma", "uart"],
+      ["cpus", "root"],
+    ]);
+    expect([...subtreeOf("soc", parents)].sort()).toEqual(["dma", "soc", "uart"]);
+    expect(subtreeOf("root", parents).size).toBe(5);
   });
 });

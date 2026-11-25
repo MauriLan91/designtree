@@ -1071,6 +1071,7 @@ button.lib-header:hover { background: var(--hover); }
 .problems-toolbar .chip-count { font-size: 11px; color: var(--muted); }
 .problems-total { margin-left: auto; color: var(--muted); font-size: 12px; }
 .problems-view .hint:empty { display: none; }
+.problems-scope { margin: 0; color: var(--muted); font-size: 12px; }
 /* Rows of one height (22px, ProblemsView's ROW): only those in view are drawn. */
 .problem-items { list-style: none; margin: 0; padding: 0; }
 .problem-items > li { height: 22px; overflow: hidden; }

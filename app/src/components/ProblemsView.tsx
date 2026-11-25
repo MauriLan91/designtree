@@ -15,6 +15,9 @@ interface Props {
   onFocusNode: (id: string) => void;
   /** Notes on what was not checked, above the list. */
   notes?: ReactNode;
+  /** What is on show (US-5.7): its name, how many problems lie outside it,
+   * and whether the list shows the whole design instead. */
+  view?: { title: string; hidden: number; whole: boolean; onWhole: (whole: boolean) => void };
 }
 
 /** Height of a row, in pixels; the stylesheet gives rows the same. */
@@ -30,7 +33,7 @@ const GROUP_TITLES: [GroupBy, string][] = [
   ["none", "Not grouped"],
 ];
 
-export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
+export function ProblemsView({ problems, pathOf, onFocusNode, notes, view }: Props) {
   const [by, setBy] = useState<GroupBy>("rule");
   const [filter, setFilter] = useState<ProblemFilter>({ severity: "all", sources: new Set(SOURCES), text: "" });
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
@@ -88,6 +91,16 @@ export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
           <option value="error">Errors</option>
           <option value="warning">Warnings</option>
         </select>
+        {view && (
+          <button
+            className="chip"
+            aria-pressed={view.whole}
+            onClick={() => view.onWhole(!view.whole)}
+            title={view.whole ? `Show only the problems of ${view.title}` : "Show the problems of the whole design"}
+          >
+            Whole design
+          </button>
+        )}
         {SOURCES.map((s) => (
           <button key={s} className="chip" aria-pressed={filter.sources.has(s)} onClick={() => toggleSource(s)} title={`Show the ${SOURCE_TITLES[s]} problems`}>
             {SOURCE_TITLES[s]} <span className="chip-count">{counts[s]}</span>
@@ -103,9 +116,28 @@ export function ProblemsView({ problems, pathOf, onFocusNode, notes }: Props) {
           {kept.length === problems.length ? `${problems.length}` : `${kept.length} of ${problems.length}`}
         </span>
       </div>
+      {view && (
+        <p className="problems-scope">
+          {view.whole ? (
+            "Every problem of the design."
+          ) : (
+            <>
+              Problems of {view.title}
+              {view.hidden > 0 && (
+                <>
+                  {" · "}
+                  <button className="link" onClick={() => view.onWhole(true)}>
+                    {view.hidden} more outside this view
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </p>
+      )}
       {notes}
       {problems.length === 0 ? (
-        <p className="hint">No problems found.</p>
+        <p className="hint">{view && !view.whole && view.hidden > 0 ? "No problems in this view." : "No problems found."}</p>
       ) : kept.length === 0 ? (
         <p className="hint">No problem matches the filters.</p>
       ) : (
