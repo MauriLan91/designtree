@@ -31,6 +31,9 @@ use serde_json::{json, Map, Value};
 
 pub use fdt::{parse_fdt, FdtError, FdtNode};
 
+/// How a problem about a schema that could not be used starts.
+const CANNOT_CHECK: &str = "the binding cannot be checked";
+
 /// Prefix of every schema `$id`.
 const ID_BASE: &str = "http://devicetree.org/schemas/";
 
@@ -72,6 +75,8 @@ impl SchemaSet {
             schemas.insert(id, schema);
         }
         let types = types::TypeDb::new(schemas.iter().map(|(id, s)| (id.as_str(), s)));
+        // After the types: dt-schema reads property names from `$ref`s unescaped.
+        schemas.values_mut().for_each(escape_ref_fragments);
         SchemaSet { schemas, types }
     }
 
@@ -81,6 +86,71 @@ impl SchemaSet {
 
     pub fn len(&self) -> usize {
         self.schemas.len()
+    }
+}
+
+/// Percent-encodes what a URI fragment may not hold in every `$ref`. The
+/// JSON pointer of a property named `#interrupt-cells` has a bare `#`
+/// (`arm,gic.yaml#/properties/#interrupt-cells`, kernel 7.2), which
+/// dt-validate follows but a strict URI parser rejects.
+fn escape_ref_fragments(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, value) in map.iter_mut() {
+                match value {
+                    Value::String(reference) if key == "$ref" => {
+                        if let Some(escaped) = escape_fragment(reference) {
+                            *reference = escaped;
+                        }
+                    }
+                    _ => escape_ref_fragments(value),
+                }
+            }
+        }
+        Value::Array(list) => list.iter_mut().for_each(escape_ref_fragments),
+        _ => {}
+    }
+}
+
+/// `reference` with its fragment percent-encoded, or `None` when it needs
+/// no change.
+fn escape_fragment(reference: &str) -> Option<String> {
+    let (base, fragment) = reference.split_once('#')?;
+    let bytes = fragment.as_bytes();
+    let allowed = |i: usize| {
+        let b = bytes[i];
+        b.is_ascii_alphanumeric()
+            || b"-._~!$&'()*+,;=:@/?".contains(&b)
+            || (b == b'%'
+                && bytes.get(i + 1).is_some_and(u8::is_ascii_hexdigit)
+                && bytes.get(i + 2).is_some_and(u8::is_ascii_hexdigit))
+    };
+    if (0..bytes.len()).all(allowed) {
+        return None;
+    }
+    let mut out = format!("{base}#");
+    for (i, &b) in bytes.iter().enumerate() {
+        if allowed(i) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    Some(out)
+}
+
+/// The first `$ref` of `schema` that is not a valid URI reference, with
+/// why.
+fn invalid_ref(schema: &Value) -> Option<String> {
+    match schema {
+        Value::Object(map) => map.iter().find_map(|(key, value)| match value {
+            Value::String(reference) if key == "$ref" => jsonschema::uri::from_str(reference)
+                .err()
+                .map(|e| e.to_string()),
+            _ => invalid_ref(value),
+        }),
+        Value::Array(list) => list.iter().find_map(invalid_ref),
+        _ => None,
     }
 }
 
@@ -235,6 +305,9 @@ pub struct Checker {
     selecting: Vec<(String, Value)>,
     /// Compiled validators, or why one could not be compiled.
     validators: RwLock<HashMap<String, Result<Arc<Validator>, String>>>,
+    /// Schemas left out of the registry, with why: one that cannot be
+    /// registered would leave every other schema unchecked.
+    broken: HashMap<String, String>,
 }
 
 impl Checker {
@@ -265,7 +338,18 @@ impl Checker {
                 }
             }
         }
-        let resources = schemas.into_iter().map(|(id, s)| (id, Arc::new(s)));
+        let mut broken = HashMap::new();
+        let resources: Vec<_> = schemas
+            .into_iter()
+            .filter(|(id, schema)| match invalid_ref(schema) {
+                Some(reason) => {
+                    broken.insert(id.clone(), reason);
+                    false
+                }
+                None => true,
+            })
+            .map(|(id, s)| (id, Arc::new(s)))
+            .collect();
         // Only an invalid `$id` makes this fail; nothing can be checked then.
         let registry = Registry::new()
             .draft(Draft::Draft201909)
@@ -279,6 +363,7 @@ impl Checker {
             by_compatible,
             selecting,
             validators: RwLock::default(),
+            broken,
         }
     }
 
@@ -294,6 +379,9 @@ impl Checker {
 
     /// The validator of the schema `id`.
     fn validator(&self, id: &str) -> Result<Arc<Validator>, String> {
+        if let Some(reason) = self.broken.get(id) {
+            return Err(reason.clone());
+        }
         self.compiled(id, || json!({ "$ref": id }))
     }
 
@@ -440,12 +528,20 @@ impl Checker {
             let validator = match self.validator(id) {
                 Ok(validator) => validator,
                 Err(reason) => {
-                    out.push(SchemaProblem {
-                        node: path.to_owned(),
-                        property: None,
-                        message: format!("the binding cannot be checked: {reason}"),
-                        schema: schema_path(id),
-                    });
+                    let schema = schema_path(id);
+                    // Once per tree: a schema that selects itself would
+                    // report it on every node.
+                    if !out
+                        .iter()
+                        .any(|p| p.schema == schema && p.message.starts_with(CANNOT_CHECK))
+                    {
+                        out.push(SchemaProblem {
+                            node: path.to_owned(),
+                            property: None,
+                            message: format!("{CANNOT_CHECK}: {reason}"),
+                            schema,
+                        });
+                    }
                     continue;
                 }
             };
@@ -584,6 +680,16 @@ fn describe(error: &ValidationError) -> String {
                 _ => format!("one of these must be fixed: {}", messages.join("; ")),
             }
         }
+        // `memory: false` in root-node.yaml, `"^gic-its@": false`: a name
+        // the schema forbids. dt-validate's "False schema does not allow"
+        // says neither what nor why.
+        ValidationErrorKind::FalseSchema => match error.instance_path().segments().last() {
+            None => "the binding relies on a schema that is not loaded".to_owned(),
+            Some(LocationSegment::Property(name)) if error.instance().is_object() => {
+                format!("a node named `{name}` is not allowed here")
+            }
+            Some(_) => "not allowed here".to_owned(),
+        },
         _ if error.instance().is_object() => error.masked_with("the node").to_string(),
         _ => error.to_string(),
     }

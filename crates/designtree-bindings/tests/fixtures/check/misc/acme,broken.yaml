@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/misc/acme,broken.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Acme broken
+
+description:
+  Refers to another schema with a reference no URI parser accepts, and
+  selects every node, so that it would reject each one if it were used.
+
+maintainers:
+  - Nobody <nobody@example.com>
+
+select: true
+
+properties:
+  acme,broken:
+    $ref: acme widget.yaml#
+
+additionalProperties: true
