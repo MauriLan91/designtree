@@ -1,6 +1,6 @@
 # Product backlog
 
-> Status: **draft v0.5** (2026-11-15, M7 and M8 added from a large vendor tree and the third round of feedback). Product decisions below were taken
+> Status: **draft v0.6** (2026-11-25, M9 added from the fourth round of feedback). Product decisions below were taken
 > with the product owner; story details can still change during refinement.
 > Every milestone is mirrored as a
 > [GitHub milestone](https://github.com/MauriLan91/designtree/milestones) and
@@ -64,6 +64,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
 | **M6 v1.2 Editing comfort** ✅ | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | done 2026-11-15 |
 | **M7 v1.3 Large trees** ✅ | Trees of thousands of nodes and decompiled blobs: restored references, node search, compact property table, library by device class with filters, problems at scale | G5 | done 2026-11-24 |
+| **M9 v1.4 Trustworthy UI** | Stories from the fourth round of feedback (2026-11-25): an end-to-end test of every UI element, errors told apart from warnings, problems of the shown view, an About page with the version | G4, G6 | 2027-01-29 |
 | **M8 v2.0 Beyond the editor** | Usage and diff views, validation profiles and quick fixes, pin multiplexing, Zephyr, web demo, assistant | – | 2027-09-30 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
@@ -389,6 +390,32 @@ moves `compatible` before the other properties.
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
 | US-11.3 | As a user, I want lists to stay fast on a 5,000-node design so that large boards remain fluid. | Outline, problem list and property table draw only the rows in view; the design file is written compactly (an array of numbers on one line); a 5,000-node design with 8,000 problems joins the G5 benchmark. | 3 | Sonnet 5.5 | run, high-perf-browser |
+
+## M9 · v1.4 Trustworthy UI
+
+Stories from the fourth round of hands-on feedback (5 notes, 2026-11-25),
+planned before v2.0. One defect is tracked as a bug in v1.0: the schema check
+reports "False schema does not allow the node", a message that says nothing
+about the cause, and the maintainer sees it on every node.
+
+### F4 Engineering enablers (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-4.5 | As a maintainer, I want an end-to-end test of every UI element so that I know each one does what it says. | An inventory of every UI element (menu item, toolbar and pane button, shortcut, context menu entry, panel control, dialog), generated from the command registry where it can be and listed by hand otherwise; an end-to-end suite drives the real app (Tauri WebDriver under Xvfb, with a small kernel bindings tree and `dtc`) and checks each element by its effect on the design, the DTS text, the file written or the view shown, not only that it renders; the suite fails when a command in the registry has no test; runs in CI; the first run is reported and every failure is filed as a bug. | 8 | Sonnet 5.5 | testing-setup, run, code-review |
+
+### F5 Schema validation (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-5.6 | As a user, I want errors told apart from warnings so that I fix first what breaks the tree. | Every problem has a severity: errors are what makes the tree wrong (bad type or length, missing required property, structural error, `dtc` error), warnings what is suspect but builds (undocumented property or compatible, deprecated property, placement hint, `dtc` warning); schema problems get theirs from the failed keyword instead of all being errors; the problem list, the node badges, the Outline and the status bar show them with distinct icon and colour; `designtree check --json` carries the severity. | 3 | Opus 5.5 | run, code-review, ux-heuristics |
+| US-5.7 | As a user, I want the problems panel to show the problems of what I am looking at so that the list matches the view. | On the canvas the panel lists the problems of the open scope and the nodes below it, in the DTS view those of the shown file, in the address map and the board view those of the nodes they draw; a "Whole design" toggle shows them all; the panel header says how many are hidden; the status bar keeps counting the whole design. | 3 | Sonnet 5.5 | run, ux-heuristics |
+
+### F13 Onboarding and docs (continued)
+
+| ID | User story | Acceptance criteria | SP | Model | Skills |
+| --- | --- | --- | --- | --- | --- |
+| US-13.5 | As a user, I want an About page and the version always in sight so that I know which build I run and can report it. | Help > About shows the app version, the commit and build date, the licence (MIT), the versions of the loaded kernel and `dtc`, and links to the guide, the repository and the issue tracker, with a "Copy" button for a bug report; the window title shows the design name and "DesignTree <version>"; the status bar shows the version. | 1 | Haiku 5.5 | run |
 
 ## M8 · v2.0 Beyond the editor
 
