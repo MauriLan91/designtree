@@ -12,38 +12,16 @@ on:
       - Cargo.toml
       - Cargo.lock
       - .github/workflows/packaging.yml
+      - .github/workflows/linux-packages.yml
+      - .github/actions/linux-bundles/**
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  arch:
-    runs-on: ubuntu-latest
-    container: archlinux:latest
-    steps:
-      # actions/checkout needs git in the container for a real clone, which
-      # the -git PKGBUILD builds from.
-      - run: pacman -Syu --noconfirm git
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: packaging/arch/build.sh git "$GITHUB_SHA"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: arch-package
-          path: dist-arch/
-          retention-days: 7
-
-  deb-appimage:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/linux-bundles
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundles
-          path: |
-            target/release/bundle/deb/*.deb
-            target/release/bundle/appimage/*.AppImage
-          retention-days: 7
+  packages:
+    uses: ./.github/workflows/linux-packages.yml
+    with:
+      arch-mode: git
+      arch-ref: ${{ github.sha }}

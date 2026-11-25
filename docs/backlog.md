@@ -23,6 +23,7 @@
 | D9 | The menu bar is drawn **in HTML** inside the window, from the same command registry as the command palette, the toolbar and the shortcuts. | 2026-11-06 |
 | D10 | **Decompiled vendor trees** (a `.dtb`, or the DTS `dtc` writes from one) are a supported input: their numeric phandles are restored to references. | 2026-11-15 |
 | D11 | The number base (hex, decimal, octal) is kept **per cell**, not per property. | 2026-11-15 |
+| D12 | DesignTree supports **Linux only**: no Windows or macOS builds. Packages cover the common distributions (Debian/Ubuntu, Fedora/openSUSE, Arch) plus AppImage and Flatpak, each installed and started in CI since only Arch is tried by hand. | 2026-11-25 |
 
 ## Product vision
 
@@ -50,7 +51,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | G3 | **Schema validation while editing.** Catch the errors `make dtbs_check` would report, without leaving the editor. | On a seeded corpus of 100 known errors, DesignTree reports ≥ 90 % of what `dtbs_check` reports; full validation of a 500-node design takes < 200 ms. | 2027-02-26 (v0.2) |
 | G4 | **Fast first board.** A new user builds a minimal board (CPU, memory, clock, UART, GPIO LED) from an empty canvas to a compiling `.dtb`. | Median time < 15 min across 3 test users, no help from the authors. | 2027-03-31 (v0.3) |
 | G5 | **Scales to real SoCs.** Large designs stay fluid. | A 1,000-node design pans/zooms at ≥ 50 fps and opens in < 2 s on a mid-range laptop; lists of a 5,000-node design with 8,000 problems scroll at ≥ 50 fps (benchmark in CI). | 2027-03-31 (v0.3) |
-| G6 | **Public 1.0 release.** Anyone can install and use it. | Signed installers for Linux (AppImage, .deb), Windows (.msi) and macOS (.dmg) built by CI; user guide and tutorial published; ≥ 70 % line coverage on `designtree-core`. | 2027-04-30 (v1.0) |
+| G6 | **Public 1.0 release.** Anyone can install and use it. | Linux packages (.deb, .rpm, Arch PKGBUILD, AppImage, Flatpak) built by CI with signed build provenance and installed in each target distribution; user guide and tutorial published; ≥ 70 % line coverage on `designtree-core`. | 2027-04-30 (v1.0) |
 
 ## Milestones
 
@@ -220,8 +221,8 @@ addressed, docs updated, screenshot in the PR for UI changes.
 
 | ID | User story | Acceptance criteria | SP | Model | Skills |
 | --- | --- | --- | --- | --- | --- |
-| US-12.1 | As a user, I want installers for my OS so that I do not need a Rust toolchain. | GitHub Actions matrix produces AppImage, .deb, .msi, .dmg on tag; artifacts attached to the release. Linux first (decided 2026-11-06): Arch PKGBUILDs (release and `-git`) built and checked with `namcap` in CI, AppImage and .deb on tag; .msi and .dmg follow later. | 5 | Sonnet 5.5 | security-review |
-| US-12.2 | As a user, I want signed builds and in-app update notifications so that I stay current safely. | Code signing for Windows/macOS where certificates are available; Tauri updater with signature check. Linux first (2026-11-06): signed build provenance for every release asset, daily update notice that leaves updating to the package manager; self-update (Tauri updater) and Windows/macOS signing follow with those installers. | 5 | Sonnet 5.5 | security-review |
+| US-12.1 | As a user, I want packages for my Linux distribution so that I do not need a Rust toolchain. | Linux only (D12, 2026-11-25; Windows and macOS dropped). On tag, CI builds and attaches to the release: Arch PKGBUILDs (release and `-git`, checked with `namcap`), `.deb` (Debian 12+, Ubuntu 22.04+), `.rpm` (Fedora, openSUSE Tumbleweed), AppImage and a Flatpak bundle; every package carries the desktop app, the `designtree` CLI, `dtc` (as a dependency or bundled) and the examples. Each package is installed in clean containers of its distributions, where the app must start (`linux-packages.yml`). | 5 | Sonnet 5.5 | security-review |
+| US-12.2 | As a user, I want signed builds and in-app update notifications so that I stay current safely. | ~~Code signing for Windows/macOS; Tauri updater~~ (Linux only, D12): signed build provenance for every release asset; a daily update notice that says how to update for the way it was installed and leaves updating to the package manager. | 5 | Sonnet 5.5 | security-review |
 | US-12.3 | As a maintainer, I want versioning and a changelog generated from commits so that releases are cheap. | ~~Conventional commits~~ PR titles named after their story (already the convention) grouped by backlog feature; release notes generated; one version across crates, app and packages, checked in CI. | 2 | Haiku 5.5 | – |
 
 ### F13 Onboarding and docs

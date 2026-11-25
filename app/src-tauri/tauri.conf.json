@@ -7,7 +7,8 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build",
+    "beforeBundleCommand": "cargo build --release -p designtree-cli"
   },
   "app": {
     "windows": [
@@ -26,14 +27,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
       "icons/128x128.png",
-      "icons/icon.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.png"
     ],
     "category": "DeveloperTool",
     "shortDescription": "Build Linux devicetrees on a node canvas",
@@ -47,13 +50,20 @@
           "device-tree-compiler"
         ],
         "files": {
-          "/usr/share/metainfo/io.github.maurilan91.designtree.metainfo.xml": "../../packaging/linux/io.github.maurilan91.designtree.metainfo.xml"
+          "/usr/bin/designtree": "../../target/release/designtree",
+          "/usr/share/metainfo/io.github.maurilan91.designtree.metainfo.xml": "../../packaging/linux/io.github.maurilan91.designtree.metainfo.xml",
+          "/usr/share/designtree/examples": "../../examples"
         }
       },
       "rpm": {
         "depends": [
           "dtc"
-        ]
+        ],
+        "files": {
+          "/usr/bin/designtree": "../../target/release/designtree",
+          "/usr/share/metainfo/io.github.maurilan91.designtree.metainfo.xml": "../../packaging/linux/io.github.maurilan91.designtree.metainfo.xml",
+          "/usr/share/designtree/examples": "../../examples"
+        }
       }
     }
   },

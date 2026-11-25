@@ -1,14 +1,20 @@
 # Installing DesignTree
 
-DesignTree is packaged for Linux first. Arch Linux and its derivatives
-(Manjaro, EndeavourOS) build it from a PKGBUILD; other distributions use the
-AppImage or the `.deb` attached to each
-[GitHub release](https://github.com/MauriLan91/designtree/releases).
-Windows and macOS installers are not built yet; build from source there.
+DesignTree runs on Linux; there are no Windows or macOS builds. Each
+[GitHub release](https://github.com/MauriLan91/designtree/releases) carries:
 
-Every package installs the desktop app (`designtree-app`, with a menu entry)
-and needs `dtc` for **Build .dtb**. The Arch package also installs the
-`designtree` command line.
+| Distribution | File | Section |
+| --- | --- | --- |
+| Arch Linux, Manjaro, EndeavourOS | `PKGBUILD` (also on the AUR) | [Arch Linux and Manjaro](#arch-linux-and-manjaro) |
+| Debian 12+, Ubuntu 22.04+, Linux Mint, Pop!_OS | `DesignTree_<version>_amd64.deb` | [Debian and Ubuntu](#debian-and-ubuntu) |
+| Fedora, openSUSE Tumbleweed | `DesignTree-<version>-1.x86_64.rpm` | [Fedora and openSUSE](#fedora-and-opensuse) |
+| Any other, glibc 2.35 or newer | `DesignTree_<version>_amd64.AppImage` | [AppImage](#appimage) |
+
+Every package installs the desktop app (`designtree-app`, with a menu entry),
+the `designtree` command line and the example designs, and brings `dtc`
+for **Build .dtb** as a dependency. Before a release is published, CI
+installs each package in clean containers of the distributions above and
+checks that the app starts.
 
 ## Arch Linux and Manjaro
 
@@ -43,17 +49,6 @@ WebKitGTK's DMA-BUF renderer closes the window at start with
 needed. To try the DMA-BUF renderer anyway, start it with
 `WEBKIT_DISABLE_DMABUF_RENDERER=0 designtree-app`.
 
-## AppImage
-
-```sh
-chmod +x DesignTree_<version>_amd64.AppImage
-./DesignTree_<version>_amd64.AppImage
-```
-
-Install `dtc` from your distribution (`device-tree-compiler` on Debian and
-Ubuntu) to build `.dtb` files. The AppImage is built on Ubuntu 22.04 and runs
-on distributions with glibc 2.35 or newer.
-
 ## Debian and Ubuntu
 
 ```sh
@@ -61,7 +56,31 @@ sudo apt install ./DesignTree_<version>_amd64.deb
 ```
 
 The package depends on `device-tree-compiler` and the WebKitGTK 4.1 runtime
-(Ubuntu 22.04, Debian 12 or newer).
+(Ubuntu 22.04, Debian 12 or newer). Remove it with `sudo apt remove design-tree`.
+
+## Fedora and openSUSE
+
+```sh
+sudo dnf install ./DesignTree-<version>-1.x86_64.rpm                         # Fedora
+sudo zypper install --allow-unsigned-rpm ./DesignTree-<version>-1.x86_64.rpm  # openSUSE
+```
+
+The package depends on `dtc` and the WebKitGTK 4.1 runtime, which the
+package manager installs with it. openSUSE Leap 15 is too old for it; use
+the AppImage there.
+
+## AppImage
+
+```sh
+chmod +x DesignTree_<version>_amd64.AppImage
+./DesignTree_<version>_amd64.AppImage
+```
+
+The AppImage carries its own WebKitGTK and runs on distributions with
+glibc 2.35 or newer. Install `dtc` from your distribution
+(`device-tree-compiler` on Debian and Ubuntu, `dtc` elsewhere) to build
+`.dtb` files. On a distribution without FUSE 2, run it with
+`--appimage-extract-and-run`.
 
 ## Verifying a download
 
@@ -81,7 +100,7 @@ Once a day at start, DesignTree asks GitHub for the latest published
 release (one request to `api.github.com`, nothing else is sent). When it is
 newer than the running version, a bar at the bottom says so and how to
 update for the way it was installed: the AUR helper or PKGBUILD on Arch, a
-new `.deb` or AppImage elsewhere. The app does not replace itself; on Arch
+new `.deb`, `.rpm` or AppImage elsewhere. The app does not replace itself; on Arch
 the package manager stays in charge. **Don't check** in the bar turns the
 check off; **Check for updates now** in the command palette (Ctrl+K) checks
 at once and turns it back on.

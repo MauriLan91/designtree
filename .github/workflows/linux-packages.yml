@@ -1,0 +1,92 @@
+name: Linux packages
+
+# Builds every Linux package and installs each one in clean containers of the
+# distributions it is meant for, where the app has to start. Called by the
+# packaging workflow (pull requests) and the release workflow (tags): only
+# Arch can be tried by hand, the rest is checked here.
+on:
+  workflow_call:
+    inputs:
+      arch-mode:
+        description: "`git` builds designtree-git from this commit, `release` the tagged designtree"
+        type: string
+        required: true
+      arch-ref:
+        description: The commit (git) or version (release) for packaging/arch/build.sh
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # actions/checkout needs git in the container for a real clone, which
+      # the -git PKGBUILD builds from.
+      - run: pacman -Syu --noconfirm git
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: packaging/arch/build.sh "${{ inputs.arch-mode }}" "${{ inputs.arch-ref }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist-arch/
+          retention-days: 7
+
+  bundles:
+    # The oldest supported runner: an AppImage runs on systems with the same
+    # or a newer glibc than it was built on.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-bundles
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+          retention-days: 7
+
+  smoke-test:
+    needs: [arch, bundles]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'debian:12', package: '*.deb' }
+          - { image: 'debian:13', package: '*.deb' }
+          - { image: 'ubuntu:22.04', package: '*.deb' }
+          - { image: 'ubuntu:24.04', package: '*.deb' }
+          - { image: 'fedora:latest', package: '*.rpm' }
+          - { image: 'opensuse/tumbleweed', package: '*.rpm' }
+          - { image: 'archlinux:latest', package: '*.pkg.tar.zst' }
+          - { image: 'debian:12', package: '*.AppImage' }
+          - { image: 'fedora:latest', package: '*.AppImage' }
+          - { image: 'opensuse/tumbleweed', package: '*.AppImage' }
+    name: smoke-test (${{ matrix.package }} on ${{ matrix.image }})
+    steps:
+      # actions/checkout and download-artifact need tar and gzip, which some
+      # minimal images leave out.
+      - name: Tools the actions need
+        shell: sh
+        run: |
+          if command -v zypper >/dev/null; then zypper --non-interactive -q install tar gzip; fi
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Install and start
+        shell: sh
+        run: |
+          set -- $(find packages -name '${{ matrix.package }}')
+          if [ $# -ne 1 ]; then echo "::error::expected one ${{ matrix.package }}, found $#"; exit 1; fi
+          packaging/linux/smoke-test.sh "$1"

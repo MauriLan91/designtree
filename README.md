@@ -36,8 +36,10 @@ docs/                   architecture notes, GUI options, product backlog
 ## Install
 
 Arch Linux and Manjaro build the package from `packaging/arch/` with
-`makepkg -si`; other Linux distributions use the AppImage or `.deb` from the
-[releases](https://github.com/MauriLan91/designtree/releases). See
+`makepkg -si`; Debian and Ubuntu use the `.deb`, Fedora and openSUSE the
+`.rpm`, and any other distribution the AppImage from the
+[releases](https://github.com/MauriLan91/designtree/releases). DesignTree
+runs on Linux only. See
 [docs/install.md](docs/install.md), which also covers the kernel checkout
 the element library is built from.
 

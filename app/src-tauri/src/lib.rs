@@ -396,6 +396,8 @@ fn install_kind() -> &'static str {
         "pacman"
     } else if in_usr && Path::new("/var/lib/dpkg/status").is_file() {
         "deb"
+    } else if in_usr && Path::new("/var/lib/rpm").exists() {
+        "rpm"
     } else {
         "other"
     }

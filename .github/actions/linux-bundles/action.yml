@@ -1,5 +1,5 @@
 name: Linux bundles
-description: Builds the .deb and the AppImage of the desktop app.
+description: Builds the .deb, the .rpm and the AppImage of the desktop app.
 runs:
   using: composite
   steps:
@@ -19,4 +19,4 @@ runs:
       working-directory: app
       run: |
         npm ci
-        npx tauri build --bundles deb,appimage
+        npx tauri build --bundles deb,rpm,appimage
