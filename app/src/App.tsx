@@ -30,7 +30,7 @@ import { SocPicker } from "./components/SocPicker";
 import { BuildPanel, type BuildState } from "./components/BuildPanel";
 import type { SchemaState } from "./components/schemaState";
 import { ProblemsView } from "./components/ProblemsView";
-import { readable, type Tagged } from "./problemView";
+import { problemsInView, readable, subtreeOf as scopeSubtree, type Tagged } from "./problemView";
 import { NodeProblems, problemMarks, type NodeProblem } from "./nodeProblems";
 import { placementProblem, scopeClass } from "./fits";
 import { NodePorts } from "./nodePorts";
@@ -1570,6 +1570,19 @@ export function Editor({
     ],
     [errors, placement, schema.problems, build, buildStale],
   );
+  // The problems of what is on show (US-5.7): the board's placed devices,
+  // the nodes the DTS text writes, or the open scope and what is below it.
+  const [wholeDesign, setWholeDesign] = useState(false);
+  const placedKey = boardView ? nodes.filter((n) => isDtNode(n) && n.data.boardPosition).map((n) => n.id).join(" ") : "";
+  const spanKey = mode === "dts" ? spans.map((s) => s.node).join(" ") : "";
+  const shownView = useMemo((): { nodes: ReadonlySet<string> | null; title: string } => {
+    if (boardView) return { nodes: new Set(placedKey.split(" ").filter(Boolean)), title: "the devices on the board" };
+    if (mode === "dts") return { nodes: new Set(spanKey.split(" ").filter(Boolean)), title: "the nodes in the DTS text" };
+    if (!scope || !parents.has(scope)) return { nodes: null, title: "the whole design" };
+    return { nodes: scopeSubtree(scope, parents), title: `${pathOf(scope) ?? scope} and below` };
+  }, [boardView, placedKey, mode, spanKey, scope, parents, pathOf]);
+  const inView = useMemo(() => problemsInView(taggedProblems, shownView.nodes), [taggedProblems, shownView]);
+  const viewProblems = wholeDesign ? taggedProblems : inView;
   const outlineQuery = outlineFilter.trim();
   const outlineMatches = useMemo(
     () => (outlineQuery ? new Set(searchNodes(nodesForSearch.current, paths, outlineQuery).map((m) => m.id)) : undefined),
@@ -2414,7 +2427,7 @@ export function Editor({
       {layout.panel.open && (
         <BottomPanel
           tabs={[
-            { id: "problems", title: "Problems", count: problemCount.errors + problemCount.warnings },
+            { id: "problems", title: "Problems", count: viewProblems.length },
             { id: "build", title: "Build", count: buildStale ? undefined : build?.problems.length },
             { id: "interrupts", title: "Interrupts" },
             { id: "address-map", title: "Address map" },
@@ -2427,8 +2440,14 @@ export function Editor({
         >
           {layout.panel.tab === "problems" && (
             <ProblemsView
-              problems={taggedProblems}
+              problems={viewProblems}
               pathOf={pathOf}
+              view={{
+                title: shownView.title,
+                hidden: taggedProblems.length - inView.length,
+                whole: wholeDesign,
+                onWhole: setWholeDesign,
+              }}
               onFocusNode={focusNode}
               notes={
                 <p className="hint">

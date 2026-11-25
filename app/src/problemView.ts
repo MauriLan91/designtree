@@ -113,3 +113,30 @@ export function groupProblems(list: Tagged[], by: GroupBy, pathOf: (id: string) 
   }
   return sorted;
 }
+
+/**
+ * The problems of what is on show (US-5.7): those of the nodes in `shown`,
+ * and those about no node in particular, which belong to every view. With
+ * no `shown`, the view is the whole design.
+ */
+export function problemsInView(list: Tagged[], shown: ReadonlySet<string> | null): Tagged[] {
+  if (!shown) return list;
+  return list.filter(({ problem: p }) => !p.node || shown.has(p.node));
+}
+
+/** `scope` and every node below it, by the parent of each node. */
+export function subtreeOf(scope: string, parents: ReadonlyMap<string, string>): Set<string> {
+  const inside = new Map<string, boolean>([[scope, true]]);
+  const walk = (id: string): boolean => {
+    const known = inside.get(id);
+    if (known !== undefined) return known;
+    const up = parents.get(id);
+    // Marked before the walk up, so that a cycle ends.
+    inside.set(id, false);
+    const result = up !== undefined && walk(up);
+    inside.set(id, result);
+    return result;
+  };
+  for (const id of parents.keys()) walk(id);
+  return new Set([...inside].filter(([, yes]) => yes).map(([id]) => id));
+}

@@ -53,6 +53,14 @@ through:
 - Properties no binding documents, usually vendor ones such as
   `qcom,msm-id`, are one class of their own at the end, **Undocumented
   vendor properties**, closed until you open it.
+- The list follows what you are looking at: on the canvas, the problems
+  of the open scope and the nodes below it; in the **DTS** mode, those of
+  the nodes the text writes; in the board view, those of the devices
+  placed on the board. (In the split mode the canvas decides.) Problems
+  about no node in particular are always listed. The line above the list
+  says what it covers and how many problems lie outside it; click that
+  count, or press **Whole design**, to list them all. The tab's count
+  follows the list, while the status bar always counts the whole design.
 - Each row shows the node's path, the property and the binding or dtc
   check that reports it. A value written as bytes that reads as text is
   shown as text (`"okay"` rather than `[6f 6b 61 79 00]`).
