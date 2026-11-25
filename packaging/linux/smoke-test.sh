@@ -26,7 +26,7 @@ elif command -v zypper >/dev/null; then
 	zypper --non-interactive -q install xorg-x11-server-Xvfb
 	# The package is not signed with a key zypper knows.
 	installer="zypper --non-interactive -q install --allow-unsigned-rpm"
-	desktop="fontconfig libfreetype6 libharfbuzz0 libfribidi0 libX11-6 libX11-xcb1 libxcb1 libwayland-client0 libGL1 libEGL1 libgbm1"
+	desktop="fontconfig libfreetype6 libharfbuzz0 libfribidi0 libX11-6 libX11-xcb1 libxcb1 libwayland-client0 Mesa-libGL1 Mesa-libEGL1 libgbm1"
 elif command -v pacman >/dev/null; then
 	pacman -Syu --noconfirm --needed xorg-server-xvfb
 	installer="pacman -U --noconfirm"
