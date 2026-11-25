@@ -391,11 +391,17 @@ fn install_kind() -> &'static str {
     if std::env::var_os("APPIMAGE").is_some() {
         return "appimage";
     }
+    // Inside the sandbox `/usr` is the runtime's, so this comes first.
+    if Path::new("/.flatpak-info").is_file() {
+        return "flatpak";
+    }
     let in_usr = std::env::current_exe().is_ok_and(|exe| exe.starts_with("/usr"));
     if in_usr && Path::new("/var/lib/pacman/local").is_dir() {
         "pacman"
     } else if in_usr && Path::new("/var/lib/dpkg/status").is_file() {
         "deb"
+    } else if in_usr && Path::new("/var/lib/rpm").exists() {
+        "rpm"
     } else {
         "other"
     }

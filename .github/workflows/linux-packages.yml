@@ -1,0 +1,137 @@
+name: Linux packages
+
+# Builds every Linux package and installs each one in clean containers of the
+# distributions it is meant for, where the app has to start (the Flatpak on
+# a plain Ubuntu runner, with its runtime from Flathub). Called by the packaging workflow (pull requests)
+# and the release workflow (tags): only Arch can be tried by hand, the rest
+# is checked here.
+on:
+  workflow_call:
+    inputs:
+      arch-mode:
+        description: "`git` builds designtree-git from this commit, `release` the tagged designtree"
+        type: string
+        required: true
+      arch-ref:
+        description: The commit (git) or version (release) for packaging/arch/build.sh
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # actions/checkout needs git in the container for a real clone, which
+      # the -git PKGBUILD builds from.
+      - run: pacman -Syu --noconfirm git
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: packaging/arch/build.sh "${{ inputs.arch-mode }}" "${{ inputs.arch-ref }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist-arch/
+          retention-days: 7
+
+  bundles:
+    # The oldest supported runner: an AppImage runs on systems with the same
+    # or a newer glibc than it was built on.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-bundles
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundles
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+          retention-days: 7
+
+  flatpak:
+    needs: bundles
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      # bubblewrap needs it.
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-bundles
+          path: packages
+      - name: Bundle name
+        id: name
+        run: |
+          deb=$(find packages -name '*.deb')
+          cp "$deb" packaging/flatpak/designtree.deb
+          version=$(basename "$deb" | cut -d_ -f2)
+          echo "bundle=DesignTree_${version}_x86_64.flatpak" >> "$GITHUB_OUTPUT"
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.maurilan91.designtree.yml
+          bundle: ${{ steps.name.outputs.bundle }}
+          upload-artifact: false
+          cache: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: ${{ steps.name.outputs.bundle }}
+          retention-days: 7
+
+  flatpak-smoke-test:
+    needs: flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak
+          path: packages
+      - run: sudo packaging/linux/smoke-test.sh packages/*.flatpak
+
+  smoke-test:
+    needs: [arch, bundles]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'debian:12', package: '*.deb' }
+          - { image: 'debian:13', package: '*.deb' }
+          - { image: 'ubuntu:22.04', package: '*.deb' }
+          - { image: 'ubuntu:24.04', package: '*.deb' }
+          - { image: 'fedora:latest', package: '*.rpm' }
+          - { image: 'opensuse/tumbleweed', package: '*.rpm' }
+          - { image: 'archlinux:latest', package: '*.pkg.tar.zst' }
+          - { image: 'debian:12', package: '*.AppImage' }
+          - { image: 'fedora:latest', package: '*.AppImage' }
+          - { image: 'opensuse/tumbleweed', package: '*.AppImage' }
+    name: smoke-test (${{ matrix.package }} on ${{ matrix.image }})
+    steps:
+      # actions/checkout needs tar and gzip, and the next steps find, which
+      # the openSUSE image leaves out.
+      - name: Tools the actions need
+        shell: sh
+        run: |
+          if command -v zypper >/dev/null; then zypper --non-interactive -q install tar gzip findutils; fi
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Install and start
+        shell: sh
+        run: |
+          # makepkg also writes a -debug package with the symbols.
+          set -- $(find packages -name '${{ matrix.package }}' ! -name '*-debug-*')
+          if [ $# -ne 1 ]; then echo "::error::expected one ${{ matrix.package }}, found $#"; exit 1; fi
+          packaging/linux/smoke-test.sh "$1"

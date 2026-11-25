@@ -1,0 +1,50 @@
+# Flatpak bundle of the release build (linux-packages.yml). It repackages the
+# binaries of the .deb built in the same run, so the bundle and the other
+# packages carry the same build; the workflow copies that .deb to
+# packaging/flatpak/designtree.deb first.
+id: io.github.maurilan91.designtree
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: designtree-app
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # The daily update check asks api.github.com.
+  - --share=network
+  # Kernel checkouts and board files are read where they are, with the
+  # includes next to them, which a file chooser portal cannot grant.
+  - --filesystem=home
+modules:
+  # Build .dtb runs dtc, which the runtime lacks.
+  - name: dtc
+    buildsystem: meson
+    config-opts:
+      - -Dtools=true
+      - -Dpython=disabled
+      - -Dyaml=disabled
+      - -Dvalgrind=disabled
+      - -Dtests=false
+    sources:
+      - type: git
+        url: https://github.com/dgibson/dtc.git
+        tag: v1.7.2
+        commit: 2d10aa2afe35527728db30b35ec491ecb6959e5c
+
+  - name: designtree
+    buildsystem: simple
+    build-commands:
+      - ar x packaging/flatpak/designtree.deb
+      - mkdir deb && tar -xf data.tar.* -C deb
+      - packaging/linux/install.sh '' /app deb/usr/bin
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .flatpak-builder
+          - target
+          - app/node_modules
+          - packages
