@@ -98,6 +98,14 @@ second and resolves the type of 38,004 of their 38,013 properties; every
 resolved type agrees with dt-schema's own property type database
 (`dt-extract-props`). The 9 left are not typed by any schema.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and the checks a
+pull request needs, and [SECURITY.md](SECURITY.md) to report a vulnerability
+privately. Questions go to
+[Discussions](https://github.com/MauriLan91/designtree/discussions).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The kernel binding schemas indexed at runtime

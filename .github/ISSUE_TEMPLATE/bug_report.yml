@@ -1,0 +1,68 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please search the
+        [open issues](https://github.com/MauriLan91/designtree/issues) first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Import arch/arm64/boot/dts/...
+        2. Select the node ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files
+      description: >-
+        A small `.dts` or design file that shows the problem, if you can share
+        one. Drag it here; rename it to `.txt` if GitHub refuses the extension.
+  - type: input
+    id: version
+    attributes:
+      label: DesignTree version
+      description: `designtree --version`, the package version, or the commit you built.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options:
+        - Arch package (PKGBUILD)
+        - .deb
+        - AppImage
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution and desktop
+      placeholder: e.g. Arch Linux, KDE Plasma 6 on Wayland
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel tree used for the library
+      placeholder: e.g. Linux 7.2, mainline checkout
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Terminal output, or the text of the Problems panel.
+      render: text

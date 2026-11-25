@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea to discuss
+    url: https://github.com/MauriLan91/designtree/discussions
+    about: Ask how to do something, share a board or talk through an idea before filing it.
+  - name: Security vulnerability
+    url: https://github.com/MauriLan91/designtree/security/advisories/new
+    about: Report security problems privately, not as an issue.
+  - name: User guide
+    url: https://maurilan91.github.io/designtree/guide/
+    about: The tutorial and a chapter for every feature.

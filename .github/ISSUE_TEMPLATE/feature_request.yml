@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a new feature or a change to an existing one.
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Planned work is in [docs/backlog.md](https://github.com/MauriLan91/designtree/blob/main/docs/backlog.md);
+        please check it and the open issues first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+      placeholder: When I bring up a new board, I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you would like it to work. Sketches and screenshots welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and workarounds
+      description: Other ways you considered, or what you do now.
+  - type: dropdown
+    id: role
+    attributes:
+      label: How you use DesignTree
+      options:
+        - Board bring-up
+        - Maintaining a BSP or SoC .dtsi files
+        - Reviewing or learning devicetrees
+        - Other
