@@ -28,11 +28,11 @@ jobs:
       # actions/checkout needs git in the container for a real clone, which
       # the -git PKGBUILD builds from.
       - run: pacman -Syu --noconfirm git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - run: packaging/arch/build.sh "${{ inputs.arch-mode }}" "${{ inputs.arch-ref }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: arch
           path: dist-arch/
@@ -43,9 +43,9 @@ jobs:
     # or a newer glibc than it was built on.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/linux-bundles
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-bundles
           path: |
@@ -62,8 +62,8 @@ jobs:
       # bubblewrap needs it.
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: linux-bundles
           path: packages
@@ -80,7 +80,7 @@ jobs:
           bundle: ${{ steps.name.outputs.bundle }}
           upload-artifact: false
           cache: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: flatpak
           path: ${{ steps.name.outputs.bundle }}
@@ -90,8 +90,8 @@ jobs:
     needs: flatpak
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: flatpak
           path: packages
@@ -123,8 +123,8 @@ jobs:
         shell: sh
         run: |
           if command -v zypper >/dev/null; then zypper --non-interactive -q install tar gzip findutils; fi
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: packages
           merge-multiple: true
