@@ -131,6 +131,7 @@ jobs:
       - name: Install and start
         shell: sh
         run: |
-          set -- $(find packages -name '${{ matrix.package }}')
+          # makepkg also writes a -debug package with the symbols.
+          set -- $(find packages -name '${{ matrix.package }}' ! -name '*-debug-*')
           if [ $# -ne 1 ]; then echo "::error::expected one ${{ matrix.package }}, found $#"; exit 1; fi
           packaging/linux/smoke-test.sh "$1"
