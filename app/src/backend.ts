@@ -1,6 +1,7 @@
 // Typed wrappers around the Tauri commands in src-tauri/src/lib.rs.
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { scripted } from "./e2e";
 import type { Span } from "./components/DtsEditor";
 import type { AddressMap, Binding, BoardLink, Design, DtMacro, InterruptTree, LibraryEntry, PinCheck, Problem, Property, SocDtsi } from "./model";
 
@@ -109,6 +110,9 @@ const DTBO_FILTER = [{ name: "Devicetree overlay blob", extensions: ["dtbo"] }];
 const BASE_FILTER = [{ name: "Design or devicetree source", extensions: ["json", "dts"] }];
 
 type Filter = { name: string; extensions: string[] };
+
+const open = (options: Parameters<typeof openDialog>[0]) => scripted(() => openDialog(options));
+const save = (options: Parameters<typeof saveDialog>[0]) => scripted(() => saveDialog(options));
 
 // The folder of the last file picked, where the next dialog starts (US-15.9).
 let lastFolder: string | null = null;

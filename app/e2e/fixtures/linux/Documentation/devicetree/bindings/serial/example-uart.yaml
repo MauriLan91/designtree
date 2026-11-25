@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/serial/example-uart.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Example UART
+
+allOf:
+  - $ref: serial-common.yaml#
+
+properties:
+  compatible:
+    oneOf:
+      - const: vendor,uart-a
+      - items:
+          - enum:
+              - vendor,uart-b2
+              - vendor,uart-b1
+          - const: vendor,uart-b
+
+  reg:
+    maxItems: 1
+
+  clocks:
+    description: Reference clock.
+    maxItems: 1
+
+  reset-gpios: true
+
+  status: true
+
+  current-speed: true
+
+  vendor,fifo-size:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [16, 64]
+    default: 16
+
+  vendor,line-mode:
+    enum: [rs232, rs485]
+
+  vendor,turnaround-us:
+    minimum: 1
+    maximum: 100
+
+  vendor,dma-windows:
+    $ref: /schemas/types.yaml#/definitions/uint32-matrix
+    description: Address and length of each DMA window.
+    items:
+      items:
+        - description: start
+        - description: length
+
+required:
+  - compatible
+  - reg
+
+examples:
+  - |
+    // A UART on the SoC's bus.
+    serial@1c28000 {
+        compatible = "vendor,uart-a";
+        reg = <0x1c28000 0x400>;
+    };
+  - |
+    spi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        uart@0 {
+            compatible = "vendor,uart-b", "vendor,uart-b1";
+            reg = <0>;
+        };
+    };

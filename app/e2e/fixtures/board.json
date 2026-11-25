@@ -1,0 +1,364 @@
+{
+  "nodes": [
+    {
+      "id": "/",
+      "name": "/",
+      "compatible": [
+        "vendor,e2e-board"
+      ],
+      "compatible_at": 3,
+      "properties": [
+        {
+          "name": "#address-cells",
+          "value": {
+            "type": "cells",
+            "value": [1]
+          }
+        },
+        {
+          "name": "#size-cells",
+          "value": {
+            "type": "cells",
+            "value": [1]
+          }
+        },
+        {
+          "name": "model",
+          "value": {
+            "type": "strings",
+            "value": [
+              "E2E board"
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/memory@80000000",
+      "name": "memory",
+      "unit_address": "80000000",
+      "properties": [
+        {
+          "name": "device_type",
+          "value": {
+            "type": "strings",
+            "value": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [2147483648, 268435456]
+          },
+          "base": "hex"
+        }
+      ],
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/oscillator",
+      "name": "oscillator",
+      "label": "osc",
+      "compatible": [
+        "fixed-clock"
+      ],
+      "properties": [
+        {
+          "name": "#clock-cells",
+          "value": {
+            "type": "cells",
+            "value": [0]
+          }
+        },
+        {
+          "name": "clock-frequency",
+          "value": {
+            "type": "cells",
+            "value": [24000000]
+          },
+          "base": "dec"
+        }
+      ],
+      "position": {
+        "x": 260.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/soc",
+      "name": "soc",
+      "compatible": [
+        "simple-bus"
+      ],
+      "properties": [
+        {
+          "name": "#address-cells",
+          "value": {
+            "type": "cells",
+            "value": [1]
+          }
+        },
+        {
+          "name": "#size-cells",
+          "value": {
+            "type": "cells",
+            "value": [1]
+          }
+        },
+        {
+          "name": "ranges",
+          "value": {
+            "type": "empty"
+          }
+        }
+      ],
+      "position": {
+        "x": 520.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/soc/interrupt-controller@1000",
+      "name": "interrupt-controller",
+      "unit_address": "1000",
+      "label": "intc",
+      "compatible": [
+        "vendor,intc"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [4096, 256]
+          },
+          "base": "hex"
+        },
+        {
+          "name": "interrupt-controller",
+          "value": {
+            "type": "empty"
+          }
+        },
+        {
+          "name": "#interrupt-cells",
+          "value": {
+            "type": "cells",
+            "value": [1]
+          }
+        }
+      ],
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/soc/serial@2000",
+      "name": "serial",
+      "unit_address": "2000",
+      "label": "uart0",
+      "compatible": [
+        "vendor,uart-a"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [8192, 256]
+          },
+          "base": "hex"
+        },
+        {
+          "name": "interrupts",
+          "value": {
+            "type": "cells",
+            "value": [5]
+          }
+        }
+      ],
+      "order": [
+        "compatible",
+        "reg",
+        "clocks",
+        "interrupt-parent",
+        "interrupts"
+      ],
+      "position": {
+        "x": 260.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/soc/serial@3000",
+      "name": "serial",
+      "unit_address": "3000",
+      "label": "uart1",
+      "compatible": [
+        "vendor,uart-a"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [12288, 256]
+          },
+          "base": "hex"
+        },
+        {
+          "name": "status",
+          "value": {
+            "type": "strings",
+            "value": [
+              "disabled"
+            ]
+          }
+        }
+      ],
+      "position": {
+        "x": 520.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/soc/widget@4000",
+      "name": "widget",
+      "unit_address": "4000",
+      "compatible": [
+        "acme,widget"
+      ],
+      "properties": [
+        {
+          "name": "reg",
+          "value": {
+            "type": "cells",
+            "value": [16384, 256]
+          },
+          "base": "hex"
+        },
+        {
+          "name": "acme,gain",
+          "value": {
+            "type": "cells",
+            "value": [9]
+          }
+        }
+      ],
+      "position": {
+        "x": 780.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/led-a",
+      "name": "led-a",
+      "compatible": [
+        "vendor,led"
+      ],
+      "position": {
+        "x": 780.0,
+        "y": 0.0
+      }
+    },
+    {
+      "id": "/led-b",
+      "name": "led-b",
+      "compatible": [
+        "vendor,led"
+      ],
+      "position": {
+        "x": 0.0,
+        "y": 190.0
+      }
+    },
+    {
+      "id": "/led-c",
+      "name": "led-c",
+      "compatible": [
+        "vendor,led"
+      ],
+      "position": {
+        "x": 260.0,
+        "y": 190.0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "/",
+      "to": "/memory@80000000",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/oscillator",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/soc",
+      "kind": "child"
+    },
+    {
+      "from": "/soc",
+      "to": "/soc/interrupt-controller@1000",
+      "kind": "child"
+    },
+    {
+      "from": "/soc",
+      "to": "/soc/serial@2000",
+      "kind": "child"
+    },
+    {
+      "from": "/soc",
+      "to": "/soc/serial@3000",
+      "kind": "child"
+    },
+    {
+      "from": "/soc",
+      "to": "/soc/widget@4000",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/led-a",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/led-b",
+      "kind": "child"
+    },
+    {
+      "from": "/",
+      "to": "/led-c",
+      "kind": "child"
+    },
+    {
+      "from": "/soc/serial@2000",
+      "to": "/oscillator",
+      "kind": "reference",
+      "property": "clocks"
+    },
+    {
+      "from": "/soc/serial@2000",
+      "to": "/soc/interrupt-controller@1000",
+      "kind": "reference",
+      "property": "interrupt-parent"
+    }
+  ],
+  "groups": [],
+  "arranged": []
+}

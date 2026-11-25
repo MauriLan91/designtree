@@ -36,7 +36,7 @@ DESIGNTREE_REQUIRE_DTC=1 cargo test --all        # needs dtc (device-tree-compil
 (cd app && npm install && npm test && npm run build)  # vitest, then tsc + vite
 ```
 
-CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, `g3-corpus`, `g5-bench` jobs). Rust tests that need
+CI runs the same, plus the G1 and G3 corpora, the G5 benchmark and the end-to-end suite (`g1-corpus`, `g3-corpus`, `g5-bench`, `e2e` jobs). Rust tests that need
 `dtc` skip without it, unless `DESIGNTREE_REQUIRE_DTC` is set.
 
 - **Generated types**: `app/src/model.gen.ts` comes from the Rust types. After
@@ -56,6 +56,13 @@ CI runs the same, plus the G1 and G3 corpora and the G5 benchmark (`g1-corpus`, 
   `node bench/lists.mjs <design.json> --problems 8000` on a 5,000-node design
   adds generated problems and times the Problems tab and the Outline. CI
   reports all three next to the last run on main.
+- **End-to-end suite** (US-4.5, every UI element in the real app): needs
+  `webkit2gtk-driver`, `xvfb` and `cargo install tauri-driver`; in `app`,
+  `VITE_E2E=1 npx tauri build --no-bundle`, then
+  `xvfb-run -a -s "-screen 0 1400x900x24" npm run e2e` (about 4 minutes).
+  A new command needs a test in `app/e2e/commands.mjs`, a new pane or dialog
+  one in `app/e2e/elements.mjs`; known bugs go in `app/e2e/known.mjs`
+  (`docs/e2e.md`).
 - **User guide**: `mdbook build docs/guide` (mdBook 0.5); update the chapter
   when a feature's UI changes.
 - **Releases**: `scripts/bump-version.sh <version>` sets the version and writes
