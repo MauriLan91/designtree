@@ -7,7 +7,7 @@ shown (US-4.5). It runs in CI as the `e2e` job, which attaches the report.
 ## Running it
 
 ```sh
-sudo apt-get install webkit2gtk-driver xvfb   # WebKitWebDriver
+sudo apt-get install webkitgtk-webdriver xvfb  # WebKitWebDriver (webkit2gtk-driver before Ubuntu 25.04)
 cargo install tauri-driver --locked
 cd app
 VITE_E2E=1 npx tauri build --no-bundle        # release build with the test hook
