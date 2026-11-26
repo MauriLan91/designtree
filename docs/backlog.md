@@ -65,7 +65,7 @@ accepts only compatible connections and reports schema errors while you draw.
 | **M5 v1.1 Workbench UX** ✅ | Fixes and stories from the first UX feedback (2026-11-06): VSCode-like workbench, composition with drill-down, plist-style property table, grouped library | G4 | done 2026-11-08 |
 | **M6 v1.2 Editing comfort** ✅ | Stories from the second round of feedback (2026-11-10): pane controls, canvas arranging and selection, number bases and cell groups in the property table, library suggestions per scope | G4 | done 2026-11-15 |
 | **M7 v1.3 Large trees** ✅ | Trees of thousands of nodes and decompiled blobs: restored references, node search, compact property table, library by device class with filters, problems at scale | G5 | done 2026-11-24 |
-| **M9 v1.4 Trustworthy UI** | Stories from the fourth round of feedback (2026-11-25): an end-to-end test of every UI element, errors told apart from warnings, problems of the shown view, an About page with the version | G4, G6 | 2027-01-29 |
+| **M9 v1.4 Trustworthy UI** ✅ | Stories from the fourth round of feedback (2026-11-25): an end-to-end test of every UI element, errors told apart from warnings, problems of the shown view, an About page with the version | G4, G6 | done 2026-11-25 |
 | **M8 v2.0 Beyond the editor** | Usage and diff views, validation profiles and quick fixes, pin multiplexing, Zephyr, web demo, assistant | – | 2027-09-30 |
 
 Assumed cadence: two-week sprints, about five sprints for M1 and four for each
@@ -397,7 +397,8 @@ moves `compatible` before the other properties.
 Stories from the fourth round of hands-on feedback (5 notes, 2026-11-25),
 planned before v2.0. One defect is tracked as a bug in v1.0: the schema check
 reports "False schema does not allow the node", a message that says nothing
-about the cause, and the maintainer sees it on every node.
+about the cause, and the maintainer sees it on every node. The first run of
+the end-to-end suite (US-4.5) found three more, filed in v1.0 (#252-#254).
 
 ### F4 Engineering enablers (continued)
 

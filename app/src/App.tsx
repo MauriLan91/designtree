@@ -56,6 +56,7 @@ import { RefEdge } from "./components/RefEdge";
 import { useHistory } from "./history";
 import { align, cornerOf, distribute, grid, layered, mostReferenced, star, tree, type Alignment, type Box, type Link, type Positions } from "./tidy";
 import { AboutDialog } from "./components/AboutDialog";
+import { E2E, registerEditor } from "./e2e";
 import { CommandPalette, ShortcutSheet } from "./components/CommandPalette";
 import { MenuBar } from "./components/MenuBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -2126,6 +2127,22 @@ export function Editor({
   ];
   const commandsRef = useRef(commands);
   commandsRef.current = commands;
+  // The end-to-end suite reads the registry and the design of the tab on
+  // show (US-4.5); a no-op outside an E2E build.
+  const shortcutsRef = useRef(shortcutList);
+  shortcutsRef.current = shortcutList;
+  const scopeShown = useRef(scope);
+  scopeShown.current = boardView ? null : scope;
+  useEffect(() => {
+    if (!E2E || !active) return;
+    registerEditor({
+      commands: () => commandsRef.current,
+      otherShortcuts: () => shortcutsRef.current.filter(([keys]) => !commandsRef.current.some((c) => c.shortcut === keys)),
+      design: () => toDesign(nodesRef.current, edgesRef.current, extrasRef.current),
+      scope: () => scopeShown.current,
+    });
+    return () => registerEditor(null);
+  }, [active]);
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {

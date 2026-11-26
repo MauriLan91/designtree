@@ -190,3 +190,45 @@ jobs:
           name: g5
           path: g5.json
           retention-days: 90
+
+  # US-4.5: drive the real app under tauri-driver and check every UI element
+  # by what it does. Fails on a broken element, a registry command without a
+  # test, or a known bug (e2e/known.mjs) that passes again.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tauri, WebKit driver and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev device-tree-compiler xvfb
+          # WebKitWebDriver: webkitgtk-webdriver since Ubuntu 25.04, webkit2gtk-driver before.
+          sudo apt-get install -y webkitgtk-webdriver || sudo apt-get install -y webkit2gtk-driver
+          which WebKitWebDriver
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: cargo install tauri-driver --locked
+      - name: Build the app with the E2E hook
+        working-directory: app
+        run: |
+          npm ci
+          npx tauri build --no-bundle
+        env:
+          VITE_E2E: 1
+      - name: Run the suite
+        working-directory: app
+        run: xvfb-run -a -s "-screen 0 1400x900x24" node e2e/run.mjs --app ../target/release/designtree-app
+      - name: Report
+        if: always()
+        run: if [ -f app/e2e/report/report.md ]; then cat app/e2e/report/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e
+          path: app/e2e/report
+          retention-days: 30
