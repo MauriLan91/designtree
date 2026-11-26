@@ -29,3 +29,6 @@ Import from inside the kernel tree, or pass `-I <dir>` to `designtree import`.
 indexed once and cached; the next start reads the cache.
 
 Bugs and questions: [GitHub issues](https://github.com/MauriLan91/designtree/issues).
+When you report a bug, open **Help › About DesignTree**, press **Copy** and
+paste the text in the report: it names the build, the kernel, dtc and the
+platform.

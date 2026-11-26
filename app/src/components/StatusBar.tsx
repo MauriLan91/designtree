@@ -2,6 +2,7 @@
 // many problems the design has, each a button to where it is fixed.
 import { CircleAlert, PanelBottom, TriangleAlert } from "lucide-react";
 import type { Kernel } from "../App";
+import { BUILD } from "../buildInfo";
 import { tooltipOf, type Command } from "../commands";
 
 interface Props {
@@ -15,11 +16,12 @@ interface Props {
   onKernels: () => void;
   onDtc: () => void;
   onProblems: () => void;
+  onAbout: () => void;
   /** The command that opens and closes the bottom panel (US-15.7). */
   panel: Command;
 }
 
-export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selected, onKernels, onDtc, onProblems, panel }: Props) {
+export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selected, onKernels, onDtc, onProblems, onAbout, panel }: Props) {
   return (
     <footer className="statusbar">
       <button
@@ -55,6 +57,9 @@ export function StatusBar({ kernel, dtcVersion, errors, warnings, nodes, selecte
         {nodes} node{nodes === 1 ? "" : "s"}
         {selected > 0 && ` · ${selected} selected`}
       </span>
+      <button onClick={onAbout} title="About this build">
+        DesignTree {BUILD.version}
+      </button>
     </footer>
   );
 }

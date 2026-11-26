@@ -51,8 +51,14 @@
   errors and the schema check), **Build** (dtc's output), **Interrupts** and
   **Address map**. A build opens it on Build.
 - **Status bar**: a button that opens and closes the bottom panel, the
-  loaded kernel, the dtc version and the error and warning counts. Click
-  one to go to its settings or to the problems.
+  loaded kernel, the dtc version, the error and warning counts and, at the
+  right, the DesignTree version. Click one to go to its settings, to the
+  problems or to the About page.
+
+The window title shows the design on show (with ● while it has unsaved
+changes) and the DesignTree version. **Help › About DesignTree** shows the
+version, the commit and build date, the licence, the kernel and dtc in use,
+and links to this guide, the source code and the issue tracker.
 
 ## Arranging the panes
 
